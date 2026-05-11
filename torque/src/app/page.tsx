@@ -4,12 +4,13 @@ import { useEffect, useCallback, useRef, useState } from 'react'
 import ReactFlow, { Background, Controls, MiniMap, ReactFlowProvider, useReactFlow, SelectionMode, ReactFlowInstance } from 'reactflow'
 import 'reactflow/dist/style.css'
 
+import Link from 'next/link'
 import { motion, AnimatePresence } from 'framer-motion'
 import WorkflowNodeComponent from '@/components/WorkflowNode'
 import NodePalette from '@/components/NodePalette'
 import ConfigPanel from '@/components/ConfigPanel'
 import { useWorkflowStore } from '@/lib/store'
-import { fetchNodeTypes, exportWorkflow, getExportJson } from '@/lib/api'
+import { fetchNodeTypes } from '@/lib/api'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import {
@@ -30,7 +31,12 @@ import {
   CheckCircle2,
   AlertCircle,
   Info,
+  FileCode2,
+  Settings,
 } from 'lucide-react'
+import UserMenu from '@/components/UserMenu'
+import { generateTypeScript, getExportJson } from '@/lib/codegen'
+import { useTspoonbaseStore, tspoonbaseFetch } from '@/lib/tspoonbase'
 
 const nodeTypes = { workflow: WorkflowNodeComponent }
 
@@ -86,26 +92,54 @@ function Canvas() {
     if (event.key === 'Backspace' || event.key === 'Delete') { removeSelected() }
   }, [removeSelected])
 
-  const handleExport = async () => {
+  const workflowData = (): import('@/lib/codegen').WorkflowData => ({
+    nodes: nodes.map(n => ({ id: n.id, data: { nodeType: n.data.nodeType, label: n.data.label, config: n.data.config } })),
+    edges: edges.map(e => ({ id: e.id, source: e.source, target: e.target, sourceHandle: e.sourceHandle ?? undefined, targetHandle: e.targetHandle ?? undefined })),
+    meta: { workflowId: meta.workflowId, name: meta.name },
+  })
+
+  const handleExportJson = async () => {
+    const data = workflowData()
+    const blob = new Blob([getExportJson(data)], { type: 'application/json' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url; a.download = `${meta.workflowId}.json`; a.click()
+    URL.revokeObjectURL(url)
+    showToast('Exported as JSON', 'success')
+  }
+
+  const handleExportTS = () => {
+    const ts = generateTypeScript(workflowData())
+    const blob = new Blob([ts], { type: 'text/typescript' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url; a.download = `${meta.workflowId}.ts`; a.click()
+    URL.revokeObjectURL(url)
+    showToast('Exported as TypeScript', 'success')
+  }
+
+  const handleExportToTspoonbase = async () => {
+    const { connection } = useTspoonbaseStore.getState()
+    if (!connection.connected) {
+      showToast('Connect to TspoonBase in Settings first', 'error')
+      return
+    }
     const definition = {
       workflowId: meta.workflowId,
       name: meta.name,
       description: meta.description,
       version: '1',
-      config: {},
       nodes: nodes.map(n => ({ id: n.id, type: n.data.nodeType, label: n.data.label, config: n.data.config, position: n.position })),
       edges: edges.map(e => ({ id: e.id, from: e.source, to: e.target })),
     }
     try {
-      await exportWorkflow(definition)
-      showToast('Workflow exported to TspoonBase', 'success')
-    } catch {
-      const blob = new Blob([getExportJson(definition)], { type: 'application/json' })
-      const url = URL.createObjectURL(blob)
-      const a = document.createElement('a')
-      a.href = url; a.download = `${meta.workflowId}.json`; a.click()
-      URL.revokeObjectURL(url)
-      showToast('Exported as JSON file', 'info')
+      await tspoonbaseFetch('/api/agents/workflows/register', {
+        method: 'POST',
+        body: JSON.stringify(definition),
+      })
+      showToast('Pushed to TspoonBase', 'success')
+    } catch (err: any) {
+      showToast(err.message || 'Push failed', 'error')
     }
   }
 
@@ -156,14 +190,44 @@ function Canvas() {
 
           <Tooltip>
             <TooltipTrigger
+              render={<Button variant="ghost" size="sm" />}
+              onClick={handleExportTS}
+            >
+              <FileCode2 className="size-3.5" />
+            </TooltipTrigger>
+            <TooltipContent>Export TypeScript</TooltipContent>
+          </Tooltip>
+
+          <Tooltip>
+            <TooltipTrigger
+              render={<Button variant="ghost" size="sm" />}
+              onClick={handleExportJson}
+            >
+              <FileJson className="size-3.5" />
+            </TooltipTrigger>
+            <TooltipContent>Export JSON</TooltipContent>
+          </Tooltip>
+
+          <Tooltip>
+            <TooltipTrigger
               render={<Button variant="default" size="sm" />}
-              onClick={handleExport}
+              onClick={handleExportToTspoonbase}
             >
               <Download className="size-3.5" />
-              <span className="ml-1.5">Export</span>
+              <span className="ml-1.5">Push</span>
             </TooltipTrigger>
-            <TooltipContent>Export workflow</TooltipContent>
+            <TooltipContent>Push to TspoonBase</TooltipContent>
           </Tooltip>
+
+          <div className="h-4 w-px bg-border mx-0.5" />
+
+          <Link href="/settings">
+            <Button variant="ghost" size="icon-xs" className="text-muted-foreground/50 hover:text-foreground">
+              <Settings className="size-3.5" />
+            </Button>
+          </Link>
+
+          <UserMenu />
         </div>
       </header>
 

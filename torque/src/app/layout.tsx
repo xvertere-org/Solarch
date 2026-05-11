@@ -1,6 +1,7 @@
 import type { Metadata } from 'next'
 import { Inter } from 'next/font/google'
 import './globals.css'
+import { ClerkProvider } from '@clerk/nextjs'
 import { TooltipProvider } from '@/components/ui/tooltip'
 
 const inter = Inter({
@@ -9,16 +10,18 @@ const inter = Inter({
 })
 
 export const metadata: Metadata = {
-  title: 'Torque — Agentic Workflow Canvas',
-  description: 'Visually build AI agent pipelines and deploy them to TspoonBase',
+  title: 'Torque — AI Agent Workflow Canvas',
+  description: 'Visually build AI agent pipelines. Drag, connect, configure, and export as TypeScript.',
 }
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" className={`dark ${inter.variable}`}>
-      <body>
-        <TooltipProvider>{children}</TooltipProvider>
-      </body>
-    </html>
+    <ClerkProvider>
+      <html lang="en" className={`dark ${inter.variable}`}>
+        <body>
+          <TooltipProvider>{children}</TooltipProvider>
+        </body>
+      </html>
+    </ClerkProvider>
   )
 }
