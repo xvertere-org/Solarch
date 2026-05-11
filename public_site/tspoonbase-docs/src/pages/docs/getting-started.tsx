@@ -448,6 +448,26 @@ export default defineCollection({
       <DocSection id="changelog" title="Changelog">
         <div className="space-y-6">
           <div className="rounded-lg border border-theme bg-theme-surface p-4">
+            <h3 className="font-heading text-lg font-bold text-theme">v0.9.0</h3>
+            <p className="mt-1 text-xs text-theme-muted">2026-05-01</p>
+            <h4 className="mt-3 text-sm font-semibold text-blue-400">Torque Agent Engine</h4>
+            <ul className="mt-1 list-inside list-disc space-y-1 text-sm text-theme-secondary">
+              <li>Agent workflow types &amp; schema — <code>WorkflowDefinition</code>, <code>WorkflowNode</code>, <code>WorkflowEdge</code></li>
+              <li>Node registry with 9 built-in node types: webhook, cron, event triggers, LLM (OpenAI/Anthropic), HTTP request, code execution, condition, create/query records, delay</li>
+              <li>Workflow runtime engine with topological DAG execution, condition routing, abort handling</li>
+              <li><code>_agentWorkflows</code> and <code>_agentExecutions</code> system tables auto-created</li>
+            </ul>
+            <h4 className="mt-3 text-sm font-semibold text-blue-400">API Endpoints</h4>
+            <ul className="mt-1 list-inside list-disc space-y-1 text-sm text-theme-secondary">
+              <li><code>GET /api/agents/nodes</code> — list all registered node types</li>
+              <li><code>POST /api/agents/workflows/register</code> — register a workflow from Torque</li>
+              <li><code>GET /api/agents/workflows</code> — list registered workflows</li>
+              <li><code>POST /api/agents/workflows/:id/execute</code> — execute a workflow</li>
+              <li><code>GET /api/agents/workflows/:id/execute/stream</code> — SSE-streamed execution</li>
+              <li><code>GET /api/agents/workflows/:id/executions</code> — execution history</li>
+            </ul>
+          </div>
+          <div className="rounded-lg border border-theme bg-theme-surface p-4">
             <h3 className="font-heading text-lg font-bold text-theme">v0.8.0</h3>
             <p className="mt-1 text-xs text-theme-muted">2026-05-01</p>
             <h4 className="mt-3 text-sm font-semibold text-blue-400">Architecture</h4>

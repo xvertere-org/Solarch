@@ -15,6 +15,7 @@ import { registerBackupRoutes } from './backup'
 import { registerLogRoutes } from './logs'
 import { registerInstallerRoutes } from './installer'
 import { registerAIRoutes } from './ai'
+import { registerAgentRoutes } from './agent'
 import { registerAdminAuthRoutes } from './admin_auth'
 import { corsMiddleware } from './middlewares_cors'
 import { gzipMiddleware } from './middlewares_gzip'
@@ -69,6 +70,7 @@ export async function serve(app: BaseApp, port: number): Promise<http.Server> {
   registerBackupRoutes(app, server)
   registerLogRoutes(app, server)
   registerAIRoutes(app, server)
+  registerAgentRoutes(app, server)
 
   // Serve built Admin UI from pb_public/admin if available
   const adminBuildDir = path.join(process.cwd(), 'pb_public', 'admin')
