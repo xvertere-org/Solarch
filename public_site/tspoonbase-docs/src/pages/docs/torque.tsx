@@ -2,7 +2,7 @@ import DocSection from '../../components/DocSection'
 import CodeBlock from '../../components/CodeBlock'
 import { Info, ExternalLink } from 'lucide-react'
 
-const TORQUE_URL = 'https://torque-shreyashdange15-6693s-projects.vercel.app'
+const TORQUE_URL = 'https://trytorque.vercel.app'
 
 export default function TorquePage() {
   return (
