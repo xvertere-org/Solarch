@@ -4,6 +4,7 @@ import { useEffect, useCallback, useRef, useState } from 'react'
 import ReactFlow, { Background, Controls, MiniMap, ReactFlowProvider, useReactFlow, SelectionMode } from 'reactflow'
 import 'reactflow/dist/style.css'
 
+import { useUser, SignInButton } from '@clerk/nextjs'
 import Link from 'next/link'
 import { motion, AnimatePresence } from 'framer-motion'
 import WorkflowNodeComponent from '@/components/WorkflowNode'
@@ -31,6 +32,7 @@ import {
   FileCode2,
   Settings,
   HelpCircle,
+  Workflow,
 } from 'lucide-react'
 import UserMenu from '@/components/UserMenu'
 import { generateTypeScript, getExportJson } from '@/lib/codegen'
@@ -156,7 +158,7 @@ function Canvas() {
       {/* Top bar */}
       <header className="flex items-center justify-between px-4 h-11 border-b border-border bg-card shrink-0">
         <div className="flex items-center gap-3">
-          <Link href="/landing" className="text-sm font-bold text-primary hover:text-primary/80 transition-colors">Torque</Link>
+          <Link href="/" className="text-sm font-bold text-primary hover:text-primary/80 transition-colors">Torque</Link>
           <div className="h-4 w-px bg-border" />
           <input
             className="bg-transparent text-sm text-foreground outline-none border-b border-transparent hover:border-border focus:border-primary px-1 py-0.5 transition-colors min-w-[140px]"
@@ -363,10 +365,54 @@ function Canvas() {
   )
 }
 
+function AuthGate({ children }: { children: React.ReactNode }) {
+  const { isLoaded, isSignedIn } = useUser()
+
+  if (!isLoaded) {
+    return (
+      <div className="h-screen w-screen flex items-center justify-center bg-background">
+        <div className="flex flex-col items-center gap-3">
+          <div className="size-5 rounded-full border-2 border-primary border-t-transparent animate-spin" />
+          <p className="text-xs text-muted-foreground">Loading...</p>
+        </div>
+      </div>
+    )
+  }
+
+  if (!isSignedIn) {
+    return (
+      <div className="h-screen w-screen flex items-center justify-center bg-background">
+        <div className="flex flex-col items-center text-center max-w-sm px-6">
+          <div className="size-14 rounded-xl bg-card border border-border flex items-center justify-center mb-5">
+            <Workflow className="size-6 text-primary" />
+          </div>
+          <h1 className="text-lg font-bold mb-1.5">Sign in to continue</h1>
+          <p className="text-xs text-muted-foreground mb-6 leading-relaxed">
+            You need to sign in to access the Torque workflow canvas.
+            Sign in with GitHub or Google, or create an account.
+          </p>
+          <SignInButton mode="modal">
+            <Button className="gap-2 h-9 px-5">
+              Sign In
+            </Button>
+          </SignInButton>
+          <Link href="/" className="mt-4 text-[11px] text-muted-foreground hover:text-foreground transition-colors">
+            Back to home
+          </Link>
+        </div>
+      </div>
+    )
+  }
+
+  return <>{children}</>
+}
+
 export default function CanvasPage() {
   return (
-    <ReactFlowProvider>
-      <Canvas />
-    </ReactFlowProvider>
+    <AuthGate>
+      <ReactFlowProvider>
+        <Canvas />
+      </ReactFlowProvider>
+    </AuthGate>
   )
 }
