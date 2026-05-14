@@ -66,7 +66,8 @@ export function registerRecordCRUDRoutes(app: BaseApp, router: Router): void {
         items: enriched.map(r => r.toJSON()),
       })
     } catch (err: any) {
-      res.status(500).json({ code: 500, message: err.message })
+      app.logger().error(err.message || err)
+      res.status(500).json({ code: 500, message: 'Internal server error' })
     }
   })
 
@@ -119,7 +120,8 @@ export function registerRecordCRUDRoutes(app: BaseApp, router: Router): void {
         })),
       })
     } catch (err: any) {
-      res.status(500).json({ code: 500, message: err.message })
+      app.logger().error(err.message || err)
+      res.status(500).json({ code: 500, message: 'Internal server error' })
     }
   })
 
@@ -159,7 +161,8 @@ export function registerRecordCRUDRoutes(app: BaseApp, router: Router): void {
 
       res.json(enriched.toJSON())
     } catch (err: any) {
-      res.status(500).json({ code: 500, message: err.message })
+      app.logger().error(err.message || err)
+      res.status(500).json({ code: 500, message: 'Internal server error' })
     }
   })
 
@@ -209,7 +212,8 @@ export function registerRecordCRUDRoutes(app: BaseApp, router: Router): void {
         res.status(201).json(response)
       }
     } catch (err: any) {
-      res.status(500).json({ code: 500, message: err.message })
+      app.logger().error(err.message || err)
+      res.status(500).json({ code: 500, message: 'Internal server error' })
     }
   })
 
@@ -252,7 +256,8 @@ export function registerRecordCRUDRoutes(app: BaseApp, router: Router): void {
 
       res.json(enriched.toJSON())
     } catch (err: any) {
-      res.status(500).json({ code: 500, message: err.message })
+      app.logger().error(err.message || err)
+      res.status(500).json({ code: 500, message: 'Internal server error' })
     }
   })
 
@@ -288,7 +293,8 @@ export function registerRecordCRUDRoutes(app: BaseApp, router: Router): void {
 
       res.status(204).send()
     } catch (err: any) {
-      res.status(500).json({ code: 500, message: err.message })
+      app.logger().error(err.message || err)
+      res.status(500).json({ code: 500, message: 'Internal server error' })
     }
   })
 

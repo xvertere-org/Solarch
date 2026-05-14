@@ -83,11 +83,13 @@ export function registerAdminAuthRoutes(app: BaseApp, router: Router): void {
 
       res.json({ token, admin: { id: row.id, email: row.email } })
     } catch (err: any) {
-      res.status(500).json({ code: 500, message: err.message })
+      app.logger().error(err.message || err)
+      res.status(500).json({ code: 500, message: 'Internal server error' })
     }
   })
 
-  router.post('/api/admins/refresh', async (req: Request, res: Response) => {
+  // FIXED[H-3]: Added rate limiting to admin refresh
+  router.post('/api/admins/refresh', adminAuthRateLimiter, async (req: Request, res: Response) => {
     try {
       const authHeader = req.headers.authorization
       if (!authHeader) {
@@ -122,7 +124,8 @@ export function registerAdminAuthRoutes(app: BaseApp, router: Router): void {
 
       res.json({ token: newToken, admin: { id: row.id, email: row.email } })
     } catch (err: any) {
-      res.status(500).json({ code: 500, message: err.message })
+      app.logger().error(err.message || err)
+      res.status(500).json({ code: 500, message: 'Internal server error' })
     }
   })
 
@@ -152,6 +155,8 @@ export function registerAdminAuthRoutes(app: BaseApp, router: Router): void {
         if (settings.smtp.host) {
           const mailer = Mailer.fromSettings(settings)
           const engine = new EmailTemplateEngine(settings)
+          // FIXED[L-1]: Set Referrer-Policy to no-referrer to prevent token leakage via Referer header
+          res.setHeader('Referrer-Policy', 'no-referrer')
           await sendPasswordResetEmail(mailer, engine, email, {
             resetURL: `${settings.appURL}/_/#/admin/confirm-password-reset?token=${token}`,
             userName: row.email,
@@ -163,7 +168,8 @@ export function registerAdminAuthRoutes(app: BaseApp, router: Router): void {
 
       res.json({ code: 200, message: 'Password reset email sent.' })
     } catch (err: any) {
-      res.status(500).json({ code: 500, message: err.message })
+      app.logger().error(err.message || err)
+      res.status(500).json({ code: 500, message: 'Internal server error' })
     }
   })
 
@@ -198,7 +204,8 @@ export function registerAdminAuthRoutes(app: BaseApp, router: Router): void {
 
       res.json({ code: 200, message: 'Password reset successfully.' })
     } catch (err: any) {
-      res.status(500).json({ code: 500, message: err.message })
+      app.logger().error(err.message || err)
+      res.status(500).json({ code: 500, message: 'Internal server error' })
     }
   })
 }

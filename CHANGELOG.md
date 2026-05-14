@@ -1,5 +1,24 @@
 # Changelog
 
+## v0.12.1 — Security Patch (2025-05-14)
+
+### High
+- **H-1:** Replaced `err.message` with generic `'Internal server error'` in all API catch blocks (71 instances across 16 files) — full errors logged server-side only
+- **H-2:** Added rate limiters to all 6 user-facing auth flow endpoints (password reset, verification, email change — 5 req/hr request, 10 req/15min confirm)
+- **H-3:** Added rate limiters to OAuth2 authentication callback and admin token refresh
+- **H-4:** Replaced blocklist-based view query validation with EXPLAIN-based opcode analysis — blocks write operations (DDL, DML, PRAGMA, ATTACH)
+
+### Medium
+- **M-1:** Added SELECT-only guard to `findRecordsByRawQuery`
+- **M-2:** Clamped `setBcryptRounds` to [10, 12] to prevent DoS via excessive work factor
+- **M-3:** Replaced predictable `superuser_${Date.now()}` IDs with `crypto.randomBytes`
+- **M-4:** CLI superuser password input now masked with `*` characters
+
+### Low
+- **L-1:** Added `Referrer-Policy: no-referrer` header to password reset email responses
+- **L-2:** Replaced inline regex with shared `validateIdentifier` in vector search
+- **L-3:** Replaced sync `fs` calls with `fs/promises` in automated backup cron
+
 ## v0.12.0 — Security Patch (2025-05-14)
 
 ### Critical

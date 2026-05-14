@@ -35,7 +35,8 @@ export function registerCollectionRoutes(app: BaseApp, router: Router): void {
         items: collections.map(c => c.toJSON()),
       })
     } catch (err: any) {
-      res.status(500).json({ code: 500, message: err.message })
+      app.logger().error(err.message || err)
+      res.status(500).json({ code: 500, message: 'Internal server error' })
     }
   })
 
@@ -47,7 +48,8 @@ export function registerCollectionRoutes(app: BaseApp, router: Router): void {
       }
       res.json(collection.toJSON())
     } catch (err: any) {
-      res.status(500).json({ code: 500, message: err.message })
+      app.logger().error(err.message || err)
+      res.status(500).json({ code: 500, message: 'Internal server error' })
     }
   })
 
@@ -61,7 +63,8 @@ export function registerCollectionRoutes(app: BaseApp, router: Router): void {
 
       res.status(201).json(collection.toJSON())
     } catch (err: any) {
-      res.status(500).json({ code: 500, message: err.message })
+      app.logger().error(err.message || err)
+      res.status(500).json({ code: 500, message: 'Internal server error' })
     }
   })
 
@@ -81,7 +84,8 @@ export function registerCollectionRoutes(app: BaseApp, router: Router): void {
 
       res.json(collection.toJSON())
     } catch (err: any) {
-      res.status(500).json({ code: 500, message: err.message })
+      app.logger().error(err.message || err)
+      res.status(500).json({ code: 500, message: 'Internal server error' })
     }
   })
 
@@ -94,7 +98,8 @@ export function registerCollectionRoutes(app: BaseApp, router: Router): void {
       await app.delete(collection)
       res.status(204).send()
     } catch (err: any) {
-      res.status(500).json({ code: 500, message: err.message })
+      app.logger().error(err.message || err)
+      res.status(500).json({ code: 500, message: 'Internal server error' })
     }
   })
 
@@ -133,7 +138,8 @@ export function registerCollectionRoutes(app: BaseApp, router: Router): void {
 
       res.json({ imported })
     } catch (err: any) {
-      res.status(500).json({ code: 500, message: err.message })
+      app.logger().error(err.message || err)
+      res.status(500).json({ code: 500, message: 'Internal server error' })
     }
   })
 
@@ -142,7 +148,8 @@ export function registerCollectionRoutes(app: BaseApp, router: Router): void {
       const collections = await app.findAllCollections()
       res.json(collections.map(c => c.toJSON()))
     } catch (err: any) {
-      res.status(500).json({ code: 500, message: err.message })
+      app.logger().error(err.message || err)
+      res.status(500).json({ code: 500, message: 'Internal server error' })
     }
   })
 

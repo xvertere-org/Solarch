@@ -45,7 +45,8 @@ export function registerBackupRoutes(app: BaseApp, router: Router): void {
 
       res.json(files)
     } catch (err: any) {
-      res.status(500).json({ code: 500, message: err.message })
+      app.logger().error(err.message || err)
+      res.status(500).json({ code: 500, message: 'Internal server error' })
     }
   })
 
@@ -111,7 +112,8 @@ export function registerBackupRoutes(app: BaseApp, router: Router): void {
         },
       })
     } catch (err: any) {
-      res.status(500).json({ code: 500, message: err.message })
+      app.logger().error(err.message || err)
+      res.status(500).json({ code: 500, message: 'Internal server error' })
     }
   })
 
@@ -150,7 +152,8 @@ export function registerBackupRoutes(app: BaseApp, router: Router): void {
       if (req.file && fs.existsSync(req.file.path)) {
         fs.unlinkSync(req.file.path)
       }
-      res.status(500).json({ code: 500, message: err.message })
+      app.logger().error(err.message || err)
+      res.status(500).json({ code: 500, message: 'Internal server error' })
     }
   })
 
@@ -227,7 +230,8 @@ export function registerBackupRoutes(app: BaseApp, router: Router): void {
 
       res.json({ code: 200, message: `Backup "${backupKey}" restored successfully` })
     } catch (err: any) {
-      res.status(500).json({ code: 500, message: err.message })
+      app.logger().error(err.message || err)
+      res.status(500).json({ code: 500, message: 'Internal server error' })
     }
   })
 
@@ -243,7 +247,8 @@ export function registerBackupRoutes(app: BaseApp, router: Router): void {
       fs.unlinkSync(backupPath)
       res.status(204).send()
     } catch (err: any) {
-      res.status(500).json({ code: 500, message: err.message })
+      app.logger().error(err.message || err)
+      res.status(500).json({ code: 500, message: 'Internal server error' })
     }
   })
 }

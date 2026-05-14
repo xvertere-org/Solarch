@@ -21,7 +21,8 @@ export function registerAIRoutes(app: BaseApp, router: Router): void {
       const schema = await aiService.generateCollection(description, { dryRun: !!dryRun })
       res.json({ schema, applied: !dryRun })
     } catch (err: any) {
-      res.status(500).json({ code: 500, message: err.message })
+      app.logger().error(err.message || err)
+      res.status(500).json({ code: 500, message: 'Internal server error' })
     }
   })
 
@@ -35,7 +36,8 @@ export function registerAIRoutes(app: BaseApp, router: Router): void {
       const rule = await aiService.generateRule(action, description)
       res.json({ rule })
     } catch (err: any) {
-      res.status(500).json({ code: 500, message: err.message })
+      app.logger().error(err.message || err)
+      res.status(500).json({ code: 500, message: 'Internal server error' })
     }
   })
 
@@ -52,7 +54,8 @@ export function registerAIRoutes(app: BaseApp, router: Router): void {
         records: records.map(r => r.toJSON()),
       })
     } catch (err: any) {
-      res.status(500).json({ code: 500, message: err.message })
+      app.logger().error(err.message || err)
+      res.status(500).json({ code: 500, message: 'Internal server error' })
     }
   })
 
@@ -66,7 +69,8 @@ export function registerAIRoutes(app: BaseApp, router: Router): void {
       const reply = await aiService.chat(message)
       res.json({ reply })
     } catch (err: any) {
-      res.status(500).json({ code: 500, message: err.message })
+      app.logger().error(err.message || err)
+      res.status(500).json({ code: 500, message: 'Internal server error' })
     }
   })
 

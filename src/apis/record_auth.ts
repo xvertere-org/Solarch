@@ -137,11 +137,13 @@ export function registerAuthRoutes(app: BaseApp, router: Router): void {
 
       res.json({ token, record: record.toJSON() })
     } catch (err: any) {
-      res.status(500).json({ code: 500, message: err.message })
+      app.logger().error(err.message || err)
+      res.status(500).json({ code: 500, message: 'Internal server error' })
     }
   })
 
-  authRouter.post('/auth-with-oauth2', async (req: Request, res: Response) => {
+  // FIXED[H-3]: Added rate limiting to OAuth2 callback
+  authRouter.post('/auth-with-oauth2', authRateLimiter, async (req: Request, res: Response) => {
     try {
       const { provider, code, codeVerifier, redirectURL, createData, state } = req.body
       const collectionIdOrName = req.params.collectionIdOrName ?? 'users'
@@ -259,7 +261,8 @@ export function registerAuthRoutes(app: BaseApp, router: Router): void {
 
       res.json({ token, record: record.toJSON(), meta: { isNew: !existingAuth } })
     } catch (err: any) {
-      res.status(500).json({ code: 500, message: err.message })
+      app.logger().error(err.message || err)
+      res.status(500).json({ code: 500, message: 'Internal server error' })
     }
   })
 
@@ -315,7 +318,8 @@ export function registerAuthRoutes(app: BaseApp, router: Router): void {
 
       res.json({ token, record: record.toJSON() })
     } catch (err: any) {
-      res.status(500).json({ code: 500, message: err.message })
+      app.logger().error(err.message || err)
+      res.status(500).json({ code: 500, message: 'Internal server error' })
     }
   })
 
@@ -374,7 +378,8 @@ export function registerAuthRoutes(app: BaseApp, router: Router): void {
 
       res.json({ otpId })
     } catch (err: any) {
-      res.status(500).json({ code: 500, message: err.message })
+      app.logger().error(err.message || err)
+      res.status(500).json({ code: 500, message: 'Internal server error' })
     }
   })
 
@@ -405,7 +410,8 @@ export function registerAuthRoutes(app: BaseApp, router: Router): void {
 
       res.json({ token: newToken })
     } catch (err: any) {
-      res.status(500).json({ code: 500, message: err.message })
+      app.logger().error(err.message || err)
+      res.status(500).json({ code: 500, message: 'Internal server error' })
     }
   })
 
@@ -455,7 +461,8 @@ export function registerAuthRoutes(app: BaseApp, router: Router): void {
         qrURL: `otpauth://totp/${collection.name}:${recordRow.email || payload.id}?secret=${secret}&issuer=${app.settings().appName || 'TspoonBase'}`,
       })
     } catch (err: any) {
-      res.status(500).json({ code: 500, message: err.message })
+      app.logger().error(err.message || err)
+      res.status(500).json({ code: 500, message: 'Internal server error' })
     }
   })
 
@@ -491,7 +498,8 @@ export function registerAuthRoutes(app: BaseApp, router: Router): void {
 
       res.json({ verified: true })
     } catch (err: any) {
-      res.status(500).json({ code: 500, message: err.message })
+      app.logger().error(err.message || err)
+      res.status(500).json({ code: 500, message: 'Internal server error' })
     }
   })
 
@@ -514,7 +522,8 @@ export function registerAuthRoutes(app: BaseApp, router: Router): void {
 
       res.json({ authMethods, mfa: { enabled: true }, otp: { enabled: true } })
     } catch (err: any) {
-      res.status(500).json({ code: 500, message: err.message })
+      app.logger().error(err.message || err)
+      res.status(500).json({ code: 500, message: 'Internal server error' })
     }
   })
 
@@ -553,7 +562,8 @@ export function registerAuthRoutes(app: BaseApp, router: Router): void {
         updated: r.updated,
       })))
     } catch (err: any) {
-      res.status(500).json({ code: 500, message: err.message })
+      app.logger().error(err.message || err)
+      res.status(500).json({ code: 500, message: 'Internal server error' })
     }
   })
 

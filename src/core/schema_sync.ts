@@ -99,24 +99,32 @@ async function syncViewCollection(app: BaseApp, collection: Collection): Promise
 
   const query = collection.viewOptions?.query
   if (query) {
-    const forbiddenPatterns = [
-      /\bdrop\b/i,
-      /\bdelete\b/i,
-      /\binsert\b/i,
-      /\bupdate\b/i,
-      /\bcreate\s+table\b/i,
-      /\balter\b/i,
-      /\btruncate\b/i,
-    ]
-    
-    for (const pattern of forbiddenPatterns) {
-      if (pattern.test(query)) {
-        app.logger().error(`Forbidden SQL in view query: ${viewName}`, 'View query contains forbidden operations')
-        return { changed: false, addedColumns: [], removedColumns: [], modifiedColumns: [] }
+    // FIXED[H-4]: Use EXPLAIN to validate that query is a pure SELECT
+    // The EXPLAIN approach is the definitive check — it will tell us whether the
+    // query engine interprets this as a single SELECT statement or something else
+    // (e.g., multi-statement, DDL, PRAGMA, ATTACH).
+    try {
+      const explainResult = db.prepare(`EXPLAIN ${query}`).all() as Array<{ opcode: string }>
+      // Pure SELECT queries generate only a specific set of opcodes.
+      // If the result contains opcodes like OpenWrite, CreateTable, etc., it's not read-only.
+      const writeOpcodes = new Set([
+        'OpenWrite', 'CreateTable', 'CreateIndex', 'Delete', 'Insert', 'Update',
+        'BeginTransaction', 'CommitTransaction', 'RollbackTransaction',
+        'Savepoint', 'Release', 'AttachDatabase', 'DetachDatabase',
+        'CreateTrigger', 'DropTrigger', 'DropIndex', 'DropTable', 'DropView',
+      ])
+      for (const row of explainResult) {
+        if (writeOpcodes.has(row.opcode)) {
+          app.logger().error(`View query contains write opcodes for ${viewName}`, `opcode: ${row.opcode}`)
+          return { changed: false, addedColumns: [], removedColumns: [], modifiedColumns: [] }
+        }
       }
+    } catch (explainErr: any) {
+      app.logger().error(`EXPLAIN validation failed for view ${viewName}`, explainErr.message)
+      return { changed: false, addedColumns: [], removedColumns: [], modifiedColumns: [] }
     }
-    
-    // Validate it's a SELECT query
+
+    // Keep the prefix check as an additional safeguard
     const trimmed = query.trim().toLowerCase()
     if (!trimmed.startsWith('select')) {
       app.logger().error(`Invalid view query: ${viewName}`, 'View query must start with SELECT')

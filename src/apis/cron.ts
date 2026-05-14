@@ -18,7 +18,8 @@ export function registerCronRoutes(app: BaseApp, router: Router): void {
       }))
       res.json(jobs)
     } catch (err: any) {
-      res.status(500).json({ code: 500, message: err.message })
+      app.logger().error(err.message || err)
+      res.status(500).json({ code: 500, message: 'Internal server error' })
     }
   })
 
@@ -31,7 +32,8 @@ export function registerCronRoutes(app: BaseApp, router: Router): void {
       await job.handler()
       res.json({ code: 200, message: 'Cron job executed.' })
     } catch (err: any) {
-      res.status(500).json({ code: 500, message: err.message })
+      app.logger().error(err.message || err)
+      res.status(500).json({ code: 500, message: 'Internal server error' })
     }
   })
 }

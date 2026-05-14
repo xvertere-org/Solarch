@@ -4,9 +4,15 @@ import { createHmac, createCipheriv, createDecipheriv, randomBytes, scryptSync }
 
 let SALT_ROUNDS = 12
 
+/**
+ * Set bcrypt work factor. Values above 12 cause noticeable event-loop blocking
+ * (~1s at 13, ~2s at 14, ~4s at 15) which enables slow-loris DoS.
+ * @throws if rounds outside [10, 12]
+ */
+// FIXED[M-2]: Clamped to [10, 12] to prevent DoS via excessive work factor
 export function setBcryptRounds(rounds: number): void {
-  if (rounds < 10 || rounds > 15) {
-    throw new Error('Bcrypt rounds must be between 10 and 15')
+  if (rounds < 10 || rounds > 12) {
+    throw new Error('Bcrypt rounds must be between 10 and 12')
   }
   SALT_ROUNDS = rounds
 }

@@ -5,11 +5,36 @@ import { generateRandomString } from '../tools/security/crypto'
 import { evaluateRule, RecordFieldResolver, RequestInfo } from '../core/record_field_resolver'
 import { Mailer } from '../tools/mailer/mailer'
 import { EmailTemplateEngine, sendPasswordResetEmail, sendVerificationEmail, sendEmailChangeConfirmation } from '../tools/mailer/templates'
+import rateLimit from 'express-rate-limit'
+
+// FIXED[H-2]: Rate limiters for auth flow endpoints
+const authFlowRequestLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  max: 5,
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: (req: Request): string => {
+    return req.body?.email || req.ip || 'unknown'
+  },
+  message: { code: 429, message: 'Too many requests, please try again later.' },
+})
+
+const authFlowConfirmLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: (req: Request): string => {
+    return req.ip || 'unknown'
+  },
+  message: { code: 429, message: 'Too many requests, please try again later.' },
+})
 
 export function registerPasswordResetRoutes(app: BaseApp, router: Router): void {
   const authRouter = Router({ mergeParams: true })
 
-  authRouter.post('/request-password-reset', async (req: Request, res: Response) => {
+  // FIXED[H-2]: Added rate limiting
+  authRouter.post('/request-password-reset', authFlowRequestLimiter, async (req: Request, res: Response) => {
     try {
       const { email } = req.body
       const collectionIdOrName = req.params.collectionIdOrName
@@ -37,6 +62,8 @@ export function registerPasswordResetRoutes(app: BaseApp, router: Router): void 
         if (settings.smtp.host) {
           const mailer = Mailer.fromSettings(settings)
           const engine = new EmailTemplateEngine(settings)
+          // FIXED[L-1]: Set Referrer-Policy to no-referrer to prevent token leakage via Referer header
+          res.setHeader('Referrer-Policy', 'no-referrer')
           await sendPasswordResetEmail(mailer, engine, email, {
             resetURL: `${settings.appURL}/_/#/auth/confirm-password-reset?token=${token}`,
             userName: record.get('name') || record.get('username') || email,
@@ -48,11 +75,13 @@ export function registerPasswordResetRoutes(app: BaseApp, router: Router): void 
 
       res.json({ code: 200, message: 'Password reset email sent.' })
     } catch (err: any) {
-      res.status(500).json({ code: 500, message: err.message })
+      app.logger().error(err.message || err)
+      res.status(500).json({ code: 500, message: 'Internal server error' })
     }
   })
 
-  authRouter.post('/confirm-password-reset', async (req: Request, res: Response) => {
+  // FIXED[H-2]: Added rate limiting
+  authRouter.post('/confirm-password-reset', authFlowConfirmLimiter, async (req: Request, res: Response) => {
     try {
       const { token, password, passwordConfirm } = req.body
       const collectionIdOrName = req.params.collectionIdOrName
@@ -89,7 +118,8 @@ export function registerPasswordResetRoutes(app: BaseApp, router: Router): void 
 
       res.json({ code: 200, message: 'Password reset successfully.' })
     } catch (err: any) {
-      res.status(500).json({ code: 500, message: err.message })
+      app.logger().error(err.message || err)
+      res.status(500).json({ code: 500, message: 'Internal server error' })
     }
   })
 
@@ -99,7 +129,8 @@ export function registerPasswordResetRoutes(app: BaseApp, router: Router): void 
 export function registerVerificationRoutes(app: BaseApp, router: Router): void {
   const authRouter = Router({ mergeParams: true })
 
-  authRouter.post('/request-verification', async (req: Request, res: Response) => {
+  // FIXED[H-2]: Added rate limiting
+  authRouter.post('/request-verification', authFlowRequestLimiter, async (req: Request, res: Response) => {
     try {
       const { email } = req.body
       const collectionIdOrName = req.params.collectionIdOrName
@@ -142,11 +173,13 @@ export function registerVerificationRoutes(app: BaseApp, router: Router): void {
 
       res.json({ code: 200, message: 'Verification email sent.' })
     } catch (err: any) {
-      res.status(500).json({ code: 500, message: err.message })
+      app.logger().error(err.message || err)
+      res.status(500).json({ code: 500, message: 'Internal server error' })
     }
   })
 
-  authRouter.post('/confirm-verification', async (req: Request, res: Response) => {
+  // FIXED[H-2]: Added rate limiting
+  authRouter.post('/confirm-verification', authFlowConfirmLimiter, async (req: Request, res: Response) => {
     try {
       const { token } = req.body
       const collectionIdOrName = req.params.collectionIdOrName
@@ -171,7 +204,8 @@ export function registerVerificationRoutes(app: BaseApp, router: Router): void {
 
       res.json({ code: 200, message: 'Email verified successfully.' })
     } catch (err: any) {
-      res.status(500).json({ code: 500, message: err.message })
+      app.logger().error(err.message || err)
+      res.status(500).json({ code: 500, message: 'Internal server error' })
     }
   })
 
@@ -181,7 +215,8 @@ export function registerVerificationRoutes(app: BaseApp, router: Router): void {
 export function registerEmailChangeRoutes(app: BaseApp, router: Router): void {
   const authRouter = Router({ mergeParams: true })
 
-  authRouter.post('/request-email-change', async (req: Request, res: Response) => {
+  // FIXED[H-2]: Added rate limiting
+  authRouter.post('/request-email-change', authFlowRequestLimiter, async (req: Request, res: Response) => {
     try {
       const { newEmail } = req.body
       const collectionIdOrName = req.params.collectionIdOrName
@@ -233,11 +268,13 @@ export function registerEmailChangeRoutes(app: BaseApp, router: Router): void {
 
       res.json({ code: 200, message: 'Email change confirmation sent.' })
     } catch (err: any) {
-      res.status(500).json({ code: 500, message: err.message })
+      app.logger().error(err.message || err)
+      res.status(500).json({ code: 500, message: 'Internal server error' })
     }
   })
 
-  authRouter.post('/confirm-email-change', async (req: Request, res: Response) => {
+  // FIXED[H-2]: Added rate limiting
+  authRouter.post('/confirm-email-change', authFlowConfirmLimiter, async (req: Request, res: Response) => {
     try {
       const { token } = req.body
       const collectionIdOrName = req.params.collectionIdOrName
@@ -262,7 +299,8 @@ export function registerEmailChangeRoutes(app: BaseApp, router: Router): void {
 
       res.json({ code: 200, message: 'Email changed successfully.' })
     } catch (err: any) {
-      res.status(500).json({ code: 500, message: err.message })
+      app.logger().error(err.message || err)
+      res.status(500).json({ code: 500, message: 'Internal server error' })
     }
   })
 
@@ -302,7 +340,8 @@ export function registerImpersonateRoutes(app: BaseApp, router: Router): void {
 
       res.json({ token, record: record.toJSON() })
     } catch (err: any) {
-      res.status(500).json({ code: 500, message: err.message })
+      app.logger().error(err.message || err)
+      res.status(500).json({ code: 500, message: 'Internal server error' })
     }
   })
 

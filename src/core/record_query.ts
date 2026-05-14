@@ -2,6 +2,7 @@ import { BaseApp } from './base'
 import { RecordModel as PBRecord, RecordData } from './record'
 import { Collection } from './collection'
 import { parseFilter, buildSQL, buildSortSQL, FilterAST, evaluateFilterAST } from '../tools/search/filter'
+import { validateIdentifier } from '../utils/sql_safe'
 
 export interface RecordQueryOptions {
   filter?: string
@@ -220,12 +221,17 @@ export async function findAuthRecordByToken(
   }
 }
 
+// FIXED[M-1]: Guarded against SQL injection — only allows single SELECT statements
 export async function findRecordsByRawQuery(
   app: BaseApp,
   collectionIdOrName: string,
   rawQuery: string,
   params: any[] = []
 ): Promise<PBRecord[]> {
+  const trimmed = rawQuery.trim().toLowerCase()
+  if (!trimmed.startsWith('select') || trimmed.includes(';')) {
+    throw new Error('Raw query must be a single SELECT statement')
+  }
   const collection = await app.findCollectionByNameOrId(collectionIdOrName)
   if (!collection) return []
 
@@ -264,9 +270,8 @@ export async function vectorSearch(
   if (!collection) return []
 
   // Validate field name to prevent SQL injection
-  if (!/^[a-zA-Z0-9_]+$/.test(fieldName)) {
-    throw new Error('Invalid field name')
-  }
+  // FIXED[L-2]: Use shared validateIdentifier instead of inline regex
+  validateIdentifier(fieldName, 'vector field name')
 
   const field = collection.fields.find(f => f.name === fieldName)
   if (!field || field.type !== 'vector') {

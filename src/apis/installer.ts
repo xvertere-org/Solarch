@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express'
 import { BaseApp } from '../core/base'
 import { hashPassword } from '../tools/security/crypto'
+import { randomBytes } from 'crypto'
 
 export function registerInstallerRoutes(app: BaseApp, router: Router): void {
   router.get('/api/installer/check', async (req: Request, res: Response) => {
@@ -13,7 +14,8 @@ export function registerInstallerRoutes(app: BaseApp, router: Router): void {
       const row = db.prepare(`SELECT COUNT(*) as count FROM _superusers`).get() as { count: number }
       res.json({ installed: row.count > 0 })
     } catch (err: any) {
-      res.status(500).json({ code: 500, message: err.message })
+      app.logger().error(err.message || err)
+      res.status(500).json({ code: 500, message: 'Internal server error' })
     }
   })
 
@@ -46,7 +48,8 @@ export function registerInstallerRoutes(app: BaseApp, router: Router): void {
       }
 
       const passwordHash = await hashPassword(password)
-      const id = `superuser_${Date.now()}`
+      // FIXED[M-3]: Use crypto.randomBytes instead of predictable Date.now()
+      const id = `su_${randomBytes(8).toString('hex')}`
       const now = new Date().toISOString()
 
       db.prepare(
@@ -55,7 +58,8 @@ export function registerInstallerRoutes(app: BaseApp, router: Router): void {
 
       res.json({ code: 200, message: 'Installer completed.' })
     } catch (err: any) {
-      res.status(500).json({ code: 500, message: err.message })
+      app.logger().error(err.message || err)
+      res.status(500).json({ code: 500, message: 'Internal server error' })
     }
   })
 }

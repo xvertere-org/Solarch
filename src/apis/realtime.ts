@@ -75,7 +75,8 @@ export function registerRealtimeRoutes(app: BaseApp, router: Router): void {
         subscriptions: subscriptions.map((s: any) => s.channel),
       })
     } catch (err: any) {
-      res.status(500).json({ code: 500, message: err.message })
+      app.logger().error(err.message || err)
+      res.status(500).json({ code: 500, message: 'Internal server error' })
     }
   })
 }

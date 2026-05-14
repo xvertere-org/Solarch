@@ -52,7 +52,8 @@ export function registerBatchRoutes(app: BaseApp, router: Router): void {
 
       res.json(results)
     } catch (err: any) {
-      res.status(500).json({ code: 500, message: err.message })
+      app.logger().error(err.message || err)
+      res.status(500).json({ code: 500, message: 'Internal server error' })
     }
   })
 }
@@ -117,7 +118,7 @@ async function processBatchRequest(app: BaseApp, originalReq: Request, batchReq:
     }
   } catch (err: any) {
     statusCode = 500
-    responseBody = { code: 500, message: err.message }
+    responseBody = { code: 500, message: 'Internal server error' }
   }
 
   return {

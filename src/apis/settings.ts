@@ -31,7 +31,8 @@ export function registerSettingsRoutes(app: BaseApp, router: Router): void {
       const settings = app.settings()
       res.json(settings)
     } catch (err: any) {
-      res.status(500).json({ code: 500, message: err.message })
+      app.logger().error(err.message || err)
+      res.status(500).json({ code: 500, message: 'Internal server error' })
     }
   })
 
@@ -51,7 +52,8 @@ export function registerSettingsRoutes(app: BaseApp, router: Router): void {
       await app.reloadSettings()
       res.json(app.settings())
     } catch (err: any) {
-      res.status(500).json({ code: 500, message: err.message })
+      app.logger().error(err.message || err)
+      res.status(500).json({ code: 500, message: 'Internal server error' })
     }
   })
 
@@ -73,7 +75,8 @@ export function registerSettingsRoutes(app: BaseApp, router: Router): void {
 
       res.json({ success: true, message: `Test email sent to ${to}.` })
     } catch (err: any) {
-      res.status(500).json({ code: 500, message: err.message })
+      app.logger().error(err.message || err)
+      res.status(500).json({ code: 500, message: 'Internal server error' })
     }
   })
 
@@ -93,7 +96,8 @@ export function registerSettingsRoutes(app: BaseApp, router: Router): void {
       }
       res.json({ success: true, message: 'S3 connection successful.' })
     } catch (err: any) {
-      res.status(500).json({ code: 500, message: `S3 connection failed: ${err.message}` })
+      app.logger().error(err.message || err)
+      res.status(500).json({ code: 500, message: 'S3 connection failed.' })
     }
   })
 

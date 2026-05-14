@@ -21,7 +21,8 @@ export function registerAgentRoutes(app: BaseApp, router: Router): void {
         inputs: n.inputs ?? 1, outputs: n.outputs ?? 1,
       })) })
     } catch (err: any) {
-      res.status(500).json({ code: 500, message: err.message })
+      app.logger().error(err.message || err)
+      res.status(500).json({ code: 500, message: 'Internal server error' })
     }
   })
 
@@ -32,7 +33,8 @@ export function registerAgentRoutes(app: BaseApp, router: Router): void {
       if (!node) return res.status(404).json({ code: 404, message: `Node type "${req.params.type}" not found` })
       res.json({ code: 200, data: { type: node.type, label: node.label, description: node.description, category: node.category, configSchema: node.configSchema } })
     } catch (err: any) {
-      res.status(500).json({ code: 500, message: err.message })
+      app.logger().error(err.message || err)
+      res.status(500).json({ code: 500, message: 'Internal server error' })
     }
   })
 
@@ -85,7 +87,8 @@ export function registerAgentRoutes(app: BaseApp, router: Router): void {
 
       res.status(201).json({ code: 201, message: `Workflow "${workflowId}" registered`, data: { workflowId, id } })
     } catch (err: any) {
-      res.status(500).json({ code: 500, message: err.message })
+      app.logger().error(err.message || err)
+      res.status(500).json({ code: 500, message: 'Internal server error' })
     }
   })
 
@@ -96,7 +99,8 @@ export function registerAgentRoutes(app: BaseApp, router: Router): void {
       const rows = db.prepare(`SELECT id, workflowId, name, description, version, enabled, created, updated FROM _agentWorkflows ORDER BY updated DESC LIMIT 100`).all() as any[]
       res.json({ code: 200, data: rows })
     } catch (err: any) {
-      res.status(500).json({ code: 500, message: err.message })
+      app.logger().error(err.message || err)
+      res.status(500).json({ code: 500, message: 'Internal server error' })
     }
   })
 
@@ -130,7 +134,8 @@ export function registerAgentRoutes(app: BaseApp, router: Router): void {
       }
       res.json({ code: 200, data: { id: row.id, workflowId: row.workflowId, name: row.name, description: row.description, version: row.version, enabled: row.enabled, created: row.created, updated: row.updated, nodes: definition.nodes, edges: definition.edges, config: definition.config } })
     } catch (err: any) {
-      res.status(500).json({ code: 500, message: err.message })
+      app.logger().error(err.message || err)
+      res.status(500).json({ code: 500, message: 'Internal server error' })
     }
   })
 
@@ -142,7 +147,8 @@ export function registerAgentRoutes(app: BaseApp, router: Router): void {
       if (result.changes === 0) return res.status(404).json({ code: 404, message: 'Workflow not found' })
       res.status(204).send()
     } catch (err: any) {
-      res.status(500).json({ code: 500, message: err.message })
+      app.logger().error(err.message || err)
+      res.status(500).json({ code: 500, message: 'Internal server error' })
     }
   })
 
@@ -178,7 +184,8 @@ export function registerAgentRoutes(app: BaseApp, router: Router): void {
 
       res.json({ code: 200, data: result })
     } catch (err: any) {
-      res.status(500).json({ code: 500, message: err.message })
+      app.logger().error(err.message || err)
+      res.status(500).json({ code: 500, message: 'Internal server error' })
     }
   })
 
@@ -218,7 +225,7 @@ export function registerAgentRoutes(app: BaseApp, router: Router): void {
       res.write(`data: ${JSON.stringify({ type: 'result', ...result })}\n\n`)
       res.end()
     } catch (err: any) {
-      res.write(`data: ${JSON.stringify({ type: 'error', message: err.message })}\n\n`)
+      res.write(`data: ${JSON.stringify({ type: 'error', message: 'Internal server error' })}\n\n`)
       res.end()
     }
   })
@@ -230,7 +237,8 @@ export function registerAgentRoutes(app: BaseApp, router: Router): void {
       const rows = db.prepare(`SELECT id, workflowId, status, trigger, duration, error, created FROM _agentExecutions WHERE workflowId = ? ORDER BY created DESC LIMIT 50`).all(req.params.workflowId) as any[]
       res.json({ code: 200, data: rows })
     } catch (err: any) {
-      res.status(500).json({ code: 500, message: err.message })
+      app.logger().error(err.message || err)
+      res.status(500).json({ code: 500, message: 'Internal server error' })
     }
   })
 
@@ -242,7 +250,8 @@ export function registerAgentRoutes(app: BaseApp, router: Router): void {
       if (!row) return res.status(404).json({ code: 404, message: 'Execution not found' })
       res.json({ code: 200, data: { ...row, input: JSON.parse(row.input), output: JSON.parse(row.output), results: JSON.parse(row.results) } })
     } catch (err: any) {
-      res.status(500).json({ code: 500, message: err.message })
+      app.logger().error(err.message || err)
+      res.status(500).json({ code: 500, message: 'Internal server error' })
     }
   })
 

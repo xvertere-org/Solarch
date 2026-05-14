@@ -1,10 +1,43 @@
 import { BaseApp } from '../core/base'
 import { hashPassword } from '../tools/security/crypto'
+import { randomBytes } from 'crypto'
 
 interface SuperuserOptions {
   email?: string
   password?: string
   dataDir: string
+}
+
+// FIXED[M-4]: Mask password input with * characters
+async function silentQuestion(prompt: string): Promise<string> {
+  return new Promise((resolve) => {
+    process.stdout.write(prompt)
+    const stdin = process.stdin
+    const wasRaw = stdin.isRaw
+    stdin.setRawMode(true)
+    stdin.resume()
+
+    const buf: string[] = []
+    const onData = (data: Buffer) => {
+      const char = data.toString()
+      if (char === '\r' || char === '\n') {
+        stdin.setRawMode(wasRaw)
+        stdin.pause()
+        stdin.removeListener('data', onData)
+        process.stdout.write('\n')
+        resolve(buf.join(''))
+      } else if (char === '\x7f' || char === '\b') {
+        if (buf.length > 0) {
+          buf.pop()
+          process.stdout.write('\b \b')
+        }
+      } else {
+        buf.push(char)
+        process.stdout.write('*')
+      }
+    }
+    stdin.on('data', onData)
+  })
 }
 
 export async function createSuperuser(opts: SuperuserOptions): Promise<void> {
@@ -27,7 +60,7 @@ export async function createSuperuser(opts: SuperuserOptions): Promise<void> {
     }
 
     if (!password) {
-      password = await question('Password: ')
+      password = await silentQuestion('Password: ')
     }
 
     rl.close()
@@ -53,7 +86,8 @@ export async function createSuperuser(opts: SuperuserOptions): Promise<void> {
     `)
 
     const passwordHash = await hashPassword(password!)
-    const id = `superuser_${Date.now()}`
+    // FIXED[M-3]: Use crypto.randomBytes instead of predictable Date.now()
+    const id = `su_${randomBytes(8).toString('hex')}`
     const now = new Date().toISOString()
 
     db.prepare(

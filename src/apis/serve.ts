@@ -28,6 +28,7 @@ import { WebSocketServer, WebSocket } from 'ws'
 import { registerBuiltInProviders } from '../tools/auth/oauth2'
 import path from 'path'
 import fs from 'fs'
+import fsPromises from 'fs/promises'
 import { hasSuperuser } from '../cmd/superuser'
 
 export async function serve(app: BaseApp, port: number): Promise<http.Server> {
@@ -163,42 +164,50 @@ export async function serve(app: BaseApp, port: number): Promise<http.Server> {
     const maxKeep = app.settings().backups?.cronMaxKeep ?? 3
     if (backupCron) {
       const croner = require('croner')
+      // FIXED[L-3]: Use async fs/promises to prevent event-loop blocking during backups
       croner(backupCron, async () => {
         try {
           const { default: JSZip } = await import('jszip')
           const backupDir = path.join(app.dataDir, 'backups')
-          fs.mkdirSync(backupDir, { recursive: true })
+          await fsPromises.mkdir(backupDir, { recursive: true })
           const backupName = `auto_backup_${Date.now()}.zip`
           const backupPath = path.join(backupDir, backupName)
 
           const zip = new JSZip()
           for (const dbFile of ['data.db', 'auxiliary.db']) {
             const dbPath = path.join(app.dataDir, dbFile)
-            if (fs.existsSync(dbPath)) {
-              zip.file(dbFile, fs.readFileSync(dbPath))
-            }
+            try {
+              const content = await fsPromises.readFile(dbPath)
+              zip.file(dbFile, content)
+            } catch {}
           }
           const storageDir = path.join(app.dataDir, 'storage')
-          if (fs.existsSync(storageDir)) {
-            const walk = (dir: string, prefix: string) => {
-              for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
+          try {
+            await fsPromises.access(storageDir)
+            const walk = async (dir: string, prefix: string) => {
+              const entries = await fsPromises.readdir(dir, { withFileTypes: true })
+              for (const e of entries) {
                 const fp = path.join(dir, e.name)
-                if (e.isDirectory()) walk(fp, prefix ? `${prefix}/${e.name}` : e.name)
-                else zip.file(`storage/${prefix ? prefix + '/' : ''}${e.name}`, fs.readFileSync(fp))
+                if (e.isDirectory()) await walk(fp, prefix ? `${prefix}/${e.name}` : e.name)
+                else {
+                  const content = await fsPromises.readFile(fp)
+                  zip.file(`storage/${prefix ? prefix + '/' : ''}${e.name}`, content)
+                }
               }
             }
-            walk(storageDir, '')
-          }
+            await walk(storageDir, '')
+          } catch {}
           const buf = await zip.generateAsync({ type: 'nodebuffer', compression: 'DEFLATE' })
-          fs.writeFileSync(backupPath, buf)
+          await fsPromises.writeFile(backupPath, buf)
 
           // Prune old backups
-          const files = fs.readdirSync(backupDir)
+          const allFiles = await fsPromises.readdir(backupDir)
+          const zipFiles = allFiles
             .filter(f => f.startsWith('auto_backup_') && f.endsWith('.zip'))
             .sort()
-          while (files.length > maxKeep) {
-            const old = files.shift()
-            if (old) fs.unlinkSync(path.join(backupDir, old))
+          while (zipFiles.length > maxKeep) {
+            const old = zipFiles.shift()
+            if (old) await fsPromises.unlink(path.join(backupDir, old))
           }
         } catch (err: any) {
           app.logger().error('Automated backup failed', err.message)

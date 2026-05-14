@@ -33,7 +33,8 @@ export function registerLogRoutes(app: BaseApp, router: Router): void {
         items: rows,
       })
     } catch (err: any) {
-      res.status(500).json({ code: 500, message: err.message })
+      app.logger().error(err.message || err)
+      res.status(500).json({ code: 500, message: 'Internal server error' })
     }
   })
 
@@ -48,7 +49,8 @@ export function registerLogRoutes(app: BaseApp, router: Router): void {
 
       res.json(rows)
     } catch (err: any) {
-      res.status(500).json({ code: 500, message: err.message })
+      app.logger().error(err.message || err)
+      res.status(500).json({ code: 500, message: 'Internal server error' })
     }
   })
 }

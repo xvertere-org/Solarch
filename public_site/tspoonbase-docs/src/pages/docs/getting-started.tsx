@@ -448,6 +448,24 @@ export default defineCollection({
       <DocSection id="changelog" title="Changelog">
         <div className="space-y-6">
           <div className="rounded-lg border border-theme bg-theme-surface p-4">
+            <h3 className="font-heading text-lg font-bold text-theme">v0.12.0</h3>
+            <p className="mt-1 text-xs text-theme-muted">2026-05-14</p>
+            <h4 className="mt-3 text-sm font-semibold text-red-400">Security Patch — 22 Findings</h4>
+            <ul className="mt-1 list-inside list-disc space-y-1 text-sm text-theme-secondary">
+              <li><strong>Critical:</strong> OAuth2 createData mass assignment — explicit field allowlist prevents passwordHash injection</li>
+              <li><strong>Critical:</strong> OTP verification rate limited — 5 req/min per IP+otpId</li>
+              <li><strong>Critical:</strong> OTP and MFA backup codes now generated with <code>crypto.randomInt</code></li>
+              <li><strong>High:</strong> Collection and cron endpoints gated behind superuser auth</li>
+              <li><strong>High:</strong> <code>+</code>/<code>-</code> field modifier bypass fixed — resolved name checked against protected field list</li>
+              <li><strong>High:</strong> All <code>Math.random()</code> ID generation replaced with <code>crypto.randomBytes</code></li>
+              <li><strong>High:</strong> SQL INSERT column/placeholder count mismatch fixed (was crashing OTP auth)</li>
+              <li><strong>High:</strong> Rate limiting enabled by default — 60 req/min per IP</li>
+              <li><strong>Medium:</strong> SMTP TLS validation, per-encryption KDF salt, body limits lowered to 10MB</li>
+              <li><strong>Medium:</strong> Sanitized request logging, file field validation, account lockout (10 failed attempts)</li>
+              <li><strong>Low:</strong> Timing-safe OTP comparison, collection import validation, <code>X-Powered-By</code> hidden</li>
+            </ul>
+          </div>
+          <div className="rounded-lg border border-theme bg-theme-surface p-4">
             <h3 className="font-heading text-lg font-bold text-theme">v0.11.0</h3>
             <p className="mt-1 text-xs text-theme-muted">2026-05-12</p>
             <h4 className="mt-3 text-sm font-semibold text-red-400">Security Remediation — 32 Findings</h4>
