@@ -19,5 +19,5 @@
     "allowSyntheticDefaultImports": true
   },
   "include": ["src/**/*"],
-  "exclude": ["node_modules", "dist", "ui", "src/**/*.test.ts"]
+  "exclude": ["node_modules", "dist", "ui", "src/**/*.test.ts", "src/tools/jsvm/deno_worker.ts"]
 }
