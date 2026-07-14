@@ -6,7 +6,7 @@ interface Message { role: 'user' | 'assistant'; content: string }
 
 export default function AIAssistant() {
   const [messages, setMessages] = useState<Message[]>([
-    { role: 'assistant', content: 'Hello! I am your TspoonBase AI assistant. I can help you generate collections, write access rules, create seed data, and answer questions about your database.' }
+    { role: 'assistant', content: 'Hello! I am your Solarch AI assistant. I can help you generate collections, write access rules, create seed data, and answer questions about your database.' }
   ])
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)

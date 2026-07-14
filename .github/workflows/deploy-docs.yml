@@ -5,7 +5,7 @@ on:
     branches:
       - main
     paths:
-      - 'public_site/tspoonbase-docs/**'
+      - 'public_site/solarch-docs/**'
       - '.github/workflows/deploy-docs.yml'
 
 jobs:
@@ -13,7 +13,7 @@ jobs:
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: public_site/tspoonbase-docs
+        working-directory: public_site/solarch-docs
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -23,7 +23,7 @@ jobs:
         with:
           node-version: 20
           cache: 'npm'
-          cache-dependency-path: public_site/tspoonbase-docs/package-lock.json
+          cache-dependency-path: public_site/solarch-docs/package-lock.json
 
       - name: Install dependencies
         run: npm ci

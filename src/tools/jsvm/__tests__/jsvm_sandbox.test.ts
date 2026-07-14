@@ -53,11 +53,11 @@ describe('Isolated Mode — Basic Execution', () => {
   itIsolated('should handle string operations', async () => {
     const result = await runInDeno(
       'return input.name.toUpperCase()',
-      { input: { name: 'tspoonbase' } },
+      { input: { name: 'solarch' } },
       { mode: 'code', timeoutMs: 10000 }
     )
     expect(result.success).toBe(true)
-    expect(result.result).toBe('TSPOONBASE')
+    expect(result.result).toBe('SOLARCH')
   }, 15000)
 
   itIsolated('should evaluate condition expressions (true)', async () => {

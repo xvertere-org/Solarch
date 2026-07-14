@@ -2,40 +2,40 @@
   <div style="text-align:center;margin-bottom:48px">
     <div class="pill" style="margin-bottom:16px">Got questions?</div>
     <h2 style="font-size:clamp(28px,3.5vw,38px);font-weight:700;margin-bottom:12px">Frequently Asked Questions</h2>
-    <p style="color:var(--text-secondary);font-size:16px;max-width:500px;margin:0 auto">Everything you need to know about TspoonBase.</p>
+    <p style="color:var(--text-secondary);font-size:16px;max-width:500px;margin:0 auto">Everything you need to know about Solarch.</p>
   </div>
   <div style="max-width:720px;margin:0 auto">
     <div class="faq-item" data-delay="0">
       <button class="faq-question" onclick="toggleFaq(this)">
-        What is TspoonBase?
+        What is Solarch?
         <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="6 9 12 15 18 9"/></svg>
       </button>
-      <div class="faq-answer"><div class="faq-answer-inner">TspoonBase is an open-source Backend-as-a-Service (BaaS) written in TypeScript. It provides SQLite, Express, WebSocket, authentication, file storage, AI tools, vector search, and an admin UI — all in a single npm package. No Docker, no microservices, no YAML.</div></div>
+      <div class="faq-answer"><div class="faq-answer-inner">Solarch is an open-source Backend-as-a-Service (BaaS) written in TypeScript. It provides SQLite, Express, WebSocket, authentication, file storage, AI tools, vector search, and an admin UI — all in a single npm package. No Docker, no microservices, no YAML.</div></div>
     </div>
     <div class="faq-item" data-delay="100">
       <button class="faq-question" onclick="toggleFaq(this)">
         How is this different from PocketBase?
         <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="6 9 12 15 18 9"/></svg>
       </button>
-      <div class="faq-answer"><div class="faq-answer-inner">While inspired by PocketBase, TspoonBase is built entirely in TypeScript with a Node.js runtime. This means you get native npm ecosystem access, TypeScript-first DX, easy customization through code, and no Go dependency. It also includes built-in AI tools, MFA/TOTP, and S3-compatible storage.</div></div>
+      <div class="faq-answer"><div class="faq-answer-inner">While inspired by PocketBase, Solarch is built entirely in TypeScript with a Node.js runtime. This means you get native npm ecosystem access, TypeScript-first DX, easy customization through code, and no Go dependency. It also includes built-in AI tools, MFA/TOTP, and S3-compatible storage.</div></div>
     </div>
     <div class="faq-item" data-delay="200">
       <button class="faq-question" onclick="toggleFaq(this)">
         Do I need Docker or a database?
         <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="6 9 12 15 18 9"/></svg>
       </button>
-      <div class="faq-answer"><div class="faq-answer-inner">No. TspoonBase uses SQLite as its embedded database, so there's zero infrastructure to manage. Just <code style="color:var(--text-code)">npx tspoonbase serve</code> and you're running. For production, you can optionally connect S3 for file storage and configure SMTP for emails.</div></div>
+      <div class="faq-answer"><div class="faq-answer-inner">No. Solarch uses SQLite as its embedded database, so there's zero infrastructure to manage. Just <code style="color:var(--text-code)">npx solarch serve</code> and you're running. For production, you can optionally connect S3 for file storage and configure SMTP for emails.</div></div>
     </div>
     <div class="faq-item" data-delay="300">
       <button class="faq-question" onclick="toggleFaq(this)">
-        Can I use TspoonBase in production?
+        Can I use Solarch in production?
         <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="6 9 12 15 18 9"/></svg>
       </button>
-      <div class="faq-answer"><div class="faq-answer-inner">Absolutely. TspoonBase is designed for production use with built-in security features including Helmet, rate limiting, CORS configuration, JWT-based auth, SQL injection protection, and MFA/TOTP support. It's already being used in production by developers worldwide.</div></div>
+      <div class="faq-answer"><div class="faq-answer-inner">Absolutely. Solarch is designed for production use with built-in security features including Helmet, rate limiting, CORS configuration, JWT-based auth, SQL injection protection, and MFA/TOTP support. It's already being used in production by developers worldwide.</div></div>
     </div>
     <div class="faq-item" data-delay="400">
       <button class="faq-question" onclick="toggleFaq(this)">
-        How do I deploy TspoonBase?
+        How do I deploy Solarch?
         <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="6 9 12 15 18 9"/></svg>
       </button>
       <div class="faq-answer"><div class="faq-answer-inner">Deploy it anywhere Node.js runs — VPS, Railway, Fly.io, Render, or your own server. Since it's a single process with SQLite, deployment is straightforward. For horizontal scaling, you can configure read replicas and S3 for file storage.</div></div>
@@ -45,7 +45,7 @@
         Is there a hosted/cloud version?
         <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="6 9 12 15 18 9"/></svg>
       </button>
-      <div class="faq-answer"><div class="faq-answer-inner">Not yet. TspoonBase is self-hosted and open source (Apache-2.0). You own your data completely. A cloud-hosted option is on the roadmap — <a href="https://github.com/Jay-Suryawansh7/tspoonbase" target="_blank" style="color:var(--blue-bright);text-decoration:underline">star the repo</a> to stay updated.</div></div>
+      <div class="faq-answer"><div class="faq-answer-inner">Not yet. Solarch is self-hosted and open source (Apache-2.0). You own your data completely. A cloud-hosted option is on the roadmap — <a href="https://github.com/Jay-Suryawansh7/solarch" target="_blank" style="color:var(--blue-bright);text-decoration:underline">star the repo</a> to stay updated.</div></div>
     </div>
   </div>
 </section>

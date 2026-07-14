@@ -435,7 +435,7 @@ export function registerAuthRoutes(app: BaseApp, router: Router): void {
       res.json({
         secret,
         backupCodes: rawBackupCodes,
-        qrURL: `otpauth://totp/${collection.name}:${recordRow.email || payload.id}?secret=${secret}&issuer=${app.settings().appName || 'TspoonBase'}`,
+        qrURL: `otpauth://totp/${collection.name}:${recordRow.email || payload.id}?secret=${secret}&issuer=${app.settings().appName || 'Solarch'}`,
       })
     } catch (err: any) {
       app.logger().error(err.message || err)

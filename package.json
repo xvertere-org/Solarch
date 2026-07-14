@@ -1,15 +1,15 @@
 {
-  "name": "tspoonbase",
+  "name": "solarch",
   "version": "0.15.0",
-  "description": "TspoonBase - a TypeScript backend-as-a-service with SQLite, auth, realtime, and admin UI. Inspired by PocketBase.",
-  "repository": "https://github.com/Jay-Suryawansh7/tspoonbase",
-  "homepage": "https://tspoonbase-docs.vercel.app/",
-  "bugs": "https://github.com/Jay-Suryawansh7/tspoonbase/issues",
+  "description": "Solarch - a TypeScript backend-as-a-service with SQLite, auth, realtime, and admin UI. Inspired by PocketBase.",
+  "repository": "https://github.com/Jay-Suryawansh7/solarch",
+  "homepage": "https://solarch-docs.vercel.app/",
+  "bugs": "https://github.com/Jay-Suryawansh7/solarch/issues",
   "license": "Apache-2.0",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "bin": {
-    "tspoonbase": "dist/cli.js"
+    "solarch": "dist/cli.js"
   },
   "files": [
     "dist/**/*",

@@ -4,13 +4,13 @@ import http from 'http'
 import fs from 'fs'
 import path from 'path'
 import os from 'os'
-import { TspoonBase } from '../../tspoonbase.js'
+import { Solarch } from '../../solarch.js'
 import { registerAuthRoutes } from '../record_auth.js'
 import { registerRecordCRUDRoutes } from '../record_crud.js'
 import { Collection } from '../../core/collection.js'
 
 function tmpDir(): string {
-  return fs.mkdtempSync(path.join(os.tmpdir(), 'tspoonbase-security-'))
+  return fs.mkdtempSync(path.join(os.tmpdir(), 'solarch-security-'))
 }
 
 async function fetchJson(url: string, init?: RequestInit) {
@@ -20,12 +20,12 @@ async function fetchJson(url: string, init?: RequestInit) {
 }
 
 describe('Security Regression', () => {
-  let ctx: { server: http.Server; dataDir: string; url: string; app: TspoonBase }
+  let ctx: { server: http.Server; dataDir: string; url: string; app: Solarch }
 
   beforeAll(async () => {
     process.env.JWT_SECRET = 'e'.repeat(32)
     const dataDir = tmpDir()
-    const app = new TspoonBase({ hideStartBanner: true, defaultDataDir: dataDir, defaultDev: true })
+    const app = new Solarch({ hideStartBanner: true, defaultDataDir: dataDir, defaultDev: true })
     
     await app.bootstrap()
     await app.migrate()

@@ -5,13 +5,13 @@ import fs from 'fs'
 import path from 'path'
 import os from 'os'
 import crypto from 'crypto'
-import { TspoonBase } from '../../tspoonbase.js'
+import { Solarch } from '../../solarch.js'
 import { registerAdminAuthRoutes } from '../admin_auth.js'
 import { hashPassword, verifyPassword } from '../../tools/security/crypto.js'
 import { clearAttempts } from '../../utils/lockout.js'
 
 function tmpDir(): string {
-  return fs.mkdtempSync(path.join(os.tmpdir(), 'tspoonbase-admin-'))
+  return fs.mkdtempSync(path.join(os.tmpdir(), 'solarch-admin-'))
 }
 
 async function fetchJson(url: string, init?: RequestInit) {
@@ -21,7 +21,7 @@ async function fetchJson(url: string, init?: RequestInit) {
 }
 
 describe('Admin Auth', () => {
-  let ctx: { server: http.Server; dataDir: string; url: string; app: TspoonBase }
+  let ctx: { server: http.Server; dataDir: string; url: string; app: Solarch }
   const ADMIN_EMAIL = 'admin@example.com'
   const ADMIN_PASS = 'SecureAdminPass123!'
   let adminId: string
@@ -29,7 +29,7 @@ describe('Admin Auth', () => {
   beforeAll(async () => {
     process.env.JWT_SECRET = 'b'.repeat(32)
     const dataDir = tmpDir()
-    const app = new TspoonBase({ hideStartBanner: true, defaultDataDir: dataDir, defaultDev: true })
+    const app = new Solarch({ hideStartBanner: true, defaultDataDir: dataDir, defaultDev: true })
     
     await app.bootstrap()
     await app.migrate()

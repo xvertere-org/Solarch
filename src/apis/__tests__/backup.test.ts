@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest'
-import { TspoonBase } from '../../tspoonbase'
+import { Solarch } from '../../solarch'
 import express from 'express'
 import http from 'http'
 import path from 'path'
@@ -7,12 +7,12 @@ import fs from 'fs'
 import os from 'os'
 
 function tmpDir(): string {
-  return fs.mkdtempSync(path.join(os.tmpdir(), 'tspoonbase-test-'))
+  return fs.mkdtempSync(path.join(os.tmpdir(), 'solarch-test-'))
 }
 
-async function createTestApp(): Promise<{ server: http.Server; dataDir: string; url: string; app: TspoonBase }> {
+async function createTestApp(): Promise<{ server: http.Server; dataDir: string; url: string; app: Solarch }> {
   const dataDir = tmpDir()
-  const app = new TspoonBase({
+  const app = new Solarch({
     hideStartBanner: true,
     defaultDataDir: dataDir,
     defaultDev: true,
@@ -58,7 +58,7 @@ async function fetchJson<T = any>(url: string, init?: RequestInit): Promise<{ st
 }
 
 describe('Backup API', () => {
-  let ctx: { server: http.Server; dataDir: string; url: string; app: TspoonBase }
+  let ctx: { server: http.Server; dataDir: string; url: string; app: Solarch }
 
   beforeAll(async () => {
     ctx = await createTestApp()
@@ -182,7 +182,7 @@ describe('Backup API', () => {
 })
 
 describe('Health endpoint', () => {
-  let ctx: { server: http.Server; dataDir: string; url: string; app: TspoonBase }
+  let ctx: { server: http.Server; dataDir: string; url: string; app: Solarch }
 
   beforeAll(async () => {
     ctx = await createTestApp()

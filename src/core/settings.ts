@@ -71,7 +71,7 @@ export interface BatchConfig {
 
 export function defaultSettings(): AppSettings {
   return {
-    appName: 'TspoonBase',
+    appName: 'Solarch',
     appNameVisible: false,
     appURL: 'http://localhost:8090',
     jwtSecret: '',

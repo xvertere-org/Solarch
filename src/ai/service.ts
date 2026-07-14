@@ -29,13 +29,13 @@ export class AIService {
   }
 
   async generateCollection(description: string, options?: { dryRun?: boolean }): Promise<CollectionData> {
-    const systemPrompt = `You are a database schema designer. Generate a JSON collection schema for TspoonBase.
+    const systemPrompt = `You are a database schema designer. Generate a JSON collection schema for Solarch.
 
 Available field types: text, number, email, url, bool, date, select, file, relation, json, editor, autodate, geoPoint.
 
 Collection types: base (regular), auth (has users), view (read-only SQL).
 
-Rules use TspoonBase filter syntax: @request.auth.id, @request.auth.isAdmin, =, !=, >, <, ~ (contains), &&, ||, !().
+Rules use Solarch filter syntax: @request.auth.id, @request.auth.isAdmin, =, !=, >, <, ~ (contains), &&, ||, !().
 
 Respond ONLY with valid JSON in this exact shape:
 {
@@ -85,7 +85,7 @@ Do not include markdown, explanations, or comments. Only raw JSON.`
   }
 
   async generateRule(action: string, description: string): Promise<string> {
-    const systemPrompt = `You translate plain English security requirements into TspoonBase filter expressions.
+    const systemPrompt = `You translate plain English security requirements into Solarch filter expressions.
 
 Available syntax:
 - @request.auth.id - current user's ID
@@ -170,12 +170,12 @@ Respond with ONLY the filter expression string, or the word "null" for no restri
       fields: c.fields.map(f => f.name),
     }))
 
-    const systemPrompt = `You are TspoonBase AI Assistant, a helpful backend development assistant.
+    const systemPrompt = `You are Solarch AI Assistant, a helpful backend development assistant.
 
 Current database collections:\n${JSON.stringify(collectionInfo, null, 2)}
 
 You can help with:
-- Writing TspoonBase filter expressions
+- Writing Solarch filter expressions
 - Designing collection schemas
 - Explaining API endpoints
 - Generating test data

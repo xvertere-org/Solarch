@@ -14,7 +14,7 @@ const RESERVED_GLOBALS = new Set([
   'Int32Array', 'Float32Array', 'Float64Array', 'DataView', 'TextEncoder',
   'TextDecoder', 'structuredClone', 'queueMicrotask', 'atob', 'btoa',
   'Deno', 'process', 'require', 'globalThis', 'self', 'window', 'global',
-  'eval', 'Function', 'import', '__dirname', '__filename', 'arguments',
+  'eval', 'Function', '__dirname', '__filename', 'arguments',
   'Reflect', 'Proxy', 'constructor',
 ]);
 
@@ -162,7 +162,6 @@ function buildSandboxGlobals(context: Record<string, unknown>): Record<string, u
     global: undefined,
     eval: undefined,
     Function: undefined,
-    import: undefined,
     __dirname: undefined,
     __filename: undefined,
     arguments: undefined,
@@ -176,9 +175,9 @@ function executeCode(code: string, globals: Record<string, unknown>, mode: strin
   const paramValues = Object.values(globals);
   let wrappedCode: string;
   if (mode === 'condition') {
-    wrappedCode = `"use strict";\nreturn Boolean(${code});`;
+    wrappedCode = `return (function() { "use strict"; return Boolean(${code}); })()`;
   } else {
-    wrappedCode = `"use strict";\n${code}`;
+    wrappedCode = `return (function() { "use strict"; ${code} })()`;
   }
   const fn = new Function(...paramNames, wrappedCode);
   return fn(...paramValues);

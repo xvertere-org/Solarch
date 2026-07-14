@@ -5,13 +5,13 @@ import fs from 'fs'
 import path from 'path'
 import os from 'os'
 import crypto from 'crypto'
-import { TspoonBase } from '../../tspoonbase.js'
+import { Solarch } from '../../solarch.js'
 import { registerPasswordResetRoutes, registerVerificationRoutes, registerEmailChangeRoutes, registerImpersonateRoutes } from '../auth_flows.js'
 import { Collection } from '../../core/collection.js'
 import { hashPassword, verifyPassword } from '../../tools/security/crypto.js'
 
 function tmpDir(): string {
-  return fs.mkdtempSync(path.join(os.tmpdir(), 'tspoonbase-authflows-'))
+  return fs.mkdtempSync(path.join(os.tmpdir(), 'solarch-authflows-'))
 }
 
 async function fetchJson(url: string, init?: RequestInit) {
@@ -21,7 +21,7 @@ async function fetchJson(url: string, init?: RequestInit) {
 }
 
 describe('Auth Flows', () => {
-  let ctx: { server: http.Server; dataDir: string; url: string; app: TspoonBase }
+  let ctx: { server: http.Server; dataDir: string; url: string; app: Solarch }
   let authCollection: Collection
   let userId: string
   let adminToken: string
@@ -29,7 +29,7 @@ describe('Auth Flows', () => {
   beforeAll(async () => {
     process.env.JWT_SECRET = 'd'.repeat(32)
     const dataDir = tmpDir()
-    const app = new TspoonBase({ hideStartBanner: true, defaultDataDir: dataDir, defaultDev: true })
+    const app = new Solarch({ hideStartBanner: true, defaultDataDir: dataDir, defaultDev: true })
     
     await app.bootstrap()
     await app.migrate()
@@ -177,11 +177,7 @@ describe('Auth Flows', () => {
     expect(reqStatus).toBe(200)
 
     // 2. Generate token
-    const changeToken = ctx.app.generateJWT(
-      { id: userId, type: 'changeEmail', collectionId: authCollection.id, newEmail },
-      ctx.app.getJwtSecret(),
-      '2h'
-    )
+    const changeToken = ctx.app.createPasswordResetToken(userId, `emailChange:${authCollection.id}`, 2, newEmail)
 
     // 3. Confirm email change
     const { status: confStatus } = await fetchJson(`${ctx.url}/api/collections/users/confirm-email-change`, {

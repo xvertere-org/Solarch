@@ -1,19 +1,19 @@
-# TspoonBase
+# Solarch
 
 <p align="center">
-  <a href="https://tspoonbase-docs.vercel.app/">tspoonbase-docs.vercel.app</a>
+  <a href="https://solarch-docs.vercel.app/">solarch-docs.vercel.app</a>
 </p>
 
 <p align="center">
-  <a href="https://tspoonbase-docs.vercel.app/">
-    <img src=".github/assets/preview.png" alt="TspoonBase Website Preview" width="800">
+  <a href="https://solarch-docs.vercel.app/">
+    <img src=".github/assets/preview.png" alt="Solarch Website Preview" width="800">
   </a>
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/npm/v/tspoonbase.svg?style=flat-square&color=blue" alt="npm version">
+  <img src="https://img.shields.io/npm/v/solarch.svg?style=flat-square&color=blue" alt="npm version">
   <img src="https://img.shields.io/badge/node-%3E%3D20.0.0-brightgreen.svg?style=flat-square" alt="Node.js">
-  <img src="https://img.shields.io/npm/dm/tspoonbase.svg?style=flat-square&color=orange" alt="Downloads">
+  <img src="https://img.shields.io/npm/dm/solarch.svg?style=flat-square&color=orange" alt="Downloads">
   <img src="https://img.shields.io/badge/License-Apache%202.0-blue.svg?style=flat-square" alt="License">
 </p>
 
@@ -23,9 +23,9 @@
 </p>
 
 <p align="center">
-  <a href="https://tspoonbase-docs.vercel.app/">Website</a> •
-  <a href="https://www.npmjs.com/package/tspoonbase">npm</a> •
-  <a href="https://github.com/Jay-Suryawansh7/tspoonbase">GitHub</a> •
+  <a href="https://solarch-docs.vercel.app/">Website</a> •
+  <a href="https://www.npmjs.com/package/solarch">npm</a> •
+  <a href="https://github.com/Jay-Suryawansh7/solarch">GitHub</a> •
   <a href="#quick-start">Quick Start</a> •
   <a href="#api-reference">API Reference</a>
 </p>
@@ -61,29 +61,29 @@
 
 ```bash
 # Install globally
-npm install -g tspoonbase
+npm install -g solarch
 
 # Start the server
-tspoonbase serve --dev --port 8090
+solarch serve --dev --port 8090
 ```
 
 Open http://localhost:8090/_/ for the Admin UI. On first access, create your admin account directly in the browser.
 Alternatively, create a superuser programmatically:
 
 ```bash
-tspoonbase superuser-create admin@example.com secret123
+solarch superuser-create admin@example.com secret123
 ```
 
 ### Programmatic Usage
 
 ```bash
-npm install tspoonbase
+npm install solarch
 ```
 
 ```typescript
-import { TspoonBase } from 'tspoonbase'
+import { Solarch } from 'solarch'
 
-const app = new TspoonBase({ defaultDev: true })
+const app = new Solarch({ defaultDev: true })
 await app.start(8090)
 ```
 
@@ -91,9 +91,9 @@ await app.start(8090)
 
 ```dockerfile
 FROM node:20-alpine
-RUN npm install -g tspoonbase
+RUN npm install -g solarch
 EXPOSE 8090
-CMD ["tspoonbase", "serve", "--port", "8090"]
+CMD ["solarch", "serve", "--port", "8090"]
 ```
 
 ---
@@ -102,9 +102,9 @@ CMD ["tspoonbase", "serve", "--port", "8090"]
 
 | Method | Command |
 |--------|---------|
-| Global CLI | `npm install -g tspoonbase` |
-| Local library | `npm install tspoonbase` |
-| NPX (no install) | `npx tspoonbase serve --dev` |
+| Global CLI | `npm install -g solarch` |
+| Local library | `npm install solarch` |
+| NPX (no install) | `npx solarch serve --dev` |
 
 **Requirements:** Node.js >= 20.0.0
 
@@ -114,22 +114,22 @@ CMD ["tspoonbase", "serve", "--port", "8090"]
 
 ```bash
 # Start the server
-tspoonbase serve [options]
+solarch serve [options]
   --port, -p      Port to listen on (default: 8090)
   --dev           Development mode with hot reload
   --dir           Data directory (default: ./pb_data)
 
 # Create superuser
-tspoonbase superuser-create <email> <password>
+solarch superuser-create <email> <password>
 
 # Run pending migrations
-tspoonbase migrate up
+solarch migrate up
 
 # Rollback migrations
-tspoonbase migrate down [count]
+solarch migrate down [count]
 
 # Check migration status
-tspoonbase migrate status
+solarch migrate status
 ```
 
 ---
@@ -593,7 +593,7 @@ es.onmessage = (e) => console.log(JSON.parse(e.data))
 
 ## Migrations
 
-TspoonBase supports JavaScript migrations in the `pb_migrations/` directory.
+Solarch supports JavaScript migrations in the `pb_migrations/` directory.
 
 ### Directory Structure
 ```
@@ -634,21 +634,21 @@ module.exports = {
 **CLI:**
 ```bash
 # Run pending migrations
-tspoonbase migrate up
+solarch migrate up
 
 # Rollback last migration
-tspoonbase migrate down
+solarch migrate down
 
 # Rollback 3 migrations
-tspoonbase migrate down 3
+solarch migrate down 3
 
 # Check status
-tspoonbase migrate status
+solarch migrate status
 ```
 
 **Programmatic:**
 ```typescript
-const app = new TspoonBase()
+const app = new Solarch()
 await app.bootstrap()
 
 // Run all pending migrations
@@ -864,7 +864,7 @@ flowchart TB
 ### Project Structure
 ```
 src/
-├── tspoonbase.ts          # TspoonBase class, bootstrap, JS migrations
+├── solarch.ts          # Solarch class, bootstrap, JS migrations
 ├── cli.ts                 # CLI: serve, superuser-create, migrate
 ├── core/
 │   ├── base.ts            # BaseApp: hooks, DB, settings, collections
@@ -916,7 +916,7 @@ src/
 
 ## Feature Comparison with PocketBase
 
-| Feature | Go PocketBase | TspoonBase |
+| Feature | Go PocketBase | Solarch |
 |---------|--------------|------------|
 | Runtime | Go 1.21+ | Node.js 20+ |
 | Database | SQLite | SQLite (better-sqlite3) |
@@ -946,8 +946,8 @@ src/
 
 ```bash
 # Clone
-git clone https://github.com/Jay-Suryawansh7/tspoonbase.git
-cd tspoonbase
+git clone https://github.com/Jay-Suryawansh7/solarch.git
+cd solarch
 
 # Install dependencies
 npm install

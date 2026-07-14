@@ -1,6 +1,6 @@
-# Contributing to TspoonBase
+# Contributing to Solarch
 
-Thank you for your interest in contributing to TspoonBase! This document provides guidelines and instructions for contributing.
+Thank you for your interest in contributing to Solarch! This document provides guidelines and instructions for contributing.
 
 ## Table of Contents
 
@@ -22,8 +22,8 @@ This project and everyone participating in it is governed by our [Code of Conduc
 1. **Fork the repository** on GitHub
 2. **Clone your fork** locally:
    ```bash
-   git clone https://github.com/YOUR_USERNAME/tspoonbase.git
-   cd tspoonbase
+   git clone https://github.com/YOUR_USERNAME/solarch.git
+   cd solarch
    ```
 3. **Install dependencies**:
    ```bash
@@ -54,7 +54,7 @@ npm test
 ### Project Structure
 ```
 src/
-├── tspoonbase.ts    # Main application class
+├── solarch.ts    # Main application class
 ├── cli.ts           # CLI entry point
 ├── core/            # Core models (collections, records, fields, db)
 ├── apis/            # Express routes and middleware
@@ -67,14 +67,14 @@ src/
 ### Reporting Bugs
 
 Before creating a bug report, please:
-1. Check the [existing issues](https://github.com/Jay-Suryawansh7/tspoonbase/issues) to avoid duplicates
-2. Use the [Bug Report template](https://github.com/Jay-Suryawansh7/tspoonbase/issues/new?template=bug_report.yml)
+1. Check the [existing issues](https://github.com/Jay-Suryawansh7/solarch/issues) to avoid duplicates
+2. Use the [Bug Report template](https://github.com/Jay-Suryawansh7/solarch/issues/new?template=bug_report.yml)
 3. Include as much detail as possible (steps to reproduce, environment, logs)
 
 ### Suggesting Features
 
 1. Check if the feature has already been requested
-2. Use the [Feature Request template](https://github.com/Jay-Suryawansh7/tspoonbase/issues/new?template=feature_request.yml)
+2. Use the [Feature Request template](https://github.com/Jay-Suryawansh7/solarch/issues/new?template=feature_request.yml)
 3. Explain the use case and why it would be valuable
 
 ### Contributing Code
@@ -191,7 +191,7 @@ Releases are managed by maintainers:
 
 ## Questions?
 
-- Open a [GitHub Discussion](https://github.com/Jay-Suryawansh7/tspoonbase/discussions)
-- Check the [Documentation](https://tspoonbase-docs.vercel.app/)
+- Open a [GitHub Discussion](https://github.com/Jay-Suryawansh7/solarch/discussions)
+- Check the [Documentation](https://solarch-docs.vercel.app/)
 
 Thank you for contributing!

@@ -1,7 +1,7 @@
-# TspoonBase AI Development Scope
+# Solarch AI Development Scope
 
 ## Overview
-Integrate AI capabilities directly into TspoonBase to accelerate development workflows: generate schemas from descriptions, write access rules in plain English, seed realistic data, and provide an AI admin assistant.
+Integrate AI capabilities directly into Solarch to accelerate development workflows: generate schemas from descriptions, write access rules in plain English, seed realistic data, and provide an AI admin assistant.
 
 ## Proposed Features
 
@@ -39,7 +39,7 @@ Convert natural language descriptions into full Collection schemas.
 ### 2. AI Access Rule Translator
 **Endpoint:** `POST /api/ai/generate-rule`
 
-Convert plain English security requirements into TspoonBase filter expressions.
+Convert plain English security requirements into Solarch filter expressions.
 
 **Input:**
 ```json

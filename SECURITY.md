@@ -2,7 +2,7 @@
 
 ## Supported Versions
 
-The following versions of TspoonBase are currently supported with security updates:
+The following versions of Solarch are currently supported with security updates:
 
 | Version | Supported          |
 | ------- | ------------------ |
@@ -11,7 +11,7 @@ The following versions of TspoonBase are currently supported with security updat
 
 ## Reporting a Vulnerability
 
-If you discover a security vulnerability within TspoonBase, please report it responsibly.
+If you discover a security vulnerability within Solarch, please report it responsibly.
 
 **Please do NOT open a public GitHub issue for security vulnerabilities.**
 
@@ -35,7 +35,7 @@ Please include:
 
 ## Security Best Practices
 
-When deploying TspoonBase:
+When deploying Solarch:
 
 - Keep your Node.js version up to date
 - Use strong passwords for admin accounts

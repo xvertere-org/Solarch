@@ -3,7 +3,7 @@
 ## v0.2.6 (April 2026)
 
 ### Added
-- Documentation site: [https://tspoonbase-docs.vercel.app/](https://tspoonbase-docs.vercel.app/)
+- Documentation site: [https://solarch-docs.vercel.app/](https://solarch-docs.vercel.app/)
 - GitHub issue templates (bug report, feature request, docs)
 - Pull request template
 - CONTRIBUTING.md guide

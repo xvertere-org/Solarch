@@ -22,7 +22,7 @@ A clear and concise description of what you expected to happen.
 What actually happened instead.
 
 ## Environment
-- **TspoonBase version:** e.g. 0.2.6
+- **Solarch version:** e.g. 0.2.6
 - **Node.js version:** e.g. 20.x
 - **OS:** e.g. macOS 14, Ubuntu 22.04
 - **Database:** e.g. SQLite (default)

@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 import { Command } from 'commander'
-import { TspoonBase } from './tspoonbase'
+import { Solarch } from './solarch'
 import { readFileSync } from 'fs'
 import { join } from 'path'
 
@@ -15,8 +15,8 @@ try {
 } catch {}
 
 program
-  .name('tspoonbase')
-  .description('TspoonBase - TypeScript backend-as-a-service')
+  .name('solarch')
+  .description('Solarch - TypeScript backend-as-a-service')
   .version(version)
 
 program
@@ -36,7 +36,7 @@ program
     const encryptionEnv = program.opts().encryptionEnv
     const queryTimeout = parseInt(program.opts().queryTimeout, 10)
 
-    const app = new TspoonBase({
+    const app = new Solarch({
       hideStartBanner: opts.hideStartBanner,
       defaultDev: dev,
       defaultDataDir: dataDir,
@@ -65,7 +65,7 @@ program
 program
   .command('superuser-create')
   .alias('superuser create')
-  .description('create superuser account (shorthand: tspoonbase superuser create EMAIL PASS)')
+  .description('create superuser account (shorthand: solarch superuser create EMAIL PASS)')
   .argument('[email]', 'superuser email')
   .argument('[password]', 'superuser password')
   .option('--dir <path>', 'data directory', './pb_data')
@@ -87,8 +87,8 @@ migrate
   .description('run pending migrations')
   .option('--dir <path>', 'data directory', './pb_data')
   .action(async (opts) => {
-    const { TspoonBase } = await import('./tspoonbase.js')
-    const app = new TspoonBase({
+    const { Solarch } = await import('./solarch.js')
+    const app = new Solarch({
       defaultDev: false,
       defaultDataDir: opts.dir,
     })
@@ -104,8 +104,8 @@ migrate
   .argument('[count]', 'number of migrations to rollback', '1')
   .option('--dir <path>', 'data directory', './pb_data')
   .action(async (count, opts) => {
-    const { TspoonBase } = await import('./tspoonbase.js')
-    const app = new TspoonBase({
+    const { Solarch } = await import('./solarch.js')
+    const app = new Solarch({
       defaultDev: false,
       defaultDataDir: opts.dir,
     })
@@ -120,8 +120,8 @@ migrate
   .description('show migration status')
   .option('--dir <path>', 'data directory', './pb_data')
   .action(async (opts) => {
-    const { TspoonBase } = await import('./tspoonbase.js')
-    const app = new TspoonBase({
+    const { Solarch } = await import('./solarch.js')
+    const app = new Solarch({
       defaultDev: false,
       defaultDataDir: opts.dir,
     })
@@ -167,7 +167,7 @@ migrate
 
 program
   .command('init')
-  .description('scaffold a new TspoonBase project')
+  .description('scaffold a new Solarch project')
   .option('--dir <path>', 'project directory', '.')
   .action(async (opts) => {
     const fs = await import('fs')
@@ -177,7 +177,7 @@ program
     const rl = readline.createInterface({ input: process.stdin, output: process.stdout })
     const ask = (q: string): Promise<string> => new Promise(r => rl.question(q, r))
 
-    console.log('\n⚡ TspoonBase Project Initializer\n')
+    console.log('\n⚡ Solarch Project Initializer\n')
 
     const name = (await ask('? Project name [my-app]: ')).trim() || 'my-app'
     const dbType = (await ask('? Database (sqlite / postgres) [sqlite]: ')).trim().toLowerCase() || 'sqlite'
@@ -213,9 +213,9 @@ program
     console.log(`✔ Created pb_migrations/`)
 
     const envVars: string[] = [
-      `# TspoonBase Configuration`,
+      `# Solarch Configuration`,
       `JWT_SECRET=`,
-      `TSPOONBASE_ENCRYPTION_KEY=`,
+      `SOLARCH_ENCRYPTION_KEY=`,
     ]
 
     if (dbType === 'postgres') {
@@ -239,8 +239,8 @@ program
       `  ai: { enabled: ${enableAi} },`,
       `}`,
     ]
-    fs.writeFileSync(path.join(projectDir, 'tspoonbase.config.ts'), configLines.join('\n') + '\n')
-    console.log(`✔ Created tspoonbase.config.ts`)
+    fs.writeFileSync(path.join(projectDir, 'solarch.config.ts'), configLines.join('\n') + '\n')
+    console.log(`✔ Created solarch.config.ts`)
 
     const migrationTemplate = [
       `module.exports = {`,
@@ -263,7 +263,7 @@ program
         `    image: postgres:16-alpine`,
         `    environment:`,
         `      POSTGRES_DB: ${name}`,
-        `      POSTGRES_USER: tspoonbase`,
+        `      POSTGRES_USER: solarch`,
         `      POSTGRES_PASSWORD: \${POSTGRES_PASSWORD:-change_me}`,
         `    ports:`,
         `      - "5432:5432"`,
@@ -279,7 +279,7 @@ program
     console.log(`\n⚡ Project "${name}" initialized!\n`)
     console.log(`  Next steps:`)
     console.log(`    cd ${name}`)
-    console.log(`    tspoonbase serve --port 8090\n`)
+    console.log(`    solarch serve --port 8090\n`)
     process.exit(0)
   })
 

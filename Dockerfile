@@ -44,7 +44,7 @@ EXPOSE 8090
 
 VOLUME ["/app/pb_data"]
 
-ENV TSPOONBASE_DATA_DIR=/app/pb_data
+ENV SOLARCH_DATA_DIR=/app/pb_data
 ENV JSVM_SANDBOX_MODE=legacy
 
 ENTRYPOINT ["/sbin/tini", "--"]

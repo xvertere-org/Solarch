@@ -119,7 +119,7 @@ export class BaseApp {
     // FIXED[N-2]: Fail startup if JWT secret is not configured
     const secret = this.getJwtSecretSafe()
     if (!secret || secret.length < 32) {
-      const envErr = 'FATAL: JWT secret is not configured. Set TSPOONBASE_JWT_SECRET to a value of at least 32 characters.'
+      const envErr = 'FATAL: JWT secret is not configured. Set SOLARCH_JWT_SECRET to a value of at least 32 characters.'
       console.error(envErr)
       throw new Error(envErr)
     }
@@ -619,7 +619,7 @@ export class BaseApp {
   }
 
   getJwtSecret(): string {
-    const envSecret = process.env.JWT_SECRET || process.env.TSPOONBASE_JWT_SECRET
+    const envSecret = process.env.JWT_SECRET || process.env.SOLARCH_JWT_SECRET
     if (envSecret) {
       if (envSecret.length < 32) {
         throw new Error(
@@ -641,7 +641,7 @@ export class BaseApp {
   }
 
   getJwtSecretSafe(): string {
-    return this._settings?.jwtSecret || ''
+    return process.env.JWT_SECRET || process.env.SOLARCH_JWT_SECRET || this._settings?.jwtSecret || ''
   }
 
   parseJWT(token: string, secret: string): { [key: string]: any } | null {

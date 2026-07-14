@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest'
-import { TspoonBase } from '../../tspoonbase.js'
+import { Solarch } from '../../solarch.js'
 import { Collection } from '../../core/collection.js'
 import express from 'express'
 import http from 'http'
@@ -8,7 +8,7 @@ import fs from 'fs'
 import os from 'os'
 
 function tmpDir(): string {
-  return fs.mkdtempSync(path.join(os.tmpdir(), 'tspoonbase-new-'))
+  return fs.mkdtempSync(path.join(os.tmpdir(), 'solarch-new-'))
 }
 
 async function fetchJson<T = any>(url: string, init?: RequestInit): Promise<{ status: number; body: T }> {
@@ -18,11 +18,11 @@ async function fetchJson<T = any>(url: string, init?: RequestInit): Promise<{ st
 }
 
 describe('NEW-001: passwordHash injection blocked', () => {
-  let ctx: { app: TspoonBase; dataDir: string; authCollection: Collection }
+  let ctx: { app: Solarch; dataDir: string; authCollection: Collection }
 
   beforeAll(async () => {
     const dataDir = tmpDir()
-    const app = new TspoonBase({ hideStartBanner: true, defaultDataDir: dataDir, defaultDev: true })
+    const app = new Solarch({ hideStartBanner: true, defaultDataDir: dataDir, defaultDev: true })
     await app.bootstrap()
     await app.migrate()
 
@@ -95,13 +95,13 @@ describe('NEW-001: passwordHash injection blocked', () => {
 })
 
 describe('NEW-002: passwordHash hidden in auth responses', () => {
-  let ctx: { server: http.Server; dataDir: string; url: string; app: TspoonBase }
+  let ctx: { server: http.Server; dataDir: string; url: string; app: Solarch }
   let authCollection: Collection
 
   beforeAll(async () => {
     process.env.JWT_SECRET = 'a'.repeat(32)
     const dataDir = tmpDir()
-    const app = new TspoonBase({ hideStartBanner: true, defaultDataDir: dataDir, defaultDev: true })
+    const app = new Solarch({ hideStartBanner: true, defaultDataDir: dataDir, defaultDev: true })
 
     const ep = express()
     ep.use(express.json())
@@ -165,11 +165,11 @@ describe('NEW-002: passwordHash hidden in auth responses', () => {
 })
 
 describe('NEW-004: Password length validation on reset', () => {
-  let ctx: { app: TspoonBase; dataDir: string; authCollection: Collection }
+  let ctx: { app: Solarch; dataDir: string; authCollection: Collection }
 
   beforeAll(async () => {
     const dataDir = tmpDir()
-    const app = new TspoonBase({ hideStartBanner: true, defaultDataDir: dataDir, defaultDev: true })
+    const app = new Solarch({ hideStartBanner: true, defaultDataDir: dataDir, defaultDev: true })
     await app.bootstrap()
     await app.migrate()
 
@@ -215,13 +215,13 @@ describe('NEW-004: Password length validation on reset', () => {
 })
 
 describe('NEW-005: Email change uniqueness', () => {
-  let ctx: { server: http.Server; dataDir: string; url: string; app: TspoonBase }
+  let ctx: { server: http.Server; dataDir: string; url: string; app: Solarch }
   let authCollection: Collection
 
   beforeAll(async () => {
     process.env.JWT_SECRET = 'b'.repeat(32)
     const dataDir = tmpDir()
-    const app = new TspoonBase({ hideStartBanner: true, defaultDataDir: dataDir, defaultDev: true })
+    const app = new Solarch({ hideStartBanner: true, defaultDataDir: dataDir, defaultDev: true })
 
     const ep = express()
     ep.use(express.json())
@@ -278,11 +278,7 @@ describe('NEW-005: Email change uniqueness', () => {
     const db = ctx.app.db().getDataDB()
     const user1Row = db.prepare(`SELECT * FROM _r_${authCollection.id} WHERE email = ?`).get('user1@example.com') as any
 
-    const token = ctx.app.generateJWT(
-      { id: user1Row.id, type: 'changeEmail', collectionId: authCollection.id, newEmail: 'user2@example.com' },
-      ctx.app.getJwtSecret(),
-      '1h'
-    )
+    const token = ctx.app.createPasswordResetToken(user1Row.id, `emailChange:${authCollection.id}`, 2, 'user2@example.com')
 
     const { status, body } = await fetchJson(`${ctx.url}/api/collections/users/confirm-email-change`, {
       method: 'POST',

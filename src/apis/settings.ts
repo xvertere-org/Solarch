@@ -88,7 +88,7 @@ export function registerSettingsRoutes(app: BaseApp, router: Router): void {
         return res.status(400).json({ code: 400, message: 'S3 not enabled.' })
       }
       const fsys = app.getFilesystem()
-      const testKey = `_tspoonbase_test_${Date.now()}`
+      const testKey = `_solarch_test_${Date.now()}`
       await fsys.putFile(testKey, 'ok')
       const exists = await fsys.fileExists(testKey)
       await fsys.deleteFile(testKey)

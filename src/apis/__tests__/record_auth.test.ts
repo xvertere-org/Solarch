@@ -5,7 +5,7 @@ import fs from 'fs'
 import path from 'path'
 import os from 'os'
 import crypto from 'crypto'
-import { TspoonBase } from '../../tspoonbase.js'
+import { Solarch } from '../../solarch.js'
 import { registerAuthRoutes } from '../record_auth.js'
 import { registerRecordCRUDRoutes } from '../record_crud.js'
 import { Collection } from '../../core/collection.js'
@@ -13,7 +13,7 @@ import { clearAttempts } from '../../utils/lockout.js'
 import { oauth2Registry } from '../../tools/auth/oauth2.js'
 
 function tmpDir(): string {
-  return fs.mkdtempSync(path.join(os.tmpdir(), 'tspoonbase-record-'))
+  return fs.mkdtempSync(path.join(os.tmpdir(), 'solarch-record-'))
 }
 
 async function fetchJson(url: string, init?: RequestInit) {
@@ -23,13 +23,13 @@ async function fetchJson(url: string, init?: RequestInit) {
 }
 
 describe('Record Auth', () => {
-  let ctx: { server: http.Server; dataDir: string; url: string; app: TspoonBase }
+  let ctx: { server: http.Server; dataDir: string; url: string; app: Solarch }
   let authCollection: Collection
 
   beforeAll(async () => {
     process.env.JWT_SECRET = 'c'.repeat(32)
     const dataDir = tmpDir()
-    const app = new TspoonBase({ hideStartBanner: true, defaultDataDir: dataDir, defaultDev: true })
+    const app = new Solarch({ hideStartBanner: true, defaultDataDir: dataDir, defaultDev: true })
     
     await app.bootstrap()
     await app.migrate()

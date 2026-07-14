@@ -1,6 +1,6 @@
 # Architecture Decisions
 
-This page records significant architectural decisions made in TspoonBase.
+This page records significant architectural decisions made in Solarch.
 
 ---
 

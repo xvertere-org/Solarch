@@ -41,7 +41,7 @@ These four findings were specified as fixes in Round 5 (v0.14.0) but were not ap
 
 #### High
 - **N-1:** Added `parsePagination()` helper (`src/utils/pagination.ts`) enforcing `perPage` cap at 200 and page cap at 10000 across all list endpoints (`record_crud`, `batch`, `logs`). Previously `perPage=999999999` could cause OOM from unbounded SQL `LIMIT`.
-- **N-2:** `BaseApp.bootstrap()` now validates JWT secret at startup — throws `FATAL` error if `TSPOONBASE_JWT_SECRET` is missing or under 32 characters. Previously the server booted but silently failed on auth.
+- **N-2:** `BaseApp.bootstrap()` now validates JWT secret at startup — throws `FATAL` error if `SOLARCH_JWT_SECRET` is missing or under 32 characters. Previously the server booted but silently failed on auth.
 
 #### Medium
 - **N-3:** LLM node output capped at 100KB (both OpenAI and Anthropic paths). Previously an LLM could return megabytes of text causing `_agentExecutions` database bloat.

@@ -120,7 +120,7 @@ export async function decrypt(ciphertext: string, secret: string): Promise<strin
   if (parts.length < 3) {
     const ivHex = parts[0]
     const encrypted = parts.slice(1).join(':')
-    const oldSalt = process.env.TSPOONBASE_ENCRYPTION_KEY || 'tspoonbase-enc-salt-v1'
+    const oldSalt = process.env.SOLARCH_ENCRYPTION_KEY || 'solarch-enc-salt-v1'
     const cacheKey = createHash('sha256').update(secret).update(oldSalt).digest('hex')
     let key = getCachedKey(cacheKey)
     if (!key) {

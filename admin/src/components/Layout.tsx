@@ -29,8 +29,8 @@ export default function Layout({ children, onLogout, admin }: LayoutProps) {
       <aside className="sidebar">
         <div className="sidebar-header">
           <img
-            src="/tspoonbase-logo.png"
-            alt="TspoonBase"
+            src="/solarch-logo.png"
+            alt="Solarch"
             style={{ width: 28, height: 28, borderRadius: 6, objectFit: 'contain' }}
           />
           <span className="logo-text">

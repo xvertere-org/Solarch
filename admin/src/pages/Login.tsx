@@ -61,14 +61,14 @@ export default function Login({ onLogin }: LoginProps) {
       <div className="login-orb" />
       <div className="login-card">
         <div className="login-logo">
-          <img src="/tspoonbase-logo.png" alt="TspoonBase" />
-          <span>TspoonBase</span>
+          <img src="/solarch-logo.png" alt="Solarch" />
+          <span>Solarch</span>
         </div>
 
         {isInstaller ? (
           <>
             <div className="login-title">
-              <h1>Welcome to TspoonBase</h1>
+              <h1>Welcome to Solarch</h1>
               <p>Create your admin account to get started</p>
             </div>
             {error && <div className="login-error">{error}</div>}

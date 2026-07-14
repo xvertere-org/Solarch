@@ -6,7 +6,7 @@ Last updated: April 2026
 
 ## Current Status
 
-TspoonBase is actively developed and in a **usable beta** state. The core platform is stable enough for production side projects, hobby apps, and internal tools.
+Solarch is actively developed and in a **usable beta** state. The core platform is stable enough for production side projects, hobby apps, and internal tools.
 
 ### What Works Today
 
@@ -52,7 +52,7 @@ TspoonBase is actively developed and in a **usable beta** state. The core platfo
 | High | **Webhooks** | Outgoing webhooks for record changes |
 | Medium | **Email templates editor** | Rich HTML email template editor in Admin UI |
 | Medium | **Backup scheduler** | Automated scheduled backups with S3 upload |
-| Low | **CLI scaffolding** | `tspoonbase create-app` for frontend boilerplate |
+| Low | **CLI scaffolding** | `solarch create-app` for frontend boilerplate |
 
 ### Q3 2026 (Jul–Sep)
 
@@ -80,7 +80,7 @@ TspoonBase is actively developed and in a **usable beta** state. The core platfo
 ## How to Influence the Roadmap
 
 1. **Vote on issues:** Add a thumbs-up to existing feature requests
-2. **Open a discussion:** [GitHub Discussions](https://github.com/Jay-Suryawansh7/tspoonbase/discussions)
+2. **Open a discussion:** [GitHub Discussions](https://github.com/Jay-Suryawansh7/solarch/discussions)
 3. **Sponsor a feature:** If you need something urgently, open an issue and we can prioritize it
 
 ---

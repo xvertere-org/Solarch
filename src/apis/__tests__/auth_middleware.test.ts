@@ -4,12 +4,12 @@ import http from 'http'
 import fs from 'fs'
 import path from 'path'
 import os from 'os'
-import { TspoonBase } from '../../tspoonbase.js'
+import { Solarch } from '../../solarch.js'
 import { loadAuthToken, requireAuth, requireSuperuserAuth, requireSameCollectionContextAuth, requireGuestOnly } from '../middlewares_auth.js'
 import { Collection } from '../../core/collection.js'
 
 function tmpDir(): string {
-  return fs.mkdtempSync(path.join(os.tmpdir(), 'tspoonbase-mw-'))
+  return fs.mkdtempSync(path.join(os.tmpdir(), 'solarch-mw-'))
 }
 
 async function fetchJson(url: string, init?: RequestInit) {
@@ -19,14 +19,14 @@ async function fetchJson(url: string, init?: RequestInit) {
 }
 
 describe('Auth Middlewares', () => {
-  let ctx: { server: http.Server; dataDir: string; url: string; app: TspoonBase }
+  let ctx: { server: http.Server; dataDir: string; url: string; app: Solarch }
   let adminToken: string
   let userToken: string
   
   beforeAll(async () => {
     process.env.JWT_SECRET = 'a'.repeat(32)
     const dataDir = tmpDir()
-    const app = new TspoonBase({ hideStartBanner: true, defaultDataDir: dataDir, defaultDev: true })
+    const app = new Solarch({ hideStartBanner: true, defaultDataDir: dataDir, defaultDev: true })
     
     await app.bootstrap()
     await app.migrate()

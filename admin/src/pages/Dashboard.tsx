@@ -39,7 +39,7 @@ export default function Dashboard() {
         <div className="welcome-banner">
           <div className="welcome-icon"><Zap size={22} color="#fff" /></div>
           <div>
-            <h3>Welcome to TspoonBase!</h3>
+            <h3>Welcome to Solarch!</h3>
             <p>Get started by creating your first collection to store data.</p>
             <Link to="/collections" className="btn btn-primary" style={{ marginTop: 12 }}>
               Create First Collection

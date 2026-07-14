@@ -130,7 +130,7 @@ async function _executeInDeno(
   const payloadBase64 = Buffer.from(payloadJson).toString('base64')
   const patchedWorkerScript = workerScript.replace(
     /^async function readStdin\(\).*?^}/ms,
-    `async function readStdin(): Promise<string> {\n  return new TextDecoder().decode(Deno.decodeBase64("${payloadBase64}"));\n}`
+    `async function readStdin(): Promise<string> {\n  return new TextDecoder().decode(Uint8Array.from(atob("${payloadBase64}"), c => c.charCodeAt(0)));\n}`
   )
 
   const args = [

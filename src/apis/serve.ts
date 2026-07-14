@@ -114,7 +114,7 @@ export async function serve(app: BaseApp, port: number): Promise<http.Server> {
         <!DOCTYPE html>
         <html>
           <head>
-            <title>TspoonBase Admin</title>
+            <title>Solarch Admin</title>
             <meta charset="utf-8">
             <style>
               body { font-family: system-ui, sans-serif; max-width: 600px; margin: 50px auto; padding: 20px; }
@@ -125,7 +125,7 @@ export async function serve(app: BaseApp, port: number): Promise<http.Server> {
             </style>
           </head>
           <body>
-            <h1>TspoonBase Admin</h1>
+            <h1>Solarch Admin</h1>
             ${hasAdmin ? `
               <div class="box">
                 <p>Admin UI is not built yet.</p>
@@ -136,7 +136,7 @@ export async function serve(app: BaseApp, port: number): Promise<http.Server> {
               <div class="box">
                 <p>No superuser found. Please complete the installation:</p>
                 <p><a href="${installerUrl}">Open Installer</a></p>
-                <p>Or run: <code>./tspoonbase superuser-create EMAIL PASS</code></p>
+                <p>Or run: <code>./solarch superuser-create EMAIL PASS</code></p>
               </div>
             `}
           </body>

@@ -1,6 +1,6 @@
 
 import { describe, it, expect, beforeAll, afterAll } from 'vitest'
-import { TspoonBase } from '../../tspoonbase.js'
+import { Solarch } from '../../solarch.js'
 import { Collection } from '../../core/collection.js'
 import { RecordModel as PBRecord } from '../../core/record.js'
 import express from 'express'
@@ -10,7 +10,7 @@ import fs from 'fs'
 import os from 'os'
 
 function tmpDir(): string {
-  return fs.mkdtempSync(path.join(os.tmpdir(), 'tspoonbase-p0-'))
+  return fs.mkdtempSync(path.join(os.tmpdir(), 'solarch-p0-'))
 }
 
 async function fetchJson<T = any>(url: string, init?: RequestInit): Promise<{ status: number; body: T }> {
@@ -20,11 +20,11 @@ async function fetchJson<T = any>(url: string, init?: RequestInit): Promise<{ st
 }
 
 describe('SEC-009: POST /api/realtime channel authorization', () => {
-  let ctx: { server: http.Server; dataDir: string; url: string; app: TspoonBase }
+  let ctx: { server: http.Server; dataDir: string; url: string; app: Solarch }
 
   beforeAll(async () => {
     const dataDir = tmpDir()
-    const app = new TspoonBase({
+    const app = new Solarch({
       hideStartBanner: true,
       defaultDataDir: dataDir,
       defaultDev: true,
@@ -236,14 +236,14 @@ describe('SEC-009: POST /api/realtime channel authorization', () => {
 
 
 describe('BUG-006: oldPassword verification on password change', () => {
-  let ctx: { server: http.Server; dataDir: string; url: string; app: TspoonBase }
+  let ctx: { server: http.Server; dataDir: string; url: string; app: Solarch }
   let authCollection: Collection
   let testRecordId: string
   const REAL_PASSWORD = 'CorrectPassword123!'
 
   beforeAll(async () => {
     const dataDir = tmpDir()
-    const app = new TspoonBase({
+    const app = new Solarch({
       hideStartBanner: true,
       defaultDataDir: dataDir,
       defaultDev: true,
