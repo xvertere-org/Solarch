@@ -1,6 +1,6 @@
 {
   "name": "solarch",
-  "version": "0.15.1",
+  "version": "0.15.2",
   "description": "Solarch - a TypeScript backend-as-a-service with SQLite, auth, realtime, and admin UI. Inspired by PocketBase.",
   "repository": "https://github.com/Jay-Suryawansh7/solarch",
   "homepage": "https://solarch-docs.vercel.app/",
@@ -13,12 +13,14 @@
   },
   "files": [
     "dist/**/*",
+    "scripts/postinstall.js",
     "pb_public/**/*",
     "pb_migrations/**/*",
     "README.md",
     "LICENSE"
   ],
   "scripts": {
+    "postinstall": "node scripts/postinstall.js",
     "build": "tsc && npm run build:ui",
     "build:ui": "cd admin && npm install && npm run build",
     "prepublishOnly": "npm run build",
