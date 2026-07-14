@@ -290,3 +290,189 @@ describe('NEW-005: Email change uniqueness', () => {
     expect(body.message).toContain('already in use')
   })
 })
+
+describe('SEC-004: Auth token on record create blocks if onlyVerified is true', () => {
+  let ctx: { app: Solarch; dataDir: string }
+
+  beforeAll(async () => {
+    const dataDir = tmpDir()
+    const app = new Solarch({ hideStartBanner: true, defaultDataDir: dataDir, defaultDev: true })
+    await app.bootstrap()
+    await app.migrate()
+    ctx = { app, dataDir }
+  })
+
+  afterAll(async () => {
+    try { ctx.app.db().getDataDB().close(); ctx.app.db().getAuxDB().close() } catch { }
+    await new Promise(r => setTimeout(r, 100))
+    fs.rmSync(ctx.dataDir, { recursive: true, force: true })
+  })
+
+  it('does NOT return token if onlyVerified is true', async () => {
+    const collection = new Collection({
+      name: 'users_verified', type: 'auth', system: false,
+      listRule: '', viewRule: '', createRule: '', updateRule: '', deleteRule: '',
+      fields: [{ name: 'username', type: 'text' }], indexes: [],
+      authOptions: { allowEmailAuth: true, minPasswordLength: 8, onlyVerified: true },
+    })
+    await ctx.app.save(collection)
+
+    const { validateAndCreateRecord } = await import('../../core/record_upsert.js')
+    const { record } = await validateAndCreateRecord(ctx.app, collection, {
+      email: 'testverified@example.com',
+      username: 'testverified',
+      password: 'Password123!',
+      passwordConfirm: 'Password123!',
+    })
+    await ctx.app.save(record)
+
+    const ep = express()
+    ep.use(express.json())
+    const { registerRecordCRUDRoutes } = await import('../record_crud.js')
+    registerRecordCRUDRoutes(ctx.app, ep)
+
+    const request = require('supertest')
+    const res = await request(ep)
+      .post('/api/collections/users_verified/records')
+      .send({
+        email: 'another@example.com',
+        username: 'another',
+        password: 'Password123!',
+        passwordConfirm: 'Password123!',
+      })
+
+    expect(res.status).toBe(201)
+    expect(res.body.token).toBeUndefined()
+    expect(res.body.id).toBeDefined()
+  })
+
+  it('returns token if onlyVerified is false', async () => {
+    const collection = new Collection({
+      name: 'users_unverified', type: 'auth', system: false,
+      listRule: '', viewRule: '', createRule: '', updateRule: '', deleteRule: '',
+      fields: [{ name: 'username', type: 'text' }], indexes: [],
+      authOptions: { allowEmailAuth: true, minPasswordLength: 8, onlyVerified: false },
+    })
+    await ctx.app.save(collection)
+
+    const ep = express()
+    ep.use(express.json())
+    const { registerRecordCRUDRoutes } = await import('../record_crud.js')
+    registerRecordCRUDRoutes(ctx.app, ep)
+
+    const request = require('supertest')
+    const res = await request(ep)
+      .post('/api/collections/users_unverified/records')
+      .send({
+        email: 'unverified@example.com',
+        username: 'unverified',
+        password: 'Password123!',
+        passwordConfirm: 'Password123!',
+      })
+
+    expect(res.status).toBe(201)
+    expect(res.body.token).toBeDefined()
+    expect(res.body.record).toBeDefined()
+  })
+})
+
+describe('SEC-008: WebSocket realtime channel subscription authentication', () => {
+  let ctx: { app: Solarch; dataDir: string; privateCol: Collection; publicCol: Collection }
+
+  beforeAll(async () => {
+    const dataDir = tmpDir()
+    const app = new Solarch({ hideStartBanner: true, defaultDataDir: dataDir, defaultDev: true })
+    await app.bootstrap()
+    await app.migrate()
+
+    const privateCol = new Collection({
+      name: 'private_col', type: 'auth', system: false,
+      listRule: null, viewRule: null, createRule: '', updateRule: '', deleteRule: '',
+      fields: [], indexes: [],
+    })
+    await app.save(privateCol)
+
+    const publicCol = new Collection({
+      name: 'public_col', type: 'auth', system: false,
+      listRule: '', viewRule: '', createRule: '', updateRule: '', deleteRule: '',
+      fields: [], indexes: [],
+    })
+    await app.save(publicCol)
+
+    ctx = { app, dataDir, privateCol, publicCol }
+  })
+
+  afterAll(async () => {
+    try { ctx.app.db().getDataDB().close(); ctx.app.db().getAuxDB().close() } catch { }
+    await new Promise(r => setTimeout(r, 100))
+    fs.rmSync(ctx.dataDir, { recursive: true, force: true })
+  })
+
+  it('rejects WebSocket subscription to private/restricted collections and non-collection channels', async () => {
+    const { setupWebSocketRealtime } = await import('../realtime.js')
+    
+    const wssHandlers: any = {}
+    const mockWss = {
+      on: (event: string, handler: Function) => {
+        wssHandlers[event] = handler
+      }
+    }
+
+    setupWebSocketRealtime(mockWss, ctx.app)
+
+    let sentMessages: string[] = []
+    const mockWs = {
+      readyState: 1, // OPEN
+      send: (data: string) => {
+        sentMessages.push(data)
+      },
+      on: (event: string, handler: Function) => {
+        if (event === 'message') {
+          mockWs.triggerMessage = handler
+        }
+      },
+      triggerMessage: null as any
+    }
+
+    // Connect
+    wssHandlers['connection'](mockWs, { url: '/api/realtime' })
+    expect(sentMessages).toHaveLength(1)
+    const connMsg = JSON.parse(sentMessages[0])
+    expect(connMsg.type).toBe('connected')
+    expect(connMsg.authenticated).toBe(false)
+
+    sentMessages = []
+
+    // Try to subscribe to private collection records (should be rejected)
+    await mockWs.triggerMessage(JSON.stringify({
+      type: 'subscribe',
+      channels: [`collections.${ctx.privateCol.id}.records`]
+    }))
+
+    // Wait a brief tick for async handler to run
+    await new Promise(r => setTimeout(r, 10))
+
+    expect(sentMessages).toHaveLength(2)
+    const errorMsg = JSON.parse(sentMessages[0])
+    expect(errorMsg.type).toBe('error')
+    expect(errorMsg.message).toContain('Not authorized')
+    const finalSubMsg = JSON.parse(sentMessages[1])
+    expect(finalSubMsg.type).toBe('subscribed')
+    expect(finalSubMsg.channels).toHaveLength(0)
+
+    sentMessages = []
+
+    // Try to subscribe to public collection records (should succeed)
+    await mockWs.triggerMessage(JSON.stringify({
+      type: 'subscribe',
+      channels: [`collections.${ctx.publicCol.id}.records`]
+    }))
+
+    await new Promise(r => setTimeout(r, 10))
+
+    expect(sentMessages).toHaveLength(1)
+    const subMsg = JSON.parse(sentMessages[0])
+    expect(subMsg.type).toBe('subscribed')
+  })
+})
+

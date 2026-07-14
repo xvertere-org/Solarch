@@ -196,46 +196,24 @@ export function setupWebSocketRealtime(wss: any, app?: BaseApp): void {
       try {
         const msg = JSON.parse(data.toString())
         if (msg.type === 'subscribe' && Array.isArray(msg.channels)) {
-          for (const channel of msg.channels) {
-            if (app && channel.startsWith('collections.') && channel.endsWith('.records')) {
-              const collectionId = channel.replace('collections.', '').replace('.records', '')
-              let canSubscribe = false
-              if (isAdmin) {
-                canSubscribe = true
-              } else {
-                try {
-                  const collection = app.findCachedCollectionByNameOrId(collectionId)
-                  if (collection && collection.viewRule !== null) {
-                    if (collection.viewRule === '') {
-                      canSubscribe = true
-                    } else if (authRecord) {
-                      const requestInfo: RequestInfo = {
-                        auth: authRecord, isAdmin: false, method: 'GET',
-                        headers: {}, query: {}, body: {}, data: {}, context: 'view',
-                      }
-                      const resolver = new RecordFieldResolver({
-                        app, record: authRecord, collection, requestInfo,
-                      })
-                      const { evaluateRule } = require('../core/record_field_resolver')
-                      canSubscribe = evaluateRule(collection.viewRule, resolver)
-                    }
-                  }
-                } catch {
-                  canSubscribe = false
-                }
+          (async () => {
+            for (const channel of msg.channels) {
+              let allowed = true
+              if (app) {
+                allowed = await canSubscribeToChannel(app, channel, authRecord, isAdmin)
               }
-              if (!canSubscribe) {
+              if (!allowed) {
                 ws.send(JSON.stringify({ type: 'error', message: `Not authorized to subscribe to channel: ${channel}` }))
                 continue
               }
+              broker.subscribe(clientId, channel)
             }
-            broker.subscribe(clientId, channel)
-          }
-          ws.send(JSON.stringify({
-            type: 'subscribed',
-            clientId,
-            channels: Array.from(client.channels),
-          }))
+            ws.send(JSON.stringify({
+              type: 'subscribed',
+              clientId,
+              channels: Array.from(client.channels),
+            }))
+          })().catch(() => {})
         } else if (msg.type === 'unsubscribe' && Array.isArray(msg.channels)) {
           for (const channel of msg.channels) {
             broker.unsubscribe(clientId, channel)
