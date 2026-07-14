@@ -133,8 +133,19 @@ export class RecordModel extends BaseModel {
       result[key] = value
     }
 
-    if (expand) {
-      result.expand = expand
+    const finalExpand = expand || (this as any)._expand
+    if (finalExpand) {
+      const serializedExpand: Record<string, any> = {}
+      for (const [key, val] of Object.entries(finalExpand)) {
+        if (Array.isArray(val)) {
+          serializedExpand[key] = val.map(item => item instanceof RecordModel ? item.toJSON((item as any)._expand) : item)
+        } else if (val instanceof RecordModel) {
+          serializedExpand[key] = val.toJSON((val as any)._expand)
+        } else {
+          serializedExpand[key] = val
+        }
+      }
+      result.expand = serializedExpand
     }
 
     return result

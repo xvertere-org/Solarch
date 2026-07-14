@@ -78,6 +78,9 @@ export async function expandRecord(
 ): Promise<Record<string, any>> {
   const expandData: Record<string, any> = {}
 
+  const sourceCollection = await app.findCollectionByNameOrId(record.collectionId)
+  if (!sourceCollection) return expandData
+
   for (const expandPath of expands) {
     const parts = expandPath.split('.')
     const fieldName = parts[0]
@@ -85,12 +88,15 @@ export async function expandRecord(
     const field = record.get(fieldName)
     if (!field) continue
 
-    const collection = await app.findCollectionByNameOrId(fieldName)
-    if (!collection) continue
+    const fieldDef = sourceCollection.getFieldByName(fieldName) as any
+    if (!fieldDef || fieldDef.type !== 'relation') continue
+
+    const targetCollection = await app.findCollectionByNameOrId(fieldDef.collectionId || fieldDef.collectionName)
+    if (!targetCollection) continue
 
     const ids = Array.isArray(field) ? field : [field]
     const records = await Promise.all(
-      ids.map(id => findRecordById(app, collection.id, id))
+      ids.map(id => findRecordById(app, targetCollection.id, id))
     )
 
     const filtered = records.filter(r => r !== null)

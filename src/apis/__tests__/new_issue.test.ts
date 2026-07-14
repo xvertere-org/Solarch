@@ -476,3 +476,66 @@ describe('SEC-008: WebSocket realtime channel subscription authentication', () =
   })
 })
 
+describe('BUG-001: expandRecord successfully resolves relation fields', () => {
+  let ctx: { app: Solarch; dataDir: string }
+
+  beforeAll(async () => {
+    const dataDir = tmpDir()
+    const app = new Solarch({ hideStartBanner: true, defaultDataDir: dataDir, defaultDev: true })
+    await app.bootstrap()
+    await app.migrate()
+    ctx = { app, dataDir }
+  })
+
+  afterAll(async () => {
+    try { ctx.app.db().getDataDB().close(); ctx.app.db().getAuxDB().close() } catch { }
+    await new Promise(r => setTimeout(r, 100))
+    fs.rmSync(ctx.dataDir, { recursive: true, force: true })
+  })
+
+  it('correctly expands relations using the field definition and target collection settings', async () => {
+    const authorsCol = new Collection({
+      name: 'authors', type: 'base', system: false,
+      listRule: '', viewRule: '', createRule: '', updateRule: '', deleteRule: '',
+      fields: [{ name: 'name', type: 'text' }], indexes: [],
+    })
+    await ctx.app.save(authorsCol)
+
+    const articlesCol = new Collection({
+      name: 'articles', type: 'base', system: false,
+      listRule: '', viewRule: '', createRule: '', updateRule: '', deleteRule: '',
+      fields: [
+        { name: 'title', type: 'text' },
+        { name: 'author', type: 'relation', collectionId: authorsCol.id, collectionName: 'authors', maxSelect: 1 }
+      ],
+      indexes: [],
+    })
+    await ctx.app.save(articlesCol)
+
+    // Create author
+    const { validateAndCreateRecord } = await import('../../core/record_upsert.js')
+    const { record: author } = await validateAndCreateRecord(ctx.app, authorsCol, { name: 'Alice' })
+    await ctx.app.save(author)
+
+    // Create article
+    const { record: article } = await validateAndCreateRecord(ctx.app, articlesCol, {
+      title: 'Hello World',
+      author: author.id,
+    })
+    await ctx.app.save(article)
+
+    // Expand
+    const { expandRecord } = await import('../record_helpers.js')
+    const expanded = await expandRecord(ctx.app, article, ['author'])
+
+    expect(expanded.author).toBeDefined()
+    expect(expanded.author.get('name')).toBe('Alice')
+
+    ;(article as any)._expand = expanded
+    const json = article.toJSON()
+    expect(json.expand).toBeDefined()
+    expect(json.expand.author).toBeDefined()
+    expect(json.expand.author.name).toBe('Alice')
+  })
+})
+
