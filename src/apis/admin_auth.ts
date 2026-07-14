@@ -11,7 +11,7 @@ const adminAuthRateLimiter = rateLimit({
   max: 10,
   standardHeaders: true,
   legacyHeaders: false,
-  // FIXED[H-1]: Compound key includes IP to prevent identity cycling
+
   keyGenerator: (req: Request): string => {
     const ip = req.ip || req.socket.remoteAddress || 'unknown'
     const identity = req.body?.identity || 'unknown'
@@ -52,7 +52,7 @@ export function registerAdminAuthRoutes(app: BaseApp, router: Router): void {
         return res.status(400).json({ code: 400, message: 'Missing identity or password.' })
       }
 
-      // FIXED[M-6]: Check account lockout before attempting authentication
+
       if (isLockedOut(`admin:${identity.toLowerCase()}`)) {
         return res.status(429).json({ code: 429, message: 'Account temporarily locked. Try again later.' })
       }
@@ -91,7 +91,7 @@ export function registerAdminAuthRoutes(app: BaseApp, router: Router): void {
     }
   })
 
-  // FIXED[H-3]: Added rate limiting to admin refresh
+
   router.post('/api/admins/refresh', adminAuthRateLimiter, async (req: Request, res: Response) => {
     try {
       const authHeader = req.headers.authorization
@@ -151,14 +151,11 @@ export function registerAdminAuthRoutes(app: BaseApp, router: Router): void {
       }
 
       const token = app.createPasswordResetToken(row.id, 'admin', 1)
-
-      // Send email if SMTP is configured
       try {
         const settings = app.settings()
         if (settings.smtp.host) {
           const mailer = Mailer.fromSettings(settings)
           const engine = new EmailTemplateEngine(settings)
-          // FIXED[L-1]: Set Referrer-Policy to no-referrer to prevent token leakage via Referer header
           res.setHeader('Referrer-Policy', 'no-referrer')
           await sendPasswordResetEmail(mailer, engine, email, {
             resetURL: `${settings.appURL}/_/#/admin/confirm-password-reset?token=${token}`,
@@ -185,6 +182,9 @@ export function registerAdminAuthRoutes(app: BaseApp, router: Router): void {
       }
       if (password !== passwordConfirm) {
         return res.status(400).json({ code: 400, message: 'Passwords do not match.' })
+      }
+      if (!password || password.length < 10) {
+        return res.status(400).json({ code: 400, message: 'Password must be at least 10 characters.' })
       }
 
       if (!app.isPasswordResetTokenValid(token, 'admin')) {

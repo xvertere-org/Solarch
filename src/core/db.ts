@@ -3,7 +3,7 @@ import { ColumnInfo } from '../tools/database/driver'
 import Database from 'better-sqlite3'
 import path from 'path'
 import fs from 'fs'
-import { validateIdentifier } from '../utils/sql_safe'
+import { validateIdentifier, quoteIdentifier } from '../utils/sql_safe'
 
 export const DEFAULT_QUERY_TIMEOUT = 30
 
@@ -42,26 +42,23 @@ export class DB {
     return result.count > 0
   }
 
-  // FIXED[M-5]: Added identifier validation before SQL interpolation
   tableColumns(tableName: string, db: 'data' | 'aux' = 'data'): string[] {
     validateIdentifier(tableName, 'table name')
     const database = db === 'data' ? this.driver.getDataDB() : this.driver.getAuxDB()
-    const rows = database.prepare(`PRAGMA table_info(${tableName})`).all() as Array<{ name: string }>
+    const rows = database.prepare(`PRAGMA table_info(${quoteIdentifier(tableName)})`).all() as Array<{ name: string }>
     return rows.map(r => r.name)
   }
 
-  // FIXED[M-5]: Added identifier validation before SQL interpolation
   tableInfo(tableName: string, db: 'data' | 'aux' = 'data'): ColumnInfo[] {
     validateIdentifier(tableName, 'table name')
     const database = db === 'data' ? this.driver.getDataDB() : this.driver.getAuxDB()
-    return database.prepare(`PRAGMA table_info(${tableName})`).all() as ColumnInfo[]
+    return database.prepare(`PRAGMA table_info(${quoteIdentifier(tableName)})`).all() as ColumnInfo[]
   }
 
-  // FIXED[M-5]: Added identifier validation before SQL interpolation
   tableIndexes(tableName: string, db: 'data' | 'aux' = 'data'): Record<string, string> {
     validateIdentifier(tableName, 'table name')
     const database = db === 'data' ? this.driver.getDataDB() : this.driver.getAuxDB()
-    const rows = database.prepare(`PRAGMA index_list(${tableName})`).all() as Array<{ name: string; sql: string | null }>
+    const rows = database.prepare(`PRAGMA index_list(${quoteIdentifier(tableName)})`).all() as Array<{ name: string; sql: string | null }>
     const result: Record<string, string> = {}
     for (const row of rows) {
       if (row.sql) result[row.name] = row.sql
@@ -69,26 +66,23 @@ export class DB {
     return result
   }
 
-  // FIXED[M-5]: Added identifier validation before SQL interpolation
   deleteTable(tableName: string, db: 'data' | 'aux' = 'data'): void {
     validateIdentifier(tableName, 'table name')
     const database = db === 'data' ? this.driver.getDataDB() : this.driver.getAuxDB()
-    database.exec(`DROP TABLE IF EXISTS "${tableName}"`)
+    database.exec(`DROP TABLE IF EXISTS ${quoteIdentifier(tableName)}`)
   }
 
-  // FIXED[M-5]: Added identifier validation before SQL interpolation
   deleteView(viewName: string, db: 'data' | 'aux' = 'data'): void {
     validateIdentifier(viewName, 'view name')
     const database = db === 'data' ? this.driver.getDataDB() : this.driver.getAuxDB()
-    database.exec(`DROP VIEW IF EXISTS "${viewName}"`)
+    database.exec(`DROP VIEW IF EXISTS ${quoteIdentifier(viewName)}`)
   }
 
-  // FIXED[M-5]: Added identifier validation before SQL interpolation
   saveView(viewName: string, selectQuery: string, db: 'data' | 'aux' = 'data'): void {
     validateIdentifier(viewName, 'view name')
     const database = db === 'data' ? this.driver.getDataDB() : this.driver.getAuxDB()
-    database.exec(`DROP VIEW IF EXISTS "${viewName}"`)
-    database.exec(`CREATE VIEW "${viewName}" AS ${selectQuery}`)
+    database.exec(`DROP VIEW IF EXISTS ${quoteIdentifier(viewName)}`)
+    database.exec(`CREATE VIEW ${quoteIdentifier(viewName)} AS ${selectQuery}`)
   }
 
   vacuum(db: 'data' | 'aux' = 'data'): void {

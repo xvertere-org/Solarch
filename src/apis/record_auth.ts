@@ -9,13 +9,13 @@ import { oauth2Registry, handleOAuth2Callback, linkExternalAuth } from '../tools
 import { OTP } from '../core/auth_models'
 import { createHash, createHmac, randomBytes, randomInt, timingSafeEqual } from 'crypto'
 import { recordFailedAttempt, isLockedOut, clearAttempts } from '../utils/lockout'
+import { quoteIdentifier } from '../utils/sql_safe'
 
 const authRateLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 5,
   standardHeaders: true,
   legacyHeaders: false,
-  // FIXED[H-1]: Compound key includes IP to prevent identity cycling
   keyGenerator: (req: Request): string => {
     const ip = req.ip || req.socket.remoteAddress || 'unknown'
     const identity = req.body?.identity || 'unknown'
@@ -47,8 +47,6 @@ const otpRateLimiter = rateLimit({
     })
   },
 })
-
-// FIXED[C-2]: Rate limiter for OTP verification — 5 attempts/min per IP+otpId
 const otpVerifyRateLimiter = rateLimit({
   windowMs: 60 * 1000,
   max: 5,
@@ -83,30 +81,28 @@ export function registerAuthRoutes(app: BaseApp, router: Router): void {
       if (!collection || !collection.isAuth()) {
         return res.status(400).json({ code: 400, message: 'Invalid collection.' })
       }
-
-      // FIXED[M-6]: Check account lockout before attempting authentication
       const lockoutKey = `record:${collection.id}:${identity.toLowerCase()}`
       if (isLockedOut(lockoutKey)) {
         return res.status(429).json({ code: 429, message: 'Account temporarily locked. Try again later.' })
       }
 
       const db = app.db().getDataDB()
-      const columns = db.prepare(`PRAGMA table_info(_r_${collection.id})`).all() as Array<{ name: string }>
+      const columns = db.prepare(`PRAGMA table_info(${quoteIdentifier(`_r_${collection.id}`)})`).all() as Array<{ name: string }>
       const hasUsername = columns.some(c => c.name === 'username')
 
       let row: any
+      const qt = quoteIdentifier(`_r_${collection.id}`)
       if (hasUsername) {
         row = db.prepare(
-          `SELECT * FROM _r_${collection.id} WHERE email = ? OR username = ?`
+          `SELECT * FROM ${qt} WHERE email = ? OR username = ?`
         ).get(identity, identity) as any
       } else {
         row = db.prepare(
-          `SELECT * FROM _r_${collection.id} WHERE email = ?`
+          `SELECT * FROM ${qt} WHERE email = ?`
         ).get(identity) as any
       }
 
       if (!row) {
-        // FIXED[M-6]: Record failed attempt for lockout tracking
         recordFailedAttempt(lockoutKey)
         return res.status(400).json({ code: 400, message: 'Invalid login credentials.' })
       }
@@ -114,28 +110,34 @@ export function registerAuthRoutes(app: BaseApp, router: Router): void {
       const passwordHash = row.passwordHash
       const valid = await verifyPassword(password, passwordHash)
       if (!valid) {
-        // FIXED[M-6]: Record failed attempt for lockout tracking
         recordFailedAttempt(lockoutKey)
         return res.status(400).json({ code: 400, message: 'Invalid login credentials.' })
       }
-
-      // FIXED[M-6]: Clear lockout on successful auth
       clearAttempts(lockoutKey)
-
-      // Check onlyVerified option
       if (collection.authOptions?.onlyVerified && !row.verified) {
         return res.status(403).json({ code: 403, message: 'Email not verified.' })
       }
 
+      const mfaCheck = db.prepare(`SELECT id, method FROM _mfas WHERE recordRef = ? AND collectionId = ?`).get(row.id, collection.id) as any
+      if (mfaCheck) {
+        const mfaToken = app.generateJWT(
+          { id: row.id, type: 'mfa', collectionId: collection.id, mfaId: mfaCheck.id },
+          app.getJwtSecret(),
+          '5m'
+        )
+        return res.json({ mfaRequired: true, mfaId: mfaCheck.id, token: mfaToken })
+      }
+
       const record = new PBRecord(collection.id, collection.name, row)
+      record.hide('passwordHash')
+      record.hide('lastResetSentAt')
+      record.hide('lastVerificationSentAt')
       const token = app.generateJWT(
         { id: record.id, type: 'auth', collectionId: collection.id },
         app.getJwtSecret(),
         '720h'
       )
-
-      // Update lastLoginAt
-      db.prepare(`UPDATE _r_${collection.id} SET lastLoginAt = ? WHERE id = ?`).run(new Date().toISOString(), record.id)
+      db.prepare(`UPDATE ${quoteIdentifier(`_r_${collection.id}`)} SET lastLoginAt = ? WHERE id = ?`).run(new Date().toISOString(), record.id)
 
       res.json({ token, record: record.toJSON() })
     } catch (err: any) {
@@ -144,7 +146,6 @@ export function registerAuthRoutes(app: BaseApp, router: Router): void {
     }
   })
 
-  // FIXED[H-3]: Added rate limiting to OAuth2 callback
   authRouter.post('/auth-with-oauth2', authRateLimiter, async (req: Request, res: Response) => {
     try {
       const { provider, code, codeVerifier, redirectURL, createData, state } = req.body
@@ -163,7 +164,6 @@ export function registerAuthRoutes(app: BaseApp, router: Router): void {
         return res.status(403).json({ code: 403, message: 'OAuth2 is not enabled for this collection.' })
       }
 
-      // Validate redirectURL against app URL to prevent open redirect
       if (redirectURL) {
         try {
           const parsed = new URL(redirectURL)
@@ -171,7 +171,6 @@ export function registerAuthRoutes(app: BaseApp, router: Router): void {
           if (!appUrl) {
             return res.status(400).json({ code: 400, message: 'appURL is not configured. Set it in settings.' })
           }
-          // FIXED[L-6]: Only validate against the configured app URL — no hardcoded localhost entries
           const allowedOrigins = [appUrl, appUrl.replace(/\/+$/, '')]
           const isAllowed = allowedOrigins.some(ao => {
             try {
@@ -200,10 +199,7 @@ export function registerAuthRoutes(app: BaseApp, router: Router): void {
         }
         db.prepare(`DELETE FROM _oauth2States WHERE state = ?`).run(state)
       }
-
       const { user: oauthUser } = await handleOAuth2Callback(app, provider, code, codeVerifier, redirectURL)
-
-      // Check if external auth already exists
       const existingAuth = db.prepare(
         `SELECT * FROM _externalAuths WHERE provider = ? AND providerId = ?`
       ).get(provider, oauthUser.id) as any
@@ -211,23 +207,18 @@ export function registerAuthRoutes(app: BaseApp, router: Router): void {
       let record: PBRecord
 
       if (existingAuth) {
-        // Existing user - find their record
-        const row = db.prepare(`SELECT * FROM _r_${collection.id} WHERE id = ?`).get(existingAuth.recordRef) as any
+        const row = db.prepare(`SELECT * FROM ${quoteIdentifier(`_r_${collection.id}`)} WHERE id = ?`).get(existingAuth.recordRef) as any
         if (!row) {
           return res.status(400).json({ code: 400, message: 'Associated record not found.' })
         }
         record = new PBRecord(collection.id, collection.name, row)
       } else {
-        // New user - check if email exists
         if (oauthUser.email) {
-          const existingRow = db.prepare(`SELECT * FROM _r_${collection.id} WHERE email = ?`).get(oauthUser.email) as any
+          const existingRow = db.prepare(`SELECT * FROM ${quoteIdentifier(`_r_${collection.id}`)} WHERE email = ?`).get(oauthUser.email) as any
           if (existingRow) {
-            // Link external auth to existing account
             record = new PBRecord(collection.id, collection.name, existingRow)
             await linkExternalAuth(app, record, provider, oauthUser.id)
           } else {
-            // Create new record
-            // FIXED[C-1]: Only pick explicitly allowed fields from createData — never allow passwordHash through
             const allowedCreateFields = ['email', 'name', 'avatar']
             const safeCreateData: Record<string, any> = {}
             if (createData && typeof createData === 'object') {
@@ -260,7 +251,9 @@ export function registerAuthRoutes(app: BaseApp, router: Router): void {
         app.getJwtSecret(),
         '720h'
       )
-
+      record.hide('passwordHash')
+      record.hide('lastResetSentAt')
+      record.hide('lastVerificationSentAt')
       res.json({ token, record: record.toJSON(), meta: { isNew: !existingAuth } })
     } catch (err: any) {
       app.logger().error(err.message || err)
@@ -291,16 +284,13 @@ export function registerAuthRoutes(app: BaseApp, router: Router): void {
         db.prepare(`DELETE FROM _otps WHERE id = ?`).run(otpId)
         return res.status(400).json({ code: 400, message: 'OTP has expired.' })
       }
-
-      // FIXED[L-1]: Use timingSafeEqual for constant-time OTP hash comparison
       const incomingHash = createHash('sha256').update(password).digest()
       const storedHash = Buffer.from(otp.password, 'hex')
       if (storedHash.length !== incomingHash.length || !timingSafeEqual(storedHash, incomingHash)) {
         return res.status(400).json({ code: 400, message: 'Invalid OTP password.' })
       }
 
-      // Find the associated record
-      const recordRow = db.prepare(`SELECT * FROM _r_${collection.id} WHERE id = ?`).get(otp.recordRef) as any
+      const recordRow = db.prepare(`SELECT * FROM ${quoteIdentifier(`_r_${collection.id}`)} WHERE id = ?`).get(otp.recordRef) as any
       if (!recordRow) {
         return res.status(400).json({ code: 400, message: 'Associated record not found.' })
       }
@@ -311,13 +301,12 @@ export function registerAuthRoutes(app: BaseApp, router: Router): void {
         app.getJwtSecret(),
         '720h'
       )
-
-      // Clean up used OTP
       db.prepare(`DELETE FROM _otps WHERE id = ?`).run(otpId)
+      db.prepare(`UPDATE ${quoteIdentifier(`_r_${collection.id}`)} SET lastLoginAt = ? WHERE id = ?`).run(new Date().toISOString(), record.id)
 
-      // Update lastLoginAt
-      db.prepare(`UPDATE _r_${collection.id} SET lastLoginAt = ? WHERE id = ?`).run(new Date().toISOString(), record.id)
-
+      record.hide('passwordHash')
+      record.hide('lastResetSentAt')
+      record.hide('lastVerificationSentAt')
       res.json({ token, record: record.toJSON() })
     } catch (err: any) {
       app.logger().error(err.message || err)
@@ -338,33 +327,23 @@ export function registerAuthRoutes(app: BaseApp, router: Router): void {
       }
 
       const db = app.db().getDataDB()
-      const row = db.prepare(`SELECT * FROM _r_${collection.id} WHERE email = ?`).get(email) as any
+      const row = db.prepare(`SELECT * FROM ${quoteIdentifier(`_r_${collection.id}`)} WHERE email = ?`).get(email) as any
       if (!row) {
-        // Don't leak whether email exists
         return res.json({ otpId: '' })
       }
 
       const record = new PBRecord(collection.id, collection.name, row)
-
-      // Generate OTP password (6-digit code)
-      // FIXED[C-3]: Use crypto.randomInt instead of Math.random()
       const otpPassword = randomInt(100000, 1000000).toString()
       const otpId = generateRandomString(16)
       const now = new Date().toISOString()
       const expiresAt = new Date(Date.now() + 15 * 60 * 1000).toISOString()
       const requestIp = req.ip || req.socket.remoteAddress || 'unknown'
 
-      // Delete any existing OTPs for this record
       db.prepare(`DELETE FROM _otps WHERE recordRef = ? AND collectionId = ?`).run(record.id, collection.id)
-
-      // Store OTP with hashed password
       const otpHash = createHash('sha256').update(otpPassword).digest('hex')
-      // FIXED[H-3]: Aligned column/placeholder count — 10 columns, 10 placeholders, 10 values
       db.prepare(
         `INSERT INTO _otps (id, recordRef, collectionId, password, sentTo, created, updated, createdAt, expiresAt, requestIp) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
       ).run(otpId, record.id, collection.id, otpHash, email, now, now, now, expiresAt, requestIp)
-
-      // Send OTP email if SMTP is configured
       const settings = app.settings()
       if (settings.smtp.host) {
         try {
@@ -418,7 +397,6 @@ export function registerAuthRoutes(app: BaseApp, router: Router): void {
     }
   })
 
-  // MFA/TOTP endpoints
   authRouter.post('/mfa/setup', async (req: Request, res: Response) => {
     try {
       const authHeader = req.headers.authorization
@@ -438,26 +416,22 @@ export function registerAuthRoutes(app: BaseApp, router: Router): void {
       }
 
       const db = app.db().getDataDB()
-      const recordRow = db.prepare(`SELECT * FROM _r_${collection.id} WHERE id = ?`).get(payload.id) as any
+      const recordRow = db.prepare(`SELECT * FROM ${quoteIdentifier(`_r_${collection.id}`)} WHERE id = ?`).get(payload.id) as any
       if (!recordRow) {
         return res.status(404).json({ code: 404, message: 'Record not found.' })
       }
 
-      // Generate TOTP secret
       const secret = generateRandomString(32)
-      // FIXED[C-4]: Use crypto.randomInt for backup codes, hash before storage, return plaintext once
       const rawBackupCodes = Array.from({ length: 8 }, () => randomInt(10000000, 100000000).toString())
       const hashedBackupCodes = rawBackupCodes.map(c => createHash('sha256').update(c).digest('hex'))
       const backupCodes = rawBackupCodes
 
-      // Store MFA config
       const now = new Date().toISOString()
       const mfaId = generateRandomString(16)
       db.prepare(
         `INSERT INTO _mfas (id, recordRef, collectionId, method, secret, backupCodes, created, updated, createdAt, expiresAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
       ).run(mfaId, payload.id, collection.id, 'totp', secret, JSON.stringify(hashedBackupCodes), now, now, now, new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString())
 
-      // FIXED[C-4]: Return backup codes only on initial setup; they are stored hashed so cannot be retrieved later
       res.json({
         secret,
         backupCodes: rawBackupCodes,
@@ -479,7 +453,7 @@ export function registerAuthRoutes(app: BaseApp, router: Router): void {
 
       const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : authHeader
       const payload = app.parseJWT(token, app.getJwtSecret())
-      if (!payload || payload.type !== 'auth') {
+      if (!payload || !['auth', 'mfa'].includes(payload.type)) {
         return res.status(401).json({ code: 401, message: 'Invalid token.' })
       }
 
@@ -497,6 +471,24 @@ export function registerAuthRoutes(app: BaseApp, router: Router): void {
       const expectedCode = generateTOTPCode(mfaRow.secret || mfaRow.id)
       if (code !== expectedCode) {
         return res.status(400).json({ code: 400, message: 'Invalid MFA code.' })
+      }
+
+      if (payload.type === 'mfa') {
+        const recordRow = db.prepare(`SELECT * FROM ${quoteIdentifier(`_r_${collection.id}`)} WHERE id = ?`).get(payload.id) as any
+        if (!recordRow) {
+          return res.status(404).json({ code: 404, message: 'Record not found.' })
+        }
+        const record = new PBRecord(collection.id, collection.name, recordRow)
+        record.hide('passwordHash')
+        record.hide('lastResetSentAt')
+        record.hide('lastVerificationSentAt')
+        const authToken = app.generateJWT(
+          { id: payload.id, type: 'auth', collectionId: collection.id },
+          app.getJwtSecret(),
+          '720h'
+        )
+        db.prepare(`UPDATE ${quoteIdentifier(`_r_${collection.id}`)} SET lastLoginAt = ? WHERE id = ?`).run(new Date().toISOString(), payload.id)
+        return res.json({ verified: true, token: authToken, record: record.toJSON() })
       }
 
       res.json({ verified: true })
@@ -530,7 +522,6 @@ export function registerAuthRoutes(app: BaseApp, router: Router): void {
     }
   })
 
-  // List linked external auths
   authRouter.get('/external-auths', async (req: Request, res: Response) => {
     try {
       const collectionIdOrName = req.params.collectionIdOrName
@@ -573,7 +564,6 @@ export function registerAuthRoutes(app: BaseApp, router: Router): void {
   router.use('/api/collections/:collectionIdOrName', authRouter)
 }
 
-// FIXED[M-6]: RFC 6238-compliant TOTP using stdlib crypto
 function generateTOTPCode(secret: string, period = 30, digits = 6): string {
   const now = Math.floor(Date.now() / 1000)
   let timeStep = Math.floor(now / period)

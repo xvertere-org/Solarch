@@ -47,11 +47,9 @@ export async function serve(app: BaseApp, port: number): Promise<http.Server> {
         formAction: ["'self'"],
       },
     },
-    // FIXED[L-4]: Hide X-Powered-By header
     hidePoweredBy: true,
   }))
   server.use(corsMiddleware())
-  // FIXED[M-4]: Omit query strings from logs to prevent PII leakage in URLs
   server.use(require('morgan')((tokens: any, req: any, res: any) => {
     const url = tokens.url(req, res) || ''
     const pathOnly = url.split('?')[0]
@@ -66,7 +64,6 @@ export async function serve(app: BaseApp, port: number): Promise<http.Server> {
     ].join(' ')
   }))
 
-  // Additional security headers
   server.use((req, res, next) => {
     res.setHeader('X-Frame-Options', 'DENY')
     res.setHeader('X-Content-Type-Options', 'nosniff')
@@ -75,15 +72,11 @@ export async function serve(app: BaseApp, port: number): Promise<http.Server> {
     next()
   })
 
-  // FIXED[M-3]: Lower body limits to 10mb to prevent memory exhaustion DoS
   server.use(express.json({ limit: '10mb' }))
   server.use(express.urlencoded({ extended: true, limit: '10mb' }))
-  // server.use(gzipMiddleware())
   server.use(rateLimitMiddleware(app))
   server.use(bodyLimitMiddleware())
   server.use(loadAuthToken(app))
-
-  // Serve static files from pb_public directory if it exists
   const publicDir = path.join(process.cwd(), 'pb_public')
   if (fs.existsSync(publicDir)) {
     server.use(express.static(publicDir))
@@ -109,7 +102,6 @@ export async function serve(app: BaseApp, port: number): Promise<http.Server> {
   registerAIRoutes(app, server)
   registerAgentRoutes(app, server)
 
-  // Serve built Admin UI from pb_public/admin if available
   const adminBuildDir = path.join(process.cwd(), 'pb_public', 'admin')
   if (fs.existsSync(adminBuildDir)) {
     server.use('/_/', express.static(adminBuildDir))
@@ -117,7 +109,6 @@ export async function serve(app: BaseApp, port: number): Promise<http.Server> {
       res.sendFile(path.join(adminBuildDir, 'index.html'))
     })
   } else {
-    // Fallback placeholder when admin UI is not built
     server.get('/_/', (req, res) => {
       const installerUrl = `http://localhost:${port}/api/installer`
       const hasAdmin = hasSuperuser(app)
@@ -157,50 +148,23 @@ export async function serve(app: BaseApp, port: number): Promise<http.Server> {
   }
 
   await app.onServe.trigger({ app, router: server })
-
-  // Schedule automated backups if configured
   try {
     const backupCron = app.settings().backups?.cron
     const maxKeep = app.settings().backups?.cronMaxKeep ?? 3
     if (backupCron) {
       const croner = require('croner')
-      // FIXED[L-3]: Use async fs/promises to prevent event-loop blocking during backups
       croner(backupCron, async () => {
         try {
-          const { default: JSZip } = await import('jszip')
+          const { createStreamingBackup, isBackupInProgress } = await import('./backup_utils.js')
+          if (isBackupInProgress()) {
+            app.logger().warn('Skipping automated backup — another backup is already in progress')
+            return
+          }
           const backupDir = path.join(app.dataDir, 'backups')
           await fsPromises.mkdir(backupDir, { recursive: true })
           const backupName = `auto_backup_${Date.now()}.zip`
           const backupPath = path.join(backupDir, backupName)
-
-          const zip = new JSZip()
-          for (const dbFile of ['data.db', 'auxiliary.db']) {
-            const dbPath = path.join(app.dataDir, dbFile)
-            try {
-              const content = await fsPromises.readFile(dbPath)
-              zip.file(dbFile, content)
-            } catch {}
-          }
-          const storageDir = path.join(app.dataDir, 'storage')
-          try {
-            await fsPromises.access(storageDir)
-            const walk = async (dir: string, prefix: string) => {
-              const entries = await fsPromises.readdir(dir, { withFileTypes: true })
-              for (const e of entries) {
-                const fp = path.join(dir, e.name)
-                if (e.isDirectory()) await walk(fp, prefix ? `${prefix}/${e.name}` : e.name)
-                else {
-                  const content = await fsPromises.readFile(fp)
-                  zip.file(`storage/${prefix ? prefix + '/' : ''}${e.name}`, content)
-                }
-              }
-            }
-            await walk(storageDir, '')
-          } catch {}
-          const buf = await zip.generateAsync({ type: 'nodebuffer', compression: 'DEFLATE' })
-          await fsPromises.writeFile(backupPath, buf)
-
-          // Prune old backups
+          await createStreamingBackup(app, backupPath)
           const allFiles = await fsPromises.readdir(backupDir)
           const zipFiles = allFiles
             .filter(f => f.startsWith('auto_backup_') && f.endsWith('.zip'))
@@ -214,7 +178,7 @@ export async function serve(app: BaseApp, port: number): Promise<http.Server> {
         }
       })
     }
-  } catch {}
+  } catch { }
 
   const httpServer = http.createServer(server)
 

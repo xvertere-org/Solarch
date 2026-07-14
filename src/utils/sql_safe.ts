@@ -12,7 +12,17 @@ export function validateIdentifiers(names: string[], label = 'identifier'): stri
   return names
 }
 
-// FIXED[L-3]: Strip directory components via path.basename before char filtering
+
+export function quoteIdentifier(name: string): string {
+  return `"${name.replace(/"/g, '""')}"`
+}
+
+
+export function validateAndQuote(name: string, label = 'identifier'): string {
+  validateIdentifier(name, label)
+  return quoteIdentifier(name)
+}
+
 export function sanitizeFilename(name: string): string {
   const { basename } = require('path')
   return basename(name).replace(/[^a-zA-Z0-9._-]/g, '_')

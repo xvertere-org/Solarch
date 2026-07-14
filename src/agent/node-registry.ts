@@ -1,5 +1,8 @@
 import { NodeDefinition, NodeExecutionResult, ExecutionContext } from './types'
 import vm from 'vm'
+import dns from 'dns'
+import { runInDeno } from '../tools/jsvm/deno_sandbox'
+import { getSandboxMode } from '../tools/jsvm/jsvm'
 
 const registry = new Map<string, NodeDefinition>()
 
@@ -28,21 +31,99 @@ function makeResult(nodeId: string, nodeType: string, output: any, status: 'succ
   return { nodeId, nodeType, status, output, error, startTime: start.toISOString(), endTime: end.toISOString(), duration: end.getTime() - start.getTime() }
 }
 
-// FIXED[H-11]: Replaced new Function with vm.Script sandbox.
-// DEFERRED: Full dynamic code execution remains a product requirement for the 'code' node type.
-// The vm sandbox prevents access to process, require, and the file system but is not a true security boundary.
-async function executeSandboxed(code: string, input: any, ctx: ExecutionContext, timeoutMs = 5000): Promise<any> {
-  const blocked = ['process', 'require', '__dirname', '__filename', 'global', 'import(', 'eval(', 'constructor', 'prototype', '__proto__']
-  const hasBlocked = blocked.some(b => code.includes(b))
-  if (hasBlocked) throw new Error('Code contains blocked identifiers: process, require, import, eval, constructor, __dirname, __filename, global')
 
-  const sandbox = {
+async function executeSandboxed(code: string, input: any, ctx: ExecutionContext, timeoutMs = 5000): Promise<any> {
+  if (getSandboxMode() === 'isolated') {
+    return executeSandboxedIsolated(code, input, ctx, timeoutMs)
+  }
+
+  return executeSandboxedLegacy(code, input, ctx, timeoutMs)
+}
+
+async function executeSandboxedIsolated(code: string, input: any, ctx: ExecutionContext, timeoutMs: number): Promise<any> {
+  const maxMemoryMb = parseInt(process.env.JSVM_MAX_MEMORY_MB || '64', 10)
+
+  const result = await runInDeno(
+    code,
+    { input, executionId: ctx.executionId },
+    { timeoutMs, maxMemoryMb, mode: 'code' }
+  )
+  if (result.logs?.length && ctx.logger) {
+    for (const log of result.logs) {
+      ctx.logger(log)
+    }
+  }
+
+  if (!result.success) {
+    throw new Error(result.error || 'Code execution failed in isolated sandbox')
+  }
+
+  return result.result
+}
+const LEGACY_BLOCKED_PATTERNS: RegExp[] = [
+  /\bprocess\b/,
+  /\brequire\b/,
+  /\b__dirname\b/,
+  /\b__filename\b/,
+  /\bglobal\b/,
+  /\bglobalThis\b/,
+  /\bimport\s*\(/,
+  /\beval\s*\(/,
+  /\bconstructor\b/,
+  /\bprototype\b/,
+  /\b__proto__\b/,
+  /\bFunction\b/,
+  /\bReflect\b/,
+  /\bProxy\b/,
+  /\bDeno\b/,
+  /\bchild_process\b/,
+  /\bexecSync\b/,
+  /\bspawnSync\b/,
+  /\bexecFileSync\b/,
+  /\[\s*['"`]constructor['"`]\s*\]/,
+  /\[\s*['"`]__proto__['"`]\s*\]/,
+  /\[\s*['"`]prototype['"`]\s*\]/,
+  /['"`]con['"`]\s*\+\s*['"`]structor['"`]/,
+  /['"`]proto['"`]\s*\+\s*['"`]type['"`]/,
+  /['"`]proc['"`]\s*\+\s*['"`]ess['"`]/,
+  /['"`]req['"`]\s*\+\s*['"`]uire['"`]/,
+  /\\u0070rocess/,
+  /\\u0072equire/,
+  /\\u0065val/,
+]
+
+function validateLegacyCode(code: string): void {
+  for (const pattern of LEGACY_BLOCKED_PATTERNS) {
+    if (pattern.test(code)) {
+      throw new Error(
+        'Code contains blocked identifiers. Disallowed: process, require, import, eval, ' +
+        'constructor, prototype, __proto__, Function, Reflect, Proxy, Deno, globalThis, global, ' +
+        '__dirname, __filename, child_process'
+      )
+    }
+  }
+}
+
+async function executeSandboxedLegacy(code: string, input: any, ctx: ExecutionContext, timeoutMs: number): Promise<any> {
+  validateLegacyCode(code)
+
+  const sandbox: Record<string, any> = {
     input,
     ctx: { executionId: ctx.executionId, logger: ctx.logger, abortSignal: ctx.abortSignal },
-    console: ctx.logger ? { log: ctx.logger } : console,
+    console: ctx.logger ? { log: ctx.logger, info: ctx.logger, warn: ctx.logger, error: ctx.logger, debug: ctx.logger } : console,
     setTimeout: setTimeout,
     clearTimeout: clearTimeout,
     Math, Date, JSON, Array, Object, String, Number, Boolean, RegExp, Map, Set, Promise, Error, parseInt, parseFloat, isNaN, isFinite,
+    process: undefined,
+    require: undefined,
+    global: undefined,
+    globalThis: undefined,
+    Reflect: undefined,
+    Proxy: undefined,
+    Function: undefined,
+    Deno: undefined,
+    __dirname: undefined,
+    __filename: undefined,
   }
 
   const script = new vm.Script(`"use strict"; (function() { ${code} })()`)
@@ -155,16 +236,33 @@ registerNode({
   },
 })
 
-// FIXED[H-3]: Block SSRF — reject private/loopback IPs and check URL well-formedness
+function isPrivateIP(ip: string): boolean {
+  // Strip IPv6-mapped IPv4 prefix
+  let normalized = ip
+  if (normalized.startsWith('::ffff:')) normalized = normalized.slice(7)
+  if (normalized.startsWith('0:0:0:0:0:ffff:')) normalized = normalized.slice(15)
+
+  // IPv4 checks
+  if (normalized === '127.0.0.1' || normalized.startsWith('127.') || normalized === '0.0.0.0') return true
+  if (normalized.startsWith('10.') || normalized.startsWith('192.168.')) return true
+  if (normalized.startsWith('169.254.')) return true
+  if (/^172\.(1[6-9]|2\d|3[01])\./.test(normalized)) return true
+  // Broadcast
+  if (normalized === '255.255.255.255') return true
+
+  // IPv6 checks
+  const lower = normalized.toLowerCase()
+  if (lower === '::1' || lower === '[::1]') return true
+  if (lower === '::' || lower === '0:0:0:0:0:0:0:0') return true
+  if (lower.startsWith('fc') || lower.startsWith('fd')) return true  // ULA
+  if (lower.startsWith('fe80')) return true  // link-local
+
+  return false
+}
+
 function isPrivateHostname(hostname: string): boolean {
   if (hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '::1' || hostname === '[::1]') return true
-  if (hostname.startsWith('127.') || hostname === '0.0.0.0') return true
-  if (hostname.startsWith('10.') || hostname.startsWith('192.168.')) return true
-  if (hostname.startsWith('169.254.')) return true
-  if (/^172\.(1[6-9]|2\d|3[01])\./.test(hostname)) return true
-  // IPv6 loopback and unique-local
-  if (hostname.startsWith('fc') || hostname.startsWith('fd') || hostname.toLowerCase() === '::1') return true
-  return false
+  return isPrivateIP(hostname)
 }
 
 registerNode({
@@ -182,11 +280,27 @@ registerNode({
       return makeResult(ctx.executionId, 'http_request', null, 'error', 'Invalid URL')
     }
 
+    // SECURITY: Validate protocol — only http and https allowed
+    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+      return makeResult(ctx.executionId, 'http_request', null, 'error', `Protocol "${parsed.protocol}" is not allowed. Use http or https.`)
+    }
+
+    // SECURITY: Hostname-level check (catches obvious private names)
     if (isPrivateHostname(parsed.hostname)) {
       return makeResult(ctx.executionId, 'http_request', null, 'error', 'Requests to private/loopback addresses are blocked')
     }
 
-    // Check allowlist if configured
+    // SECURITY: DNS resolution — resolve hostname and validate the resolved IP
+    // This prevents DNS rebinding attacks where a hostname resolves to a private IP
+    try {
+      const { address } = await dns.promises.lookup(parsed.hostname)
+      if (isPrivateIP(address)) {
+        return makeResult(ctx.executionId, 'http_request', null, 'error', 'Resolved IP address is in a private/reserved range')
+      }
+    } catch (dnsErr: any) {
+      return makeResult(ctx.executionId, 'http_request', null, 'error', `DNS resolution failed: ${dnsErr.code || dnsErr.message}`)
+    }
+
     const allowedPrefixes = process.env.ALLOWED_URL_PREFIXES
     if (allowedPrefixes) {
       const prefixes = allowedPrefixes.split(',').map(s => s.trim()).filter(Boolean)
@@ -203,10 +317,37 @@ registerNode({
     const controller = new AbortController()
     const timer = setTimeout(() => controller.abort(), 30000)
     try {
-      const res = await fetch(urlStr, { method, signal: controller.signal, headers: { 'Content-Type': 'application/json', ...(headers as Record<string, string>) }, body: body as string | undefined })
+      // SECURITY: redirect: 'manual' prevents automatic redirect following
+      // This blocks attacks where a public URL redirects to an internal address
+      const res = await fetch(urlStr, { method, signal: controller.signal, redirect: 'manual', headers: { 'Content-Type': 'application/json', ...(headers as Record<string, string>) }, body: body as string | undefined })
+
+      // SECURITY: If the response is a redirect, validate the redirect target
+      if (res.status >= 300 && res.status < 400) {
+        const location = res.headers.get('location')
+        if (location) {
+          try {
+            const redirectUrl = new URL(location, urlStr)
+            if (redirectUrl.protocol !== 'http:' && redirectUrl.protocol !== 'https:') {
+              return makeResult(ctx.executionId, 'http_request', null, 'error', 'Redirect to non-HTTP protocol blocked')
+            }
+            if (isPrivateHostname(redirectUrl.hostname)) {
+              return makeResult(ctx.executionId, 'http_request', null, 'error', 'Redirect to private/loopback address blocked')
+            }
+            // Resolve redirect target DNS too
+            const { address: redirectAddr } = await dns.promises.lookup(redirectUrl.hostname)
+            if (isPrivateIP(redirectAddr)) {
+              return makeResult(ctx.executionId, 'http_request', null, 'error', 'Redirect target resolves to private/reserved IP')
+            }
+          } catch {
+            return makeResult(ctx.executionId, 'http_request', null, 'error', 'Invalid redirect URL')
+          }
+        }
+        return makeResult(ctx.executionId, 'http_request', { status: res.status, data: null, redirectUrl: location, headers: Object.fromEntries(res.headers.entries()) })
+      }
+
       const text = await res.text()
       let data: any = text
-      try { data = JSON.parse(text) } catch {}
+      try { data = JSON.parse(text) } catch { }
       return makeResult(ctx.executionId, 'http_request', { status: res.status, data, headers: Object.fromEntries(res.headers.entries()) })
     } finally { clearTimeout(timer) }
   },
@@ -245,12 +386,47 @@ registerNode({
   execute: async (config, input, ctx) => {
     const expression = String(config.expression || '')
     if (!expression) return makeResult(ctx.executionId, 'condition', { passed: true })
-    const blocked = ['process', 'require', 'import(', 'eval(', 'constructor', 'prototype', '__proto__']
-    if (blocked.some(b => expression.includes(b))) {
+
+    if (getSandboxMode() === 'isolated') {
+      try {
+        const maxMemoryMb = parseInt(process.env.JSVM_MAX_MEMORY_MB || '64', 10)
+        const result = await runInDeno(
+          expression,
+          { input },
+          { timeoutMs: 3000, maxMemoryMb, mode: 'condition' }
+        )
+        if (result.logs?.length && ctx.logger) {
+          for (const log of result.logs) ctx.logger(log)
+        }
+        if (!result.success) {
+          return makeResult(ctx.executionId, 'condition', { passed: false, input }, 'error', result.error || 'Condition evaluation failed')
+        }
+        return makeResult(ctx.executionId, 'condition', { passed: !!result.result, input })
+      } catch (err: any) {
+        return makeResult(ctx.executionId, 'condition', { passed: false, input }, 'error', err.message)
+      }
+    }
+
+    try {
+      validateLegacyCode(expression)
+    } catch {
       return makeResult(ctx.executionId, 'condition', { passed: false, input }, 'error', 'Expression contains blocked keywords')
     }
     try {
-      const sandbox = { input, Boolean }
+      const sandbox: Record<string, any> = {
+        input,
+        Boolean,
+        process: undefined,
+        require: undefined,
+        global: undefined,
+        globalThis: undefined,
+        Reflect: undefined,
+        Proxy: undefined,
+        Function: undefined,
+        Deno: undefined,
+        __dirname: undefined,
+        __filename: undefined,
+      }
       const script = new vm.Script(`Boolean(${expression})`)
       const context = vm.createContext(sandbox)
       const passed = script.runInContext(context, { timeout: 3000 })

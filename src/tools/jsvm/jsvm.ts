@@ -2,6 +2,15 @@ import { BaseApp } from '../../core/base'
 import vm from 'vm'
 import fs from 'fs'
 import path from 'path'
+import { runInDeno, sanitizeSettingsForSandbox, checkDenoAvailability, SerializableContext } from './deno_sandbox'
+
+export type JSVMSandboxMode = 'legacy' | 'isolated'
+
+export function getSandboxMode(): JSVMSandboxMode {
+  const mode = process.env.JSVM_SANDBOX_MODE?.toLowerCase()
+  if (mode === 'isolated') return 'isolated'
+  return 'legacy'
+}
 
 export interface JSVMContext {
   $app: BaseApp
@@ -28,13 +37,27 @@ export class JSVM {
       return
     }
 
+    const mode = getSandboxMode()
+    if (mode === 'isolated') {
+      const denoVersion = await checkDenoAvailability()
+      if (denoVersion) {
+        console.log(`[JSVM] Isolated sandbox mode active for agent nodes (Deno ${denoVersion})`)
+      } else {
+        console.warn(
+          '[JSVM] JSVM_SANDBOX_MODE=isolated but Deno is not available. ' +
+          'Agent code/condition nodes will fall back to legacy vm.Script execution.'
+        )
+      }
+      console.log('[JSVM] Hooks always run in legacy mode (operator-trusted files)')
+    }
+
     const files = fs.readdirSync(this.hooksDir)
       .filter(f => f.endsWith('.js'))
       .sort()
 
     for (const file of files) {
       try {
-        await this.executeHookFile(file)
+        await this.executeHookFileLegacy(file)
         console.log(`JS hook loaded: ${file}`)
       } catch (err: any) {
         console.error(`JS hook failed: ${file}`, err.message)
@@ -42,7 +65,7 @@ export class JSVM {
     }
   }
 
-  private async executeHookFile(filename: string): Promise<void> {
+  private async executeHookFileLegacy(filename: string): Promise<void> {
     const fullPath = path.join(this.hooksDir, filename)
     const code = fs.readFileSync(fullPath, 'utf-8')
 
@@ -56,7 +79,6 @@ export class JSVM {
     const crypto = require('crypto')
 
     const sandbox: any = {
-      // Standard JS globals (safe subset — no process, require, or child_process)
       console,
       setTimeout,
       clearTimeout,
@@ -91,8 +113,6 @@ export class JSVM {
       Intl,
       URL,
       URLSearchParams,
-
-      // Narrow whitelist of Node APIs (no require, no raw fs, no child_process)
       crypto: {
         randomBytes: (size: number) => crypto.randomBytes(size),
         randomInt: (min: number, max: number) => crypto.randomInt(min, max),
@@ -102,14 +122,12 @@ export class JSVM {
       },
       fetch: globalThis.fetch.bind(globalThis),
 
-      // TspoonBase globals
       $app: this.createAppProxy(),
       $apis: {
         record: '/api/collections',
         collection: '/api/collections',
         settings: '/api/settings',
       },
-      // Hook registration helpers
       onBootstrap: (handler: Function) => app.onBootstrap.bindFunc(handler as any),
       onServe: (handler: Function) => app.onServe.bindFunc(handler as any),
       onRecordCreate: (tag: string, handler: Function) => app.onRecordCreate.bindFunc(handler as any),

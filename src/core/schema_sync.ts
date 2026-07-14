@@ -1,7 +1,7 @@
 import { BaseApp } from './base'
 import { Collection } from './collection'
 import { Field } from './field'
-import { validateIdentifier } from '../utils/sql_safe'
+import { validateIdentifier, quoteIdentifier } from '../utils/sql_safe'
 
 export interface SchemaSyncResult {
   changed: boolean
@@ -24,12 +24,9 @@ export async function syncRecordTableSchema(
 
   const db = app.db().getDataDB()
   const tableName = `_r_${collection.id}`
-
-  // Get existing columns
+  const quotedTable = quoteIdentifier(tableName)
   const existingColumns = getExistingColumns(db, tableName)
   const existingColumnNames = new Set(existingColumns.map(c => c.name))
-
-  // Build expected columns
   const expectedColumns = buildExpectedColumns(collection)
 
   const result: SchemaSyncResult = {
@@ -39,11 +36,10 @@ export async function syncRecordTableSchema(
     modifiedColumns: [],
   }
 
-  // Add missing columns
   for (const [colName, colDef] of Object.entries(expectedColumns)) {
     if (!existingColumnNames.has(colName)) {
       try {
-        db.exec(`ALTER TABLE ${tableName} ADD COLUMN ${colName} ${colDef}`)
+        db.exec(`ALTER TABLE ${quotedTable} ADD COLUMN ${quoteIdentifier(colName)} ${colDef}`)
         result.addedColumns.push(colName)
         result.changed = true
       } catch (err: any) {
@@ -51,17 +47,11 @@ export async function syncRecordTableSchema(
       }
     }
   }
-
-  // Note: SQLite doesn't support DROP COLUMN easily in older versions,
-  // so we log removed columns but don't actually remove them to avoid data loss
   for (const col of existingColumns) {
     if (!expectedColumns[col.name] && !isSystemColumn(col.name)) {
       result.removedColumns.push(col.name)
-      // We don't drop columns to preserve data, but we could rebuild the table if needed
     }
   }
-
-  // Update indexes
   await syncIndexes(app, collection)
 
   return result
@@ -77,11 +67,12 @@ export async function createRecordTable(app: BaseApp, collection: Collection): P
 
   const db = app.db().getDataDB()
   const tableName = `_r_${collection.id}`
+  const quotedTable = quoteIdentifier(tableName)
 
   const columns = buildExpectedColumns(collection)
-  const columnDefs = Object.entries(columns).map(([name, def]) => `${name} ${def}`)
+  const columnDefs = Object.entries(columns).map(([name, def]) => `${quoteIdentifier(name)} ${def}`)
 
-  db.exec(`CREATE TABLE IF NOT EXISTS ${tableName} (${columnDefs.join(', ')})`)
+  db.exec(`CREATE TABLE IF NOT EXISTS ${quotedTable} (${columnDefs.join(', ')})`)
 
   await syncIndexes(app, collection)
 }
@@ -89,17 +80,15 @@ export async function createRecordTable(app: BaseApp, collection: Collection): P
 async function syncViewCollection(app: BaseApp, collection: Collection): Promise<SchemaSyncResult> {
   const db = app.db().getDataDB()
   const viewName = `_r_${collection.id}`
+  const quotedView = quoteIdentifier(viewName)
 
-  // Drop existing view if query changed
   try {
-    db.exec(`DROP VIEW IF EXISTS ${viewName}`)
+    db.exec(`DROP VIEW IF EXISTS ${quotedView}`)
   } catch {
-    // view might not exist
   }
 
   const query = collection.viewOptions?.query
   if (query) {
-    // FIXED[C-2]: Strip string literals before checking for semicolons to prevent multi-statement injection
     function stripStringLiterals(q: string): string {
       return q.replace(/'(?:[^'\\]|\\.)*'/g, '').replace(/"(?:[^"\\]|\\.)*"/g, '')
     }
@@ -109,14 +98,8 @@ async function syncViewCollection(app: BaseApp, collection: Collection): Promise
       return { changed: false, addedColumns: [], removedColumns: [], modifiedColumns: [] }
     }
 
-    // FIXED[H-4]: Use EXPLAIN to validate that query is a pure SELECT
-    // The EXPLAIN approach is the definitive check — it will tell us whether the
-    // query engine interprets this as a single SELECT statement or something else
-    // (e.g., multi-statement, DDL, PRAGMA, ATTACH).
     try {
       const explainResult = db.prepare(`EXPLAIN ${query}`).all() as Array<{ opcode: string }>
-      // Pure SELECT queries generate only a specific set of opcodes.
-      // If the result contains opcodes like OpenWrite, CreateTable, etc., it's not read-only.
       const writeOpcodes = new Set([
         'OpenWrite', 'CreateTable', 'CreateIndex', 'Delete', 'Insert', 'Update',
         'BeginTransaction', 'CommitTransaction', 'RollbackTransaction',
@@ -134,7 +117,6 @@ async function syncViewCollection(app: BaseApp, collection: Collection): Promise
       return { changed: false, addedColumns: [], removedColumns: [], modifiedColumns: [] }
     }
 
-    // Keep the prefix check as an additional safeguard
     const trimmed = query.trim().toLowerCase()
     if (!trimmed.startsWith('select')) {
       app.logger().error(`Invalid view query: ${viewName}`, 'View query must start with SELECT')
@@ -142,19 +124,19 @@ async function syncViewCollection(app: BaseApp, collection: Collection): Promise
     }
 
     try {
-      const safeViewName = validateIdentifier(viewName, 'view name')
-      db.exec(`CREATE VIEW ${safeViewName} AS ${query}`)
+      validateIdentifier(viewName, 'view name')
+      db.exec(`CREATE VIEW ${quotedView} AS ${query}`)
     } catch (err: any) {
       app.logger().error(`Failed to create view ${viewName}`, err.message)
     }
-}
+  }
 
   return { changed: false, addedColumns: [], removedColumns: [], modifiedColumns: [] }
 }
 
 function getExistingColumns(db: any, tableName: string): Array<{ name: string; type: string }> {
   try {
-    return db.prepare(`PRAGMA table_info(${tableName})`).all() as Array<{ name: string; type: string }>
+    return db.prepare(`PRAGMA table_info(${quoteIdentifier(tableName)})`).all() as Array<{ name: string; type: string }>
   } catch {
     return []
   }
@@ -185,7 +167,6 @@ function buildExpectedColumns(collection: Collection): Record<string, string> {
   }
 
   for (const field of collection.fields) {
-    // FIXED[C-1]: Defense-in-depth — validate field name before it reaches DDL
     validateIdentifier(field.name, 'field name')
     columns[field.name] = getSQLiteType(field)
   }
@@ -229,18 +210,13 @@ function getSQLiteType(field: Field): string {
 async function syncIndexes(app: BaseApp, collection: Collection): Promise<void> {
   const db = app.db().getDataDB()
   const tableName = `_r_${collection.id}`
-
-  // Get existing indexes
-  const existingIndexes = db.prepare(`PRAGMA index_list(${tableName})`).all() as Array<{ name: string }>
+  const quotedTable = quoteIdentifier(tableName)
+  const existingIndexes = db.prepare(`PRAGMA index_list(${quotedTable})`).all() as Array<{ name: string }>
   const existingIndexNames = new Set(existingIndexes.map(i => i.name))
-
-  // Create indexes from collection definition
-      for (const indexDef of collection.indexes) {
+  for (const indexDef of collection.indexes) {
     const indexName = `idx_${collection.id}_${createHash('md5').update(indexDef).digest('hex').slice(0, 8)}`
     if (!existingIndexNames.has(indexName)) {
       try {
-        // Only support field-list format: "field1, field2" or "field1 DESC, field2 ASC"
-        // Raw CREATE INDEX strings are rejected to prevent SQL injection
         const fields = indexDef.split(',').map(f => f.trim()).filter(Boolean)
         if (fields.length === 0) {
           app.logger().error(`Invalid empty index definition for ${tableName}`, indexDef)
@@ -254,13 +230,12 @@ async function syncIndexes(app: BaseApp, collection: Collection): Promise<void> 
             throw new Error(`Invalid sort direction "${direction}" in index field "${f}"`)
           }
           validateIdentifier(fieldName, 'index field name')
-          // FIXED[L-1]: Reject indexes referencing fields not present in collection schema
           if (!collection.fields.find(cf => cf.name === fieldName) && !['id', 'created', 'updated', 'collectionId', 'collectionName'].includes(fieldName)) {
             throw new Error(`Index field "${fieldName}" does not exist in collection "${collection.name}"`)
           }
-          return direction ? `${fieldName} ${direction}` : fieldName
+          return direction ? `${quoteIdentifier(fieldName)} ${direction}` : quoteIdentifier(fieldName)
         })
-        db.exec(`CREATE INDEX IF NOT EXISTS ${indexName} ON ${tableName} (${validatedFields.join(', ')})`)
+        db.exec(`CREATE INDEX IF NOT EXISTS ${quoteIdentifier(indexName)} ON ${quotedTable} (${validatedFields.join(', ')})`)
       } catch (err: any) {
         app.logger().error(`Failed to create index ${indexName}: ${err.message}`)
       }

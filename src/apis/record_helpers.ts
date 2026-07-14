@@ -3,6 +3,7 @@ import { RecordModel as PBRecord } from '../core/record'
 import { Collection } from '../core/collection'
 import { evaluateRule, RecordFieldResolver, RequestInfo } from '../core/record_field_resolver'
 import { findAllMFAsByRecord, findAllOTPsByRecord, findAllAuthOriginsByRecord, findAllExternalAuthsByRecord } from '../core/auth_queries'
+import { quoteIdentifier } from '../utils/sql_safe'
 
 export interface EnrichOptions {
   expands?: string[]
@@ -117,7 +118,7 @@ async function findRecordById(app: BaseApp, collectionId: string, recordId: stri
   if (!collection) return null
 
   const db = app.db().getDataDB()
-  const row = db.prepare(`SELECT * FROM _r_${collection.id} WHERE id = ?`).get(recordId) as any
+  const row = db.prepare(`SELECT * FROM ${quoteIdentifier(`_r_${collection.id}`)} WHERE id = ?`).get(recordId) as any
   if (!row) return null
 
   return new PBRecord(collection.id, collection.name, row)

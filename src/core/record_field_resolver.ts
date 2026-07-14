@@ -1,7 +1,7 @@
 import { RecordModel as PBRecord } from '../core/record'
 import { Collection } from '../core/collection'
 import { BaseApp } from '../core/base'
-import { validateIdentifier } from '../utils/sql_safe'
+import { validateIdentifier, quoteIdentifier } from '../utils/sql_safe'
 
 export interface RequestInfo {
   auth: PBRecord | null
@@ -59,7 +59,6 @@ export class RecordFieldResolver {
       return this.resolveCollection(parts.slice(1))
     }
 
-    // Handle function calls like geoDistance(...)
     const funcMatch = path.match(/^(\w+)\s*\((.*)\)$/)
     if (funcMatch) {
       return this.resolveFunctionCall(funcMatch[1], funcMatch[2])
@@ -76,7 +75,6 @@ export class RecordFieldResolver {
     const args = this.parseFunctionArgs(argsStr)
     switch (name) {
       case 'geoDistance': {
-        // geoDistance(lat1, lng1, lat2, lng2) -> meters
         if (args.length >= 4) {
           const [lat1, lng1, lat2, lng2] = args.map(a => Number(a))
           if (!isNaN(lat1) && !isNaN(lng1) && !isNaN(lat2) && !isNaN(lng2)) {
@@ -86,13 +84,11 @@ export class RecordFieldResolver {
         return undefined
       }
       case 'strftime': {
-        // strftime(format, timestamp) -> formatted string
         if (args.length >= 2) {
           const format = String(args[0])
           const ts = args[1]
           const date = typeof ts === 'number' ? new Date(ts) : new Date(String(ts))
           if (isNaN(date.getTime())) return ''
-          // Simple SQLite-like strftime support
           let result = format
           result = result.replace('%Y', String(date.getFullYear()).padStart(4, '0'))
           result = result.replace('%m', String(date.getMonth() + 1).padStart(2, '0'))
@@ -150,7 +146,6 @@ export class RecordFieldResolver {
     if (arg.startsWith("'") && arg.endsWith("'")) return arg.slice(1, -1)
     if (/^-?\d+$/.test(arg)) return parseInt(arg, 10)
     if (/^-?\d+\.\d+$/.test(arg)) return parseFloat(arg)
-    // Try to resolve as a field path
     return this.resolve(arg)
   }
 
@@ -205,14 +200,12 @@ export class RecordFieldResolver {
     const fieldName = parts[0]
     if (this.hiddenFields.has(fieldName)) return undefined
 
-    // Handle back-relations: collectionName_via_fieldName
     const backRelMatch = fieldName.match(/^(.+?)_via_(.+)$/)
     if (backRelMatch && this.app) {
       const targetCollectionName = backRelMatch[1]
       const relationFieldName = backRelMatch[2]
       const targetCollection = this.app.findCachedCollectionByNameOrId(targetCollectionName)
       if (targetCollection) {
-        // Validate that relationFieldName is a real field in the target collection
         const targetField = targetCollection.fields.find(f => f.name === relationFieldName)
         if (!targetField || targetField.type !== 'relation') {
           return []
@@ -220,9 +213,10 @@ export class RecordFieldResolver {
         validateIdentifier(relationFieldName, `back-relation field "${relationFieldName}"`)
         try {
           const db = this.app.db().getDataDB()
-          const tableName = `_r_${targetCollection.id}`
+          const qt = quoteIdentifier(`_r_${targetCollection.id}`)
+          const qf = quoteIdentifier(relationFieldName)
           const rows = db.prepare(
-            `SELECT * FROM ${tableName} WHERE json_extract(${relationFieldName}, '$') = ? OR ${relationFieldName} LIKE ? OR ${relationFieldName} LIKE ? OR ${relationFieldName} LIKE ? LIMIT 1000`
+            `SELECT * FROM ${qt} WHERE json_extract(${qf}, '$') = ? OR ${qf} LIKE ? OR ${qf} LIKE ? OR ${qf} LIKE ? LIMIT 1000`
           ).all(
             `"${this.record.id}"`,
             `%"${this.record.id}"%`,
@@ -231,11 +225,11 @@ export class RecordFieldResolver {
           ) as any[]
           return rows.map(row => new PBRecord(targetCollection.id, targetCollection.name, row))
         } catch {
-          // Fallback: try simple equality
           try {
             const db = this.app.db().getDataDB()
-            const tableName = `_r_${targetCollection.id}`
-            const rows = db.prepare(`SELECT * FROM ${tableName} WHERE ${relationFieldName} = ? LIMIT 1000`).all(this.record.id) as any[]
+            const qt = quoteIdentifier(`_r_${targetCollection.id}`)
+            const qf = quoteIdentifier(relationFieldName)
+            const rows = db.prepare(`SELECT * FROM ${qt} WHERE ${qf} = ? LIMIT 1000`).all(this.record.id) as any[]
             return rows.map(row => new PBRecord(targetCollection.id, targetCollection.name, row))
           } catch {
             return []
@@ -294,7 +288,6 @@ export class RecordFieldResolver {
         return []
       case 'excerpt':
         if (typeof value === 'string') {
-          // Strip HTML and limit to ~200 chars
           return value
             .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
             .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '')
@@ -331,9 +324,7 @@ function evaluateExpression(expr: string, resolver: RecordFieldResolver): boolea
 
   if (!expr) return true
 
-  // Handle parentheses groups
   if (expr.startsWith('(') && expr.endsWith(')')) {
-    // Find matching parenthesis to handle nested groups
     let depth = 0
     let matchIndex = -1
     for (let i = 0; i < expr.length; i++) {
@@ -351,19 +342,15 @@ function evaluateExpression(expr: string, resolver: RecordFieldResolver): boolea
     }
   }
 
-  // Split by top-level ||
   const orParts = splitByOperator(expr, '||')
   if (orParts.length > 1) {
     return orParts.some(p => evaluateExpression(p.trim(), resolver))
   }
-
-  // Split by top-level &&
   const andParts = splitByOperator(expr, '&&')
   if (andParts.length > 1) {
     return andParts.every(p => evaluateExpression(p.trim(), resolver))
   }
 
-  // Negation
   if (expr.startsWith('!(') && expr.endsWith(')')) {
     return !evaluateExpression(expr.slice(2, -1), resolver)
   }
@@ -371,7 +358,6 @@ function evaluateExpression(expr: string, resolver: RecordFieldResolver): boolea
     return !evaluateExpression(expr.slice(1), resolver)
   }
 
-  // Comparison operators - check longer ones first
   const operators = ['!=', '==', '>=', '<=', '=', '>', '<', '~', '%', '@']
   for (const op of operators) {
     const parts = splitByOperator(expr, op, true)
@@ -382,7 +368,6 @@ function evaluateExpression(expr: string, resolver: RecordFieldResolver): boolea
     }
   }
 
-  // Ternary
   if (expr.includes('?')) {
     const qIndex = expr.indexOf('?')
     const condition = expr.slice(0, qIndex).trim()

@@ -10,10 +10,11 @@ import fs from 'fs'
 import fsPromises from 'fs/promises'
 import { createHash } from 'crypto'
 import { Readable } from 'stream'
+import { quoteIdentifier } from '../utils/sql_safe'
 
 const ALLOWED_FILE_TYPES = [
   'image/jpeg',
-  'image/png', 
+  'image/png',
   'image/gif',
   'image/webp',
   'application/pdf',
@@ -24,9 +25,9 @@ const ALLOWED_FILE_TYPES = [
   'application/x-zip-compressed',
 ]
 
-const MAX_FILE_SIZE = 10 * 1024 * 1024 // 10MB
+const MAX_FILE_SIZE = 10 * 1024 * 1024
 
-// Magic bytes for common MIME types (first bytes of file)
+
 const MAGIC_BYTES: Record<string, string[]> = {
   'image/jpeg': ['ffd8ffe0', 'ffd8ffe1', 'ffd8ffe2', 'ffd8ffee', 'ffd8ffdb'],
   'image/png': ['89504e47'],
@@ -57,7 +58,6 @@ function assertPathSafe(targetPath: string, baseDir: string): void {
 }
 
 const fileFilter = (req: Express.Request, file: Express.Multer.File, cb: multer.FileFilterCallback) => {
-  // Validate by extension as an initial filter
   const ext = path.extname(file.originalname).toLowerCase()
   const allowedExts = ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.pdf', '.txt', '.csv', '.json', '.zip']
   if (!allowedExts.includes(ext)) {
@@ -66,7 +66,7 @@ const fileFilter = (req: Express.Request, file: Express.Multer.File, cb: multer.
   cb(null, true)
 }
 
-const upload = multer({ 
+const upload = multer({
   dest: 'uploads/',
   limits: { fileSize: MAX_FILE_SIZE },
   fileFilter,
@@ -91,7 +91,6 @@ function verifyFileToken(app: BaseApp, token: string): { collectionId: string; r
 }
 
 export function registerFileRoutes(app: BaseApp, router: Router): void {
-  // Generate protected file token
   router.post('/api/files/token', async (req: Request, res: Response) => {
     try {
       const { collection: collectionIdOrName, recordId, filename } = req.body
@@ -105,14 +104,13 @@ export function registerFileRoutes(app: BaseApp, router: Router): void {
       }
 
       const db = app.db().getDataDB()
-      const row = db.prepare(`SELECT * FROM _r_${collection.id} WHERE id = ?`).get(recordId) as any
+      const row = db.prepare(`SELECT * FROM ${quoteIdentifier(`_r_${collection.id}`)} WHERE id = ?`).get(recordId) as any
       if (!row) {
         return res.status(404).json({ code: 404, message: 'Record not found.' })
       }
 
       const record = new PBRecord(collection.id, collection.name, row)
 
-      // Check viewRule for file access
       const requestInfo: RequestInfo = {
         auth: req.authContext?.record ?? null,
         isAdmin: req.authContext?.isAdmin ?? false,
@@ -142,7 +140,6 @@ export function registerFileRoutes(app: BaseApp, router: Router): void {
     }
   })
 
-  // File upload endpoint
   router.post('/api/collections/:collectionIdOrName/records/:recordId/files', requireSuperuserAuth(app), upload.array('files', 10), async (req: Request, res: Response) => {
     try {
       const { collectionIdOrName, recordId } = req.params
@@ -152,7 +149,7 @@ export function registerFileRoutes(app: BaseApp, router: Router): void {
       }
 
       const db = app.db().getDataDB()
-      const row = db.prepare(`SELECT * FROM _r_${collection.id} WHERE id = ?`).get(recordId) as any
+      const row = db.prepare(`SELECT * FROM ${quoteIdentifier(`_r_${collection.id}`)} WHERE id = ?`).get(recordId) as any
       if (!row) {
         return res.status(404).json({ code: 404, message: 'Record not found.' })
       }
@@ -163,7 +160,6 @@ export function registerFileRoutes(app: BaseApp, router: Router): void {
       }
 
       const fsys = app.getFilesystem()
-      // FIXED[H-1]: collection.name is validated by validateIdentifier in Collection constructor and re-validated on PATCH
       const storageBase = path.join(app.dataDir, 'storage', collection.name, recordId)
       await fsPromises.mkdir(storageBase, { recursive: true })
 
@@ -181,7 +177,6 @@ export function registerFileRoutes(app: BaseApp, router: Router): void {
         assertPathSafe(destPath, storageBase)
 
         const fileContent = await fsPromises.readFile(file.path)
-        // Detect actual MIME type from magic bytes
         const detectedMime = detectMimeType(fileContent)
         if (!ALLOWED_FILE_TYPES.includes(detectedMime) && detectedMime !== 'application/octet-stream') {
           await fsPromises.unlink(file.path)
@@ -190,16 +185,12 @@ export function registerFileRoutes(app: BaseApp, router: Router): void {
         await fsys.putFile(storageKey, fileContent)
         await fsPromises.unlink(file.path)
         savedFiles.push(safeName)
-
-        // Generate thumbnails for image files
         if (isImageFile(safeName)) {
           const thumbs = await generateThumbnails(destPath, storageBase, baseName, ext, app)
           thumbsGenerated.push(...thumbs)
         }
       }
 
-      // Update record with file references
-      // FIXED[M-5]: Validate field parameter against collection schema
       const fieldName = req.query.field as string || 'files'
       const fieldDef = collection.fields.find(f => f.name === fieldName)
       if (!fieldDef || fieldDef.type !== 'file') {
@@ -221,7 +212,6 @@ export function registerFileRoutes(app: BaseApp, router: Router): void {
     }
   })
 
-  // File download endpoint
   router.get('/api/files/:collectionIdOrName/:recordId/:filename', async (req: Request, res: Response) => {
     try {
       const { collectionIdOrName, recordId, filename } = req.params
@@ -235,21 +225,19 @@ export function registerFileRoutes(app: BaseApp, router: Router): void {
       }
 
       const db = app.db().getDataDB()
-      const row = db.prepare(`SELECT * FROM _r_${collection.id} WHERE id = ?`).get(recordId) as any
+      const row = db.prepare(`SELECT * FROM ${quoteIdentifier(`_r_${collection.id}`)} WHERE id = ?`).get(recordId) as any
       if (!row) {
         return res.status(404).json({ code: 404, message: 'Record not found.' })
       }
 
       const record = new PBRecord(collection.id, collection.name, row)
 
-      // If a file token is provided, verify it first
       if (fileToken) {
         const tokenPayload = verifyFileToken(app, fileToken)
         if (!tokenPayload || tokenPayload.collectionId !== collection.id || tokenPayload.recordId !== recordId || tokenPayload.filename !== filename) {
           return res.status(403).json({ code: 403, message: 'Invalid or expired file token.' })
         }
       } else {
-        // Otherwise check viewRule for file access
         const requestInfo: RequestInfo = {
           auth: req.authContext?.record ?? null,
           isAdmin: req.authContext?.isAdmin ?? false,
@@ -335,7 +323,7 @@ export function registerFileRoutes(app: BaseApp, router: Router): void {
       }
 
       const db = app.db().getDataDB()
-      const row = db.prepare(`SELECT * FROM _r_${collection.id} WHERE id = ?`).get(recordId) as any
+      const row = db.prepare(`SELECT * FROM ${quoteIdentifier(`_r_${collection.id}`)} WHERE id = ?`).get(recordId) as any
       if (!row) {
         return res.status(404).json({ code: 404, message: 'Record not found.' })
       }
@@ -349,25 +337,21 @@ export function registerFileRoutes(app: BaseApp, router: Router): void {
       try {
         await fsPromises.unlink(filePath)
       } catch {
-        // file may not exist
       }
-      await fsys.deleteFile(path.join(collection.name, recordId, filename)).catch(() => {})
+      await fsys.deleteFile(path.join(collection.name, recordId, filename)).catch(() => { })
 
-      // Delete associated thumbnails
       const baseName = path.basename(filename, path.extname(filename))
       const ext = path.extname(filename)
       try {
         const entries = await fsPromises.readdir(storageBase)
         const thumbs = entries.filter(f => f.startsWith(`${baseName}_thumb`))
         for (const thumb of thumbs) {
-          await fsPromises.unlink(path.join(storageBase, thumb)).catch(() => {})
-          await fsys.deleteFile(path.join(collection.name, recordId, thumb)).catch(() => {})
+          await fsPromises.unlink(path.join(storageBase, thumb)).catch(() => { })
+          await fsys.deleteFile(path.join(collection.name, recordId, thumb)).catch(() => { })
         }
       } catch {
-        // storage directory may not exist
       }
 
-      // Update record
       const record = new PBRecord(collection.id, collection.name, row)
       const fieldName = req.query.field as string || 'files'
       const existingFiles = record.get(fieldName) || []
@@ -404,7 +388,6 @@ async function generateThumbnails(
   ]
 
   try {
-    // Try to use sharp if available, otherwise skip thumbnail generation
     let sharp: any
     try {
       sharp = require('sharp')

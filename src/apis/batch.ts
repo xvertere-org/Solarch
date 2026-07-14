@@ -34,10 +34,21 @@ export function registerBatchRoutes(app: BaseApp, router: Router): void {
         return res.status(400).json({ code: 400, message: `Too many requests. Maximum is ${settings.batch.maxBatchSize}.` })
       }
 
+      const MAX_BATCH_SIZE_CAP = 50
+      if (requests.length > MAX_BATCH_SIZE_CAP) {
+        return res.status(400).json({ code: 400, message: `Batch size exceeds hard limit of ${MAX_BATCH_SIZE_CAP}.` })
+      }
+
+      const MAX_SUB_REQUEST_BODY_SIZE = 1024 * 1024
+      for (let i = 0; i < requests.length; i++) {
+        if (requests[i].body && JSON.stringify(requests[i].body).length > MAX_SUB_REQUEST_BODY_SIZE) {
+          return res.status(400).json({ code: 400, message: `Sub-request ${i} body exceeds maximum size of 1MB.` })
+        }
+      }
+
       const results: BatchResponse[] = []
       const db = app.db().getDataDB()
 
-      // Start a transaction for atomic batch processing
       db.exec('BEGIN TRANSACTION')
 
       try {
@@ -62,7 +73,6 @@ export function registerBatchRoutes(app: BaseApp, router: Router): void {
 async function processBatchRequest(app: BaseApp, originalReq: Request, batchReq: BatchRequest): Promise<BatchResponse> {
   const { method, url, headers, body } = batchReq
 
-  // Build a mock request/response to route through the internal app
   const mockReq: any = {
     method: method.toUpperCase(),
     url,
@@ -73,7 +83,6 @@ async function processBatchRequest(app: BaseApp, originalReq: Request, batchReq:
     authContext: originalReq.authContext,
   }
 
-  // Parse query string from URL
   const urlParts = url.split('?')
   if (urlParts.length > 1) {
     const searchParams = new URLSearchParams(urlParts[1])
@@ -109,7 +118,6 @@ async function processBatchRequest(app: BaseApp, originalReq: Request, batchReq:
   }
 
   try {
-    // Route to appropriate handler based on URL pattern
     const path = urlParts[0]
     const handled = await routeBatchRequest(app, mockReq, mockRes, path)
 
@@ -130,7 +138,6 @@ async function processBatchRequest(app: BaseApp, originalReq: Request, batchReq:
 }
 
 async function routeBatchRequest(app: BaseApp, req: any, res: any, path: string): Promise<boolean> {
-  // Collection record CRUD patterns
   const recordPattern = /^\/api\/collections\/([^\/]+)\/records(?:\/(.*))?$/
   const recordMatch = path.match(recordPattern)
 
@@ -220,7 +227,6 @@ async function routeBatchRequest(app: BaseApp, req: any, res: any, path: string)
 
       case 'POST': {
         requestInfo.context = 'create'
-        // Enforce createRule
         if (collection.createRule === null) {
           res.status(403).json({ code: 403, message: 'Access denied.' })
           return true
@@ -233,7 +239,6 @@ async function routeBatchRequest(app: BaseApp, req: any, res: any, path: string)
             return true
           }
         }
-        // FIXED[H-2]: Route through validateAndCreateRecord for proper field whitelisting
         const { validateAndCreateRecord } = await import('../core/record_upsert.js')
         const { record, errors } = await validateAndCreateRecord(app, collection, req.body)
         if (errors.length > 0) {
@@ -268,7 +273,6 @@ async function routeBatchRequest(app: BaseApp, req: any, res: any, path: string)
             return true
           }
         }
-        // FIXED[H-2]: Route through validateAndUpdateRecord for proper field whitelisting
         const { validateAndUpdateRecord } = await import('../core/record_upsert.js')
         const { record: updatedRecord, errors } = await validateAndUpdateRecord(app, collection, record, req.body)
         if (errors.length > 0) {

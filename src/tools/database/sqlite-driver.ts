@@ -3,6 +3,7 @@ import path from 'path'
 import fs from 'fs'
 import { DatabaseDriver, ColumnInfo, ColumnDef, Row, Statement } from './driver'
 import { SqliteQueryBuilder, QueryBuilder } from '../search/query-builder'
+import { validateIdentifier, quoteIdentifier } from '../../utils/sql_safe'
 
 export class SqliteDriver implements DatabaseDriver {
   private dataDB: Database.Database
@@ -40,7 +41,7 @@ export class SqliteDriver implements DatabaseDriver {
     this.dataDB.function('vector_cosine_similarity', { deterministic: true }, cosineSimilarity)
   }
 
-  async connect(): Promise<void> {}
+  async connect(): Promise<void> { }
 
   async close(): Promise<void> {
     this.dataDB.close()
@@ -73,11 +74,13 @@ export class SqliteDriver implements DatabaseDriver {
   }
 
   async tableInfo(table: string): Promise<ColumnInfo[]> {
-    return this.dataDB.prepare(`PRAGMA table_info(${table})`).all() as ColumnInfo[]
+    validateIdentifier(table, 'table name')
+    return this.dataDB.prepare(`PRAGMA table_info(${quoteIdentifier(table)})`).all() as ColumnInfo[]
   }
 
   async tableIndexes(table: string): Promise<Record<string, string>> {
-    const rows = this.dataDB.prepare(`PRAGMA index_list(${table})`).all() as Array<{ name: string; sql: string | null }>
+    validateIdentifier(table, 'table name')
+    const rows = this.dataDB.prepare(`PRAGMA index_list(${quoteIdentifier(table)})`).all() as Array<{ name: string; sql: string | null }>
     const result: Record<string, string> = {}
     for (const row of rows) {
       if (row.sql) result[row.name] = row.sql
@@ -86,47 +89,66 @@ export class SqliteDriver implements DatabaseDriver {
   }
 
   async createTable(name: string, columns: ColumnDef[]): Promise<void> {
+    validateIdentifier(name, 'table name')
     const defs = columns.map(c => {
-      let s = `"${c.name}" ${c.type}`
+      validateIdentifier(c.name, 'column name')
+      let s = `${quoteIdentifier(c.name)} ${c.type}`
       if (c.primaryKey) s += ' PRIMARY KEY'
       if (c.notNull) s += ' NOT NULL'
       if (c.unique) s += ' UNIQUE'
       if (c.default !== undefined) s += ` DEFAULT ${JSON.stringify(c.default)}`
       return s
     })
-    this.dataDB.exec(`CREATE TABLE IF NOT EXISTS "${name}" (${defs.join(', ')})`)
+    this.dataDB.exec(`CREATE TABLE IF NOT EXISTS ${quoteIdentifier(name)} (${defs.join(', ')})`)
   }
 
   async addColumn(table: string, column: ColumnDef): Promise<void> {
+    validateIdentifier(table, 'table name')
+    validateIdentifier(column.name, 'column name')
     let def = `${column.type}`
     if (column.notNull) def += ' NOT NULL'
     if (column.default !== undefined) def += ` DEFAULT ${JSON.stringify(column.default)}`
-    this.dataDB.exec(`ALTER TABLE "${table}" ADD COLUMN "${column.name}" ${def}`)
+    this.dataDB.exec(`ALTER TABLE ${quoteIdentifier(table)} ADD COLUMN ${quoteIdentifier(column.name)} ${def}`)
   }
 
   async dropColumn(table: string, column: string): Promise<void> {
-    try { this.dataDB.exec(`ALTER TABLE "${table}" DROP COLUMN "${column}"`) } catch {}
+    validateIdentifier(table, 'table name')
+    validateIdentifier(column, 'column name')
+    try { this.dataDB.exec(`ALTER TABLE ${quoteIdentifier(table)} DROP COLUMN ${quoteIdentifier(column)}`) } catch { }
   }
 
   async dropTable(table: string): Promise<void> {
-    this.dataDB.exec(`DROP TABLE IF EXISTS "${table}"`)
+    validateIdentifier(table, 'table name')
+    this.dataDB.exec(`DROP TABLE IF EXISTS ${quoteIdentifier(table)}`)
   }
 
   async dropView(view: string): Promise<void> {
-    this.dataDB.exec(`DROP VIEW IF EXISTS "${view}"`)
+    validateIdentifier(view, 'view name')
+    this.dataDB.exec(`DROP VIEW IF EXISTS ${quoteIdentifier(view)}`)
   }
 
   async saveView(name: string, selectQuery: string): Promise<void> {
-    this.dataDB.exec(`DROP VIEW IF EXISTS "${name}"`)
-    this.dataDB.exec(`CREATE VIEW "${name}" AS ${selectQuery}`)
+    validateIdentifier(name, 'view name')
+    // NOTE: selectQuery is inherently dangerous — callers MUST validate it
+    // (e.g., via EXPLAIN opcode checking as done in schema_sync.ts)
+    this.dataDB.exec(`DROP VIEW IF EXISTS ${quoteIdentifier(name)}`)
+    this.dataDB.exec(`CREATE VIEW ${quoteIdentifier(name)} AS ${selectQuery}`)
   }
 
   async createIndex(table: string, name: string, columns: string[]): Promise<void> {
-    this.dataDB.exec(`CREATE INDEX IF NOT EXISTS "${name}" ON "${table}" (${columns.join(', ')})`)
+    validateIdentifier(table, 'table name')
+    validateIdentifier(name, 'index name')
+    const quotedCols = columns.map(c => {
+      const parts = c.trim().split(/\s+/)
+      validateIdentifier(parts[0], 'index column name')
+      return parts.length > 1 ? `${quoteIdentifier(parts[0])} ${parts[1]}` : quoteIdentifier(parts[0])
+    })
+    this.dataDB.exec(`CREATE INDEX IF NOT EXISTS ${quoteIdentifier(name)} ON ${quoteIdentifier(table)} (${quotedCols.join(', ')})`)
   }
 
   async dropIndex(name: string): Promise<void> {
-    this.dataDB.exec(`DROP INDEX IF EXISTS "${name}"`)
+    validateIdentifier(name, 'index name')
+    this.dataDB.exec(`DROP INDEX IF EXISTS ${quoteIdentifier(name)}`)
   }
 
   async transaction<T>(fn: () => Promise<T>): Promise<T> {

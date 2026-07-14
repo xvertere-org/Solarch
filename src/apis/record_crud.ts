@@ -213,6 +213,9 @@ export function registerRecordCRUDRoutes(app: BaseApp, router: Router): void {
         res.status(201).json(response)
       }
     } catch (err: any) {
+      if (err.code === 'SQLITE_CONSTRAINT_UNIQUE' || err.message?.includes('UNIQUE constraint failed')) {
+        return res.status(400).json({ code: 400, message: 'Validation failed.', errors: [{ field: 'email', message: 'Value must be unique.' }] })
+      }
       app.logger().error(err.message || err)
       res.status(500).json({ code: 500, message: 'Internal server error' })
     }

@@ -9,6 +9,7 @@ services:
       - tspoonbase_data:/app/pb_data
     environment:
       - TSPOONBASE_ENCRYPTION_KEY=${TSPOONBASE_ENCRYPTION_KEY:-}
+      - JSVM_SANDBOX_MODE=${JSVM_SANDBOX_MODE:-legacy}
     restart: unless-stopped
 
 volumes:

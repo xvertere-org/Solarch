@@ -24,6 +24,7 @@
     "prepublishOnly": "npm run build",
     "dev": "tsx watch src/cli.ts serve --dev",
     "test": "vitest run",
+    "test:coverage": "vitest run --coverage",
     "test:watch": "vitest",
     "lint": "eslint src --ext .ts",
     "typecheck": "tsc --noEmit"
@@ -31,6 +32,7 @@
   "dependencies": {
     "@aws-sdk/client-s3": "^3.500.0",
     "@aws-sdk/lib-storage": "^3.500.0",
+    "archiver": "^8.0.0",
     "bcrypt": "^5.1.1",
     "better-sqlite3": "^11.0.0",
     "commander": "^12.0.0",
@@ -43,12 +45,13 @@
     "jszip": "^3.10.1",
     "morgan": "^1.10.1",
     "multer": "^1.4.5-lts.1",
-    "nodemailer": "^6.9.8",
+    "nodemailer": "^9.0.0",
     "sharp": "^0.34.5",
     "ws": "^8.16.0",
     "zod": "^3.22.4"
   },
   "devDependencies": {
+    "@types/archiver": "^8.0.0",
     "@types/bcrypt": "^5.0.2",
     "@types/better-sqlite3": "^7.6.8",
     "@types/cors": "^2.8.17",
@@ -60,8 +63,9 @@
     "@types/nodemailer": "^6.4.14",
     "@types/supertest": "^7.2.0",
     "@types/ws": "^8.5.10",
-    "@typescript-eslint/eslint-plugin": "^6.19.0",
-    "@typescript-eslint/parser": "^6.19.0",
+    "@typescript-eslint/eslint-plugin": "^8.61.0",
+    "@typescript-eslint/parser": "^8.61.0",
+    "@vitest/coverage-v8": "^4.1.10",
     "eslint": "^8.56.0",
     "supertest": "^7.2.2",
     "tsx": "^4.7.0",

@@ -1,6 +1,7 @@
 import { Request, Response, NextFunction } from 'express'
 import { BaseApp } from '../core/base'
 import { RecordModel as PBRecord } from '../core/record'
+import { findAuthRecordByToken } from '../core/record_query'
 
 export interface AuthContext {
   record: PBRecord | null
@@ -17,7 +18,7 @@ declare global {
 }
 
 export function loadAuthToken(app: BaseApp) {
-  return (req: Request, res: Response, next: NextFunction) => {
+  return async (req: Request, res: Response, next: NextFunction) => {
     const authHeader = req.headers.authorization
     if (!authHeader) {
       req.authContext = { record: null, isAdmin: false, token: null }
@@ -36,8 +37,25 @@ export function loadAuthToken(app: BaseApp) {
       req.authContext = { record: null, isAdmin: true, token }
       return next()
     }
+    if (payload.type === 'auth') {
+      try {
+        const record = await findAuthRecordByToken(app, token)
 
-    // Check if this is a superuser token (type=admin)
+        if (record) {
+          req.authContext = {
+            record,
+            isAdmin: false,
+            token,
+          }
+
+          return next()
+        }
+      } catch {
+        req.authContext = { record: null, isAdmin: false, token: null }
+        return next()
+      }
+    }
+
     if (payload.type === 'admin' && payload.id) {
       try {
         const db = app.db().getDataDB()

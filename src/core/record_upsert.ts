@@ -52,7 +52,6 @@ export class RecordUpsertForm {
 
     const sanitized: Record<string, any> = {}
     for (const [key, value] of Object.entries(data)) {
-      // FIXED[H-4]: Strip +/- modifiers before checking protected field list
       const resolvedKey = key.startsWith('+') ? key.slice(1) : key.endsWith('-') ? key.slice(0, -1) : key
       if (!protectedFields.includes(resolvedKey)) {
         if (key.startsWith('_') && !['username', 'email'].includes(key)) continue
@@ -77,10 +76,8 @@ export class RecordUpsertForm {
     for (const field of this.collection.fields) {
       const value = this.data[field.name]
 
-      // Skip system fields
       if (field.system && !['email', 'username'].includes(field.name)) continue
 
-      // Check required
       if (field.required) {
         if (value === undefined || value === null || value === '') {
           this.errors.push({ field: field.name, message: `Field "${field.name}" is required.` })
@@ -88,19 +85,16 @@ export class RecordUpsertForm {
         }
       }
 
-      // Field-specific validation
       const error = field.validate(value)
       if (error) {
         this.errors.push({ field: field.name, message: error.message })
       }
 
-      // Additional validation for auth collections
       if (this.collection.isAuth()) {
         this.validateAuthField(field, value)
       }
     }
 
-    // Validate password fields for auth collections
     if (this.collection.isAuth()) {
       this.validatePasswordFields()
     }
@@ -124,7 +118,6 @@ export class RecordUpsertForm {
         this.errors.push({ field: 'email', message: 'Invalid email format.' })
       }
 
-      // Check allowed domains
       if (this.collection.authOptions?.onlyEmailDomains?.length) {
         const domain = emailStr.split('@')[1]
         if (!this.collection.authOptions.onlyEmailDomains.includes(domain)) {
@@ -132,7 +125,6 @@ export class RecordUpsertForm {
         }
       }
 
-      // Check excluded domains
       if (this.collection.authOptions?.exceptEmailDomains?.length) {
         const domain = emailStr.split('@')[1]
         if (this.collection.authOptions.exceptEmailDomains.includes(domain)) {
@@ -180,20 +172,17 @@ export class RecordUpsertForm {
       collectionName: this.collection.name,
     }
 
-    // Copy existing data if updating
     if (this.record) {
       for (const key of this.record.keys()) {
         recordData[key] = this.record.get(key)
       }
     }
 
-    // Apply new data
     for (const [key, value] of Object.entries(this.data)) {
       if (['password', 'passwordConfirm', 'oldPassword', 'newPassword', 'newPasswordConfirm'].includes(key)) {
         continue
       }
 
-      // Handle append modifier: +field
       if (key.startsWith('+')) {
         const fieldName = key.slice(1)
         const existing = recordData[fieldName] || []
@@ -203,7 +192,6 @@ export class RecordUpsertForm {
         continue
       }
 
-      // Handle remove modifier: field-
       if (key.endsWith('-')) {
         const fieldName = key.slice(0, -1)
         const existing = recordData[fieldName] || []
@@ -217,7 +205,6 @@ export class RecordUpsertForm {
       recordData[key] = value
     }
 
-    // Handle autodate fields
     for (const field of this.collection.fields) {
       if (field.type === 'autodate') {
         const autoDateField = field as any
@@ -230,7 +217,6 @@ export class RecordUpsertForm {
       }
     }
 
-    // Set auth-specific fields for new auth records
     if (!this.record && this.collection.isAuth()) {
       if (!('emailVisibility' in recordData)) {
         recordData.emailVisibility = this.data.emailVisibility ?? true
@@ -242,16 +228,6 @@ export class RecordUpsertForm {
 
     const record = new PBRecord(this.collection.id, this.collection.name, recordData)
 
-    // Set password hash if provided
-    if (this.data.password) {
-      // Hash will be set by the caller using app.hashPassword
-      record.set('passwordHash', this.data.password)
-    }
-    if (this.data.newPassword) {
-      record.set('passwordHash', this.data.newPassword)
-    }
-
-    // Set auth defaults for new records
     if (!this.record && this.collection.isAuth()) {
       record.set('emailVisibility', this.data.emailVisibility ?? true)
       record.set('verified', this.data.verified ?? false)
@@ -275,7 +251,6 @@ export async function validateAndCreateRecord(
 
   const record = form.buildRecord()
 
-  // Hash password if present
   if (data.password) {
     record.set('passwordHash', await app.hashPassword(data.password))
   }
@@ -295,10 +270,19 @@ export async function validateAndUpdateRecord(
   if (errors.length > 0) {
     return { record: null as any, errors }
   }
+  const isPasswordChange = data.newPassword !== undefined || data.password !== undefined
+  if (isPasswordChange && collection.isAuth()) {
+    const storedHash = existingRecord.get('passwordHash')
+    if (storedHash) {
+      const valid = await app.verifyPassword(data.oldPassword || '', storedHash)
+      if (!valid) {
+        return { record: null as any, errors: [{ field: 'oldPassword', message: 'Incorrect password.' }] }
+      }
+    }
+  }
 
   const record = form.buildRecord()
 
-  // Hash password if present
   if (data.newPassword) {
     record.set('passwordHash', await app.hashPassword(data.newPassword))
   } else if (data.password) {

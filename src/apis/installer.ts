@@ -41,6 +41,16 @@ export function registerInstallerRoutes(app: BaseApp, router: Router): void {
           updated TEXT NOT NULL
         )
       `)
+      const superuserCount = db.prepare(
+        `SELECT COUNT(*) as count FROM _superusers`
+      ).get() as { count: number }
+
+      if (superuserCount.count > 0) {
+        return res.status(403).json({
+          code: 403,
+          message: 'Installation already completed.'
+        })
+      }
 
       // FIXED[C-2]: Block installer if ANY superuser already exists
       const superuserCount = (db.prepare(`SELECT COUNT(*) as count FROM _superusers`).get() as { count: number }).count
@@ -49,7 +59,6 @@ export function registerInstallerRoutes(app: BaseApp, router: Router): void {
       }
 
       const passwordHash = await hashPassword(password)
-      // FIXED[M-3]: Use crypto.randomBytes instead of predictable Date.now()
       const id = `su_${randomBytes(8).toString('hex')}`
       const now = new Date().toISOString()
 

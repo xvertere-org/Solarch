@@ -10,7 +10,7 @@ function tmpDir(): string {
   return fs.mkdtempSync(path.join(os.tmpdir(), 'tspoonbase-test-'))
 }
 
-async function createTestApp(): Promise<{ server: http.Server; dataDir: string; url: string }> {
+async function createTestApp(): Promise<{ server: http.Server; dataDir: string; url: string; app: TspoonBase }> {
   const dataDir = tmpDir()
   const app = new TspoonBase({
     hideStartBanner: true,
@@ -48,7 +48,7 @@ async function createTestApp(): Promise<{ server: http.Server; dataDir: string; 
     })
   })
 
-  return { server, dataDir, url: `http://localhost:${port}` }
+  return { server, dataDir, url: `http://localhost:${port}`, app }
 }
 
 async function fetchJson<T = any>(url: string, init?: RequestInit): Promise<{ status: number; body: T }> {
@@ -58,7 +58,7 @@ async function fetchJson<T = any>(url: string, init?: RequestInit): Promise<{ st
 }
 
 describe('Backup API', () => {
-  let ctx: { server: http.Server; dataDir: string; url: string }
+  let ctx: { server: http.Server; dataDir: string; url: string; app: TspoonBase }
 
   beforeAll(async () => {
     ctx = await createTestApp()
@@ -66,6 +66,14 @@ describe('Backup API', () => {
 
   afterAll(async () => {
     ctx.server.close()
+    if (ctx.app && ctx.app.db()) {
+      try {
+        ctx.app.db().getDataDB().close()
+        ctx.app.db().getAuxDB().close()
+      } catch {}
+    }
+    // Give sqlite time to release locks
+    await new Promise(r => setTimeout(r, 100))
     fs.rmSync(ctx.dataDir, { recursive: true, force: true })
   })
 
@@ -174,7 +182,7 @@ describe('Backup API', () => {
 })
 
 describe('Health endpoint', () => {
-  let ctx: { server: http.Server; dataDir: string; url: string }
+  let ctx: { server: http.Server; dataDir: string; url: string; app: TspoonBase }
 
   beforeAll(async () => {
     ctx = await createTestApp()
@@ -182,6 +190,13 @@ describe('Health endpoint', () => {
 
   afterAll(async () => {
     ctx.server.close()
+    if (ctx.app && ctx.app.db()) {
+      try {
+        ctx.app.db().getDataDB().close()
+        ctx.app.db().getAuxDB().close()
+      } catch {}
+    }
+    await new Promise(r => setTimeout(r, 100))
     fs.rmSync(ctx.dataDir, { recursive: true, force: true })
   })
 

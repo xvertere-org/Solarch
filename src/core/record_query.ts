@@ -2,7 +2,7 @@ import { BaseApp } from './base'
 import { RecordModel as PBRecord, RecordData } from './record'
 import { Collection } from './collection'
 import { parseFilter, buildSQL, buildSortSQL, FilterAST, evaluateFilterAST } from '../tools/search/filter'
-import { validateIdentifier } from '../utils/sql_safe'
+import { validateIdentifier, quoteIdentifier } from '../utils/sql_safe'
 
 export interface RecordQueryOptions {
   filter?: string
@@ -31,7 +31,8 @@ export async function findRecordById(
   if (!collection) return null
 
   const db = app.db().getDataDB()
-  const row = db.prepare(`SELECT * FROM _r_${collection.id} WHERE id = ?`).get(recordId) as any
+  const qt = quoteIdentifier(`_r_${collection.id}`)
+  const row = db.prepare(`SELECT * FROM ${qt} WHERE id = ?`).get(recordId) as any
   if (!row) return null
 
   return new PBRecord(collection.id, collection.name, row)
@@ -47,7 +48,8 @@ export async function findRecordsByIds(
 
   const placeholders = recordIds.map(() => '?').join(',')
   const db = app.db().getDataDB()
-  const rows = db.prepare(`SELECT * FROM _r_${collection.id} WHERE id IN (${placeholders})`).all(...recordIds) as any[]
+  const qt = quoteIdentifier(`_r_${collection.id}`)
+  const rows = db.prepare(`SELECT * FROM ${qt} WHERE id IN (${placeholders})`).all(...recordIds) as any[]
 
   return rows.map(row => new PBRecord(collection.id, collection.name, row))
 }
@@ -63,6 +65,7 @@ export async function findAllRecords(
   }
 
   const db = app.db().getDataDB()
+  const qt = quoteIdentifier(`_r_${collection.id}`)
   const page = options.page ?? 1
   const perPage = options.perPage ?? 30
   const filter = options.filter
@@ -87,12 +90,12 @@ export async function findAllRecords(
   let totalPages = 1
 
   if (!options.skipTotal) {
-    const countResult = db.prepare(`SELECT COUNT(*) as total FROM _r_${collection.id} ${whereClause}`).get(...params) as { total: number }
+    const countResult = db.prepare(`SELECT COUNT(*) as total FROM ${qt} ${whereClause}`).get(...params) as { total: number }
     totalItems = countResult.total
     totalPages = Math.ceil(totalItems / perPage) || 1
   }
 
-  const rows = db.prepare(`SELECT * FROM _r_${collection.id} ${whereClause} ORDER BY ${orderBy} LIMIT ? OFFSET ?`).all(...params, perPage, offset) as any[]
+  const rows = db.prepare(`SELECT * FROM ${qt} ${whereClause} ORDER BY ${orderBy} LIMIT ? OFFSET ?`).all(...params, perPage, offset) as any[]
 
   const items = rows.map(row => new PBRecord(collection.id, collection.name, row))
   return { page, perPage, totalItems, totalPages, items }
@@ -111,7 +114,8 @@ export async function findFirstRecordByFilter(
   const whereClause = where && where !== '1=1' ? `WHERE ${where}` : ''
 
   const db = app.db().getDataDB()
-  const row = db.prepare(`SELECT * FROM _r_${collection.id} ${whereClause} LIMIT 1`).get(...params) as any
+  const qt = quoteIdentifier(`_r_${collection.id}`)
+  const row = db.prepare(`SELECT * FROM ${qt} ${whereClause} LIMIT 1`).get(...params) as any
   if (!row) return null
 
   return new PBRecord(collection.id, collection.name, row)
@@ -135,7 +139,8 @@ export async function findRecordsByFilter(
   const orderBy = buildSortSQL(sort)
 
   const db = app.db().getDataDB()
-  const rows = db.prepare(`SELECT * FROM _r_${collection.id} ${whereClause} ORDER BY ${orderBy} LIMIT ? OFFSET ?`).all(...params, limit, offset) as any[]
+  const qt = quoteIdentifier(`_r_${collection.id}`)
+  const rows = db.prepare(`SELECT * FROM ${qt} ${whereClause} ORDER BY ${orderBy} LIMIT ? OFFSET ?`).all(...params, limit, offset) as any[]
 
   return rows.map(row => new PBRecord(collection.id, collection.name, row))
 }
@@ -161,7 +166,8 @@ export async function countRecords(
   }
 
   const db = app.db().getDataDB()
-  const result = db.prepare(`SELECT COUNT(*) as total FROM _r_${collection.id} ${whereClause}`).get(...params) as { total: number }
+  const qt = quoteIdentifier(`_r_${collection.id}`)
+  const result = db.prepare(`SELECT COUNT(*) as total FROM ${qt} ${whereClause}`).get(...params) as { total: number }
   return result.total
 }
 
@@ -174,7 +180,8 @@ export async function findAuthRecordByEmail(
   if (!collection || !collection.isAuth()) return null
 
   const db = app.db().getDataDB()
-  const row = db.prepare(`SELECT * FROM _r_${collection.id} WHERE email = ?`).get(email) as any
+  const qt = quoteIdentifier(`_r_${collection.id}`)
+  const row = db.prepare(`SELECT * FROM ${qt} WHERE email = ?`).get(email) as any
   if (!row) return null
 
   return new PBRecord(collection.id, collection.name, row)
@@ -189,7 +196,8 @@ export async function findAuthRecordByUsername(
   if (!collection || !collection.isAuth()) return null
 
   const db = app.db().getDataDB()
-  const row = db.prepare(`SELECT * FROM _r_${collection.id} WHERE username = ?`).get(username) as any
+  const qt = quoteIdentifier(`_r_${collection.id}`)
+  const row = db.prepare(`SELECT * FROM ${qt} WHERE username = ?`).get(username) as any
   if (!row) return null
 
   return new PBRecord(collection.id, collection.name, row)
@@ -212,7 +220,7 @@ export async function findAuthRecordByToken(
     if (!collection) return null
 
     const db = app.db().getDataDB()
-    const row = db.prepare(`SELECT * FROM _r_${collection.id} WHERE id = ?`).get(payload.id) as any
+    const row = db.prepare(`SELECT * FROM ${quoteIdentifier(`_r_${collection.id}`)} WHERE id = ?`).get(payload.id) as any
     if (!row) return null
 
     return new PBRecord(collection.id, collection.name, row)
@@ -221,8 +229,6 @@ export async function findAuthRecordByToken(
   }
 }
 
-// FIXED[C-1]: Disabled — raw SQL execution bypasses all access controls
-// Use findAllRecords / findRecordsByFilter instead
 export async function findRecordsByRawQuery(
   _app: BaseApp,
   _collectionIdOrName: string,
@@ -241,7 +247,8 @@ export async function deleteRecordById(
   if (!collection) return false
 
   const db = app.db().getDataDB()
-  const result = db.prepare(`DELETE FROM _r_${collection.id} WHERE id = ?`).run(recordId)
+  const qt = quoteIdentifier(`_r_${collection.id}`)
+  const result = db.prepare(`DELETE FROM ${qt} WHERE id = ?`).run(recordId)
   return result.changes > 0
 }
 
@@ -261,8 +268,6 @@ export async function vectorSearch(
   const collection = await app.findCollectionByNameOrId(collectionIdOrName)
   if (!collection) return []
 
-  // Validate field name to prevent SQL injection
-  // FIXED[L-2]: Use shared validateIdentifier instead of inline regex
   validateIdentifier(fieldName, 'vector field name')
 
   const field = collection.fields.find(f => f.name === fieldName)
@@ -272,15 +277,17 @@ export async function vectorSearch(
 
   const db = app.db().getDataDB()
   const tableName = `_r_${collection.id}`
+  const qt = quoteIdentifier(tableName)
+  const qf = quoteIdentifier(fieldName)
   const vectorJson = JSON.stringify(queryVector)
 
-  const minSimClause = minSimilarity !== undefined ? `AND vector_cosine_similarity(${fieldName}, ?) >= ?` : ''
+  const minSimClause = minSimilarity !== undefined ? `AND vector_cosine_similarity(${qf}, ?) >= ?` : ''
   const minSimParams = minSimilarity !== undefined ? [vectorJson, minSimilarity] : []
 
   const rows = db.prepare(`
-    SELECT *, vector_cosine_similarity(${fieldName}, ?) as similarity
-    FROM ${tableName}
-    WHERE ${fieldName} IS NOT NULL AND ${fieldName} != ''
+    SELECT *, vector_cosine_similarity(${qf}, ?) as similarity
+    FROM ${qt}
+    WHERE ${qf} IS NOT NULL AND ${qf} != ''
     ${minSimClause}
     ORDER BY similarity DESC
     LIMIT ?
