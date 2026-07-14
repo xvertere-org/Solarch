@@ -1,11 +1,37 @@
 import Database from 'better-sqlite3'
 import path from 'path'
 import fs from 'fs'
-import { DatabaseDriver, ColumnInfo, ColumnDef, Row, Statement } from './driver'
 import { SqliteQueryBuilder, QueryBuilder } from '../search/query-builder'
 import { validateIdentifier, quoteIdentifier } from '../../utils/sql_safe'
 
-export class SqliteDriver implements DatabaseDriver {
+export interface ColumnInfo {
+  name: string
+  type: string
+  notnull: boolean
+  pk: boolean
+  dflt_value?: any
+}
+
+export interface ColumnDef {
+  name: string
+  type: string
+  primaryKey?: boolean
+  notNull?: boolean
+  unique?: boolean
+  default?: any
+}
+
+export interface Row {
+  [key: string]: any
+}
+
+export interface Statement {
+  run(...params: any[]): any
+  get(...params: any[]): Row | undefined
+  all(...params: any[]): Row[]
+}
+
+export class SqliteDriver {
   private dataDB: Database.Database
   private auxDB: Database.Database
   private dataDir: string

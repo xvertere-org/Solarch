@@ -1,5 +1,4 @@
-import { SqliteDriver } from '../tools/database/sqlite-driver'
-import { ColumnInfo } from '../tools/database/driver'
+import { SqliteDriver, ColumnInfo } from '../tools/database/sqlite-driver'
 import Database from 'better-sqlite3'
 import path from 'path'
 import fs from 'fs'

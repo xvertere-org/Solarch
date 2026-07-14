@@ -1,5 +1,4 @@
 import { Hook, TaggedHook } from '../tools/hook/hook'
-import { Store } from '../tools/store/store'
 import { DB } from './db'
 import { defaultSettings, AppSettings } from './settings'
 import { Collection } from './collection'
@@ -8,7 +7,6 @@ import {
   BootstrapEvent, ServeEvent, TerminateEvent, ModelEvent, ModelErrorEvent,
   RecordEvent, RecordErrorEvent, RecordEnrichEvent, CollectionEvent, BackupEvent
 } from './events'
-import { DateTime } from '../tools/types/types'
 import { hashPassword, verifyPassword, parseJWT } from '../tools/security/crypto'
 import jwt from 'jsonwebtoken'
 import { SettingsEncryption } from './settings_encrypt'
@@ -30,7 +28,7 @@ export class BaseApp {
   private bootstrapped = false
   private _db: DB | null = null
   private _settings: AppSettings | null = null
-  private _store = new Store<string, any>()
+  private _store = new Map<string, any>()
   private _collectionCache = new Map<string, Collection>()
 
   readonly isDev: boolean
@@ -156,7 +154,7 @@ export class BaseApp {
     return this._settings
   }
 
-  store(): Store<string, any> {
+  store(): Map<string, any> {
     return this._store
   }
 

@@ -30,8 +30,6 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@aws-sdk/client-s3": "^3.500.0",
-    "@aws-sdk/lib-storage": "^3.500.0",
     "archiver": "^8.0.0",
     "bcrypt": "^5.1.1",
     "better-sqlite3": "^11.0.0",

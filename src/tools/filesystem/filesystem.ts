@@ -1,5 +1,4 @@
-import { LocalBlobDriver } from './blob/driver'
-import { BlobDriver } from './blob/driver'
+import { LocalBlobDriver, BlobDriver } from './driver'
 import { S3BlobDriver } from './s3_driver'
 import { S3Config } from '../../core/settings'
 import fs from 'fs'

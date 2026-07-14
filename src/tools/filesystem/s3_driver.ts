@@ -1,4 +1,4 @@
-import { BlobDriver, FileAttributes } from './blob/driver'
+import { BlobDriver, FileAttributes } from './driver'
 import { S3Config } from '../../core/settings'
 import { Readable } from 'stream'
 import crypto from 'crypto'
