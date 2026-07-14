@@ -1,14 +1,12 @@
 #!/usr/bin/env node
-// ponytail: zero deps, pure ANSI, CI-aware — do not add dependencies here
+// ponytail: writes to /dev/tty to bypass npm10 lifecycle output suppression — zero deps
 'use strict'
 
-if (process.env.CI) process.exit(0)
-
-const pkg = require('../package.json')
 const ORANGE = '\x1b[38;5;208m'
 const RESET  = '\x1b[0m'
+const pkg    = require('../package.json')
 
-process.stdout.write(ORANGE + `
+const banner = ORANGE + `
   ███████╗ ██████╗ ██╗      █████╗ ██████╗  ██████╗██╗  ██╗
   ██╔════╝██╔═══██╗██║     ██╔══██╗██╔══██╗██╔════╝██║  ██║
   ███████╗██║   ██║██║     ███████║██████╔╝██║     ███████║
@@ -18,4 +16,15 @@ process.stdout.write(ORANGE + `
 
   v${pkg.version} installed  ·  run: solarch serve --dir ./data
 
-` + RESET)
+` + RESET
+
+try {
+  // Bypass npm's stdout capture by writing directly to the terminal device.
+  // Falls through silently in CI, piped contexts, and Windows (no /dev/tty).
+  const fs = require('fs')
+  const tty = fs.openSync('/dev/tty', 'w')
+  fs.writeSync(tty, banner)
+  fs.closeSync(tty)
+} catch {
+  // not a TTY (CI, --ignore-scripts, Windows) — skip silently
+}
