@@ -1,3 +1,10 @@
+// ponytail: Minimal Deno type declaration to satisfy compiler and resolve payload control-flow issues
+declare const Deno: {
+  stdout: { writeSync(data: Uint8Array): number };
+  stdin: { read(buf: Uint8Array): Promise<number | null> };
+  exit(code?: number): never;
+};
+
 const MAX_LOG_ENTRIES = 500;
 
 const MAX_LOG_LINE_BYTES = 4096;
