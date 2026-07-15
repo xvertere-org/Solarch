@@ -192,6 +192,6 @@ Releases are managed by maintainers:
 ## Questions?
 
 - Open a [GitHub Discussion](https://github.com/xvertere-org/Solarch/discussions)
-- Check the [Documentation](https://solarch-docs.vercel.app/)
+- Check the [Documentation](https://solarch.in/)
 
 Thank you for contributing!

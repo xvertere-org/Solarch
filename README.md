@@ -23,7 +23,7 @@
 </p>
 
 <p align="center">
-  <a href="https://solarch-docs.vercel.app/">Website</a> •
+  <a href="https://solarch.in/">Website</a> •
   <a href="https://www.npmjs.com/package/solarch">npm</a> •
   <a href="https://github.com/xvertere-org/Solarch">GitHub</a> •
   <a href="#quick-start">Quick Start</a> •

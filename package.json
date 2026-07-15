@@ -1,9 +1,9 @@
 {
   "name": "solarch",
-  "version": "0.15.3",
+  "version": "0.15.4",
   "description": "Solarch - a TypeScript backend-as-a-service with SQLite, auth, realtime, and admin UI. Inspired by PocketBase.",
   "repository": "https://github.com/xvertere-org/Solarch",
-  "homepage": "https://solarch-docs.vercel.app/",
+  "homepage": "https://solarch.in/",
   "bugs": "https://github.com/xvertere-org/Solarch/issues",
   "license": "Apache-2.0",
   "main": "dist/index.js",
