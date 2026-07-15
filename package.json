@@ -21,7 +21,7 @@
   ],
   "scripts": {
     "postinstall": "node scripts/postinstall.js",
-    "build": "tsc && npm run build:ui",
+    "build": "tsc && node -e \"require('fs').copyFileSync('src/tools/jsvm/deno_worker.ts', 'dist/tools/jsvm/deno_worker.ts')\" && npm run build:ui",
     "build:ui": "cd admin && npm install && npm run build",
     "prepublishOnly": "npm run build",
     "dev": "tsx watch src/cli.ts serve --dev",
