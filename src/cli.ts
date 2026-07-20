@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 
+import 'dotenv/config'
 import { Command } from 'commander'
 import { Solarch } from './solarch'
 import { readFileSync } from 'fs'
@@ -12,7 +13,7 @@ let version = '0.1.0'
 try {
   const pkg = JSON.parse(readFileSync(packageJsonPath, 'utf-8'))
   version = pkg.version
-} catch {}
+} catch { }
 
 program
   .name('solarch')
@@ -33,7 +34,9 @@ program
   .action(async (opts) => {
     const dev = program.opts().dev ?? false
     const dataDir = program.opts().dir ?? './pb_data'
-    const encryptionEnv = program.opts().encryptionEnv
+    const encryptionEnv =
+      program.opts().encryptionEnv ||
+      process.env.SETTINGS_ENCRYPTION_KEY
     const queryTimeout = parseInt(program.opts().queryTimeout, 10)
 
     const app = new Solarch({

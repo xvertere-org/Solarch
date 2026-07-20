@@ -64,8 +64,8 @@ export function generateJWT(
 export function parseJWT(token: string, secret: string): { [key: string]: any } | null {
   try {
     return jwt.verify(token, secret) as Record<string, any>
-  } catch {
-    return null
+  } catch (err) {
+    return null;
   }
 }
 
