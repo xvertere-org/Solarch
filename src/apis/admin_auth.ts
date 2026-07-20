@@ -65,6 +65,8 @@ export function registerAdminAuthRoutes(app: BaseApp, router: Router): void {
       }
 
       const row = db.prepare(`SELECT * FROM _superusers WHERE email = ?`).get(identity) as any
+
+
       if (!row) {
         recordFailedAttempt(`admin:${identity.toLowerCase()}`)
         return res.status(400).json({ code: 400, message: 'Invalid credentials.' })
