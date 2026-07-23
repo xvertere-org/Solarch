@@ -88,6 +88,7 @@ export class BaseApp {
   constructor(config: BaseAppConfig) {
     this.isDev = config.isDev
     this.dataDir = config.dataDir
+
     this.encryptionEnv = config.encryptionEnv ?? ''
     this.queryTimeout = config.queryTimeout ?? 30
   }
@@ -564,7 +565,7 @@ export class BaseApp {
 
 
     // FIXED[N-5]: Add data column to _passwordResetTokens for storing opaque token metadata
-    try { db.exec('ALTER TABLE _passwordResetTokens ADD COLUMN data TEXT DEFAULT \'\'') } catch {}
+    try { db.exec('ALTER TABLE _passwordResetTokens ADD COLUMN data TEXT DEFAULT \'\'') } catch { }
 
     const now = new Date().toISOString()
     db.prepare("INSERT OR IGNORE INTO _settings (key, value, created, updated) VALUES (?, ?, ?, ?)").run(
@@ -609,11 +610,24 @@ export class BaseApp {
     return whitelist
   }
 
-  generateJWT(payload: { [key: string]: any }, secret: string, expiration: string = '720h'): string {
+  generateJWT(
+    payload: { [key: string]: any },
+    secret: string,
+    expiration: string = '720h'
+  ): string {
+
+
     if (!secret) {
-      throw new Error('JWT_SECRET is required. Configure jwtSecret in settings.')
+      throw new Error(
+        'JWT_SECRET is required. Configure jwtSecret in settings.'
+      )
     }
-    return jwt.sign(payload, secret, { expiresIn: expiration } as jwt.SignOptions)
+
+    return jwt.sign(
+      payload,
+      secret,
+      { expiresIn: expiration } as jwt.SignOptions
+    )
   }
 
   getJwtSecret(): string {
