@@ -2,7 +2,7 @@ import { Router, Request, Response } from 'express'
 import { BaseApp } from '../core/base'
 import { requireSuperuserAuth } from './middlewares_auth'
 import { AIService } from '../ai/service'
-import { defaultAIConfig } from '../ai/provider'
+
 
 export function registerAIRoutes(app: BaseApp, router: Router): void {
   const aiRouter = Router()
@@ -58,19 +58,43 @@ export function registerAIRoutes(app: BaseApp, router: Router): void {
       res.status(500).json({ code: 500, message: 'Internal server error' })
     }
   })
+  aiRouter.post('/test', async (req: Request, res: Response) => {
+    try {
+      const reply = await aiService.chat('Reply with exactly: Connection successful.')
+
+      res.json({
+        success: true,
+        reply,
+      })
+    } catch (err: any) {
+      app.logger().error(err.message || err)
+
+      res.status(500).json({
+        success: false,
+        message: err.message || 'AI connection failed.',
+      })
+    }
+  })
 
   aiRouter.post('/chat', async (req: Request, res: Response) => {
     try {
       const { message } = req.body
+
       if (!message) {
-        return res.status(400).json({ code: 400, message: 'Message is required.' })
+        return res.status(400).json({
+          code: 400,
+          message: 'Message is required.',
+        })
       }
 
       const reply = await aiService.chat(message)
       res.json({ reply })
     } catch (err: any) {
       app.logger().error(err.message || err)
-      res.status(500).json({ code: 500, message: 'Internal server error' })
+      res.status(500).json({
+        code: 500,
+        message: 'Internal server error',
+      })
     }
   })
 
