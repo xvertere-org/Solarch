@@ -5,6 +5,7 @@ export default defineConfig({
   plugins: [react()],
   base: '/_/',
   build: {
+    target: 'es2022',
     outDir: '../pb_public/admin',
     emptyOutDir: true,
   },
