@@ -112,39 +112,40 @@ export function loadAuthToken(app: BaseApp) {
     next()
   }
 }
-  export function requireAuth(app: BaseApp) {
-    return async (req: Request, res: Response, next: NextFunction) => {
-      if (!req.authContext?.record && !req.authContext?.isAdmin) {
-        return res.status(401).json({ code: 401, message: 'Authentication required.' })
-      }
-      next()
-    }
-  }
 
-  export function requireSuperuserAuth(app: BaseApp) {
-    return async (req: Request, res: Response, next: NextFunction) => {
-      if (!req.authContext?.isAdmin) {
-        return res.status(403).json({ code: 403, message: 'Superuser authentication required.' })
-      }
-      next()
+export function requireAuth(app: BaseApp) {
+  return async (req: Request, res: Response, next: NextFunction) => {
+    if (!req.authContext?.record && !req.authContext?.isAdmin) {
+      return res.status(401).json({ code: 401, message: 'Authentication required.' })
     }
+    next()
   }
+}
 
-  export function requireSameCollectionContextAuth(collectionIdOrName: string) {
-    return async (req: Request, res: Response, next: NextFunction) => {
-      const ctx = req.authContext
-      if (ctx?.record && ctx.record.collectionName !== collectionIdOrName && ctx.record.collectionId !== collectionIdOrName) {
-        return res.status(403).json({ code: 403, message: 'Invalid collection context.' })
-      }
-      next()
+export function requireSuperuserAuth(app: BaseApp) {
+  return async (req: Request, res: Response, next: NextFunction) => {
+    if (!req.authContext?.isAdmin) {
+      return res.status(403).json({ code: 403, message: 'Superuser authentication required.' })
     }
+    next()
   }
+}
 
-  export function requireGuestOnly() {
-    return async (req: Request, res: Response, next: NextFunction) => {
-      if (req.authContext?.record || req.authContext?.isAdmin) {
-        return res.status(400).json({ code: 400, message: 'Only guests can access this endpoint.' })
-      }
-      next()
+export function requireSameCollectionContextAuth(collectionIdOrName: string) {
+  return async (req: Request, res: Response, next: NextFunction) => {
+    const ctx = req.authContext
+    if (ctx?.record && ctx.record.collectionName !== collectionIdOrName && ctx.record.collectionId !== collectionIdOrName) {
+      return res.status(403).json({ code: 403, message: 'Invalid collection context.' })
     }
+    next()
   }
+}
+
+export function requireGuestOnly() {
+  return async (req: Request, res: Response, next: NextFunction) => {
+    if (req.authContext?.record || req.authContext?.isAdmin) {
+      return res.status(400).json({ code: 400, message: 'Only guests can access this endpoint.' })
+    }
+    next()
+  }
+}
