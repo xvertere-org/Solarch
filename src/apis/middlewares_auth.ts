@@ -27,6 +27,7 @@ export function loadAuthToken(app: BaseApp) {
 
     const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : authHeader
     const payload = app.parseJWT(token, app.getJwtSecret())
+   
 
     if (!payload) {
       req.authContext = { record: null, isAdmin: false, token: null }
@@ -50,7 +51,8 @@ export function loadAuthToken(app: BaseApp) {
 
           return next()
         }
-      } catch {
+      } catch (err: any) {
+        // _superusers table may not exist yet
         req.authContext = { record: null, isAdmin: false, token: null }
         return next()
       }
@@ -59,15 +61,28 @@ export function loadAuthToken(app: BaseApp) {
     if (payload.type === 'admin' && payload.id) {
       try {
         const db = app.db().getDataDB()
-        const row = db.prepare(`SELECT id FROM _superusers WHERE id = ?`).get(payload.id)
+
+
+        const row = db.prepare(
+          "SELECT id, email FROM _superusers WHERE id = ?"
+        ).get(payload.id)
+
+
         if (row) {
-          req.authContext = { record: null, isAdmin: true, token }
+          req.authContext = {
+            record: null,
+            isAdmin: true,
+            token,
+          }
           return next()
         }
-      } catch {
-        // _superusers table may not exist yet
+      } catch (err: any) {
+
+
+        throw err
       }
     }
+
 
     req.authContext = { record: null, isAdmin: false, token }
     next()
