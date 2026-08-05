@@ -15,7 +15,7 @@ export interface LLMProvider {
 
 export interface AIConfig {
   enabled: boolean
-  provider: 'openai' | 'anthropic' | 'ollama' | 'custom'
+  provider: 'openai' | 'openrouter' | 'anthropic' | 'ollama' | 'custom'
   apiKey: string
   model: string
   baseURL: string
@@ -222,6 +222,11 @@ export class OllamaProvider implements LLMProvider {
 
 export function createLLMProvider(config: AIConfig): LLMProvider {
   switch (config.provider) {
+    case 'openrouter':
+      return new OpenAIProvider({
+        ...config,
+        baseURL: config.baseURL || 'https://openrouter.ai/api/v1',
+      })
     case 'anthropic':
       return new AnthropicProvider(config)
     case 'ollama':

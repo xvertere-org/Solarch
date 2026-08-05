@@ -22,7 +22,7 @@
   "scripts": {
     "postinstall": "node scripts/postinstall.js",
     "build": "tsc && node -e \"require('fs').copyFileSync('src/tools/jsvm/deno_worker.ts', 'dist/tools/jsvm/deno_worker.ts')\" && npm run build:ui",
-    "build:ui": "cd admin && npm install && npm run build",
+    "build:ui": "cd admin && npm install && npm run build && cd .. && node scripts/copy-admin.js",
     "prepublishOnly": "npm run build",
     "dev": "tsx watch src/cli.ts serve --dev",
     "test": "vitest run",
@@ -38,6 +38,7 @@
     "commander": "^12.0.0",
     "cors": "^2.8.5",
     "croner": "^8.0.0",
+    "dotenv": "^17.4.2",
     "express": "^4.18.2",
     "express-rate-limit": "^7.1.5",
     "helmet": "^7.1.0",

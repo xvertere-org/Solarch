@@ -9,4 +9,12 @@ export default defineConfig({
     outDir: '../pb_public/admin',
     emptyOutDir: true,
   },
+  server: {
+    proxy: {
+      '/api': {
+        target: 'http://localhost:8090',
+        changeOrigin: true,
+      },
+    },
+  },
 })

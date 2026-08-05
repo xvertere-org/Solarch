@@ -6,7 +6,7 @@ import { Field, fieldFromJSON } from '../core/field'
 
 export class AIService {
   private app: BaseApp
-  private provider: LLMProvider | null = null
+
 
   constructor(app: BaseApp) {
     this.app = app
@@ -21,11 +21,14 @@ export class AIService {
 
   private getProvider(): LLMProvider {
     const config = this.getConfig()
-    if (!config) throw new Error('AI is not configured. Set ai.enabled=true and ai.apiKey in settings.')
-    if (!this.provider) {
-      this.provider = createLLMProvider(config)
+
+    if (!config) {
+      throw new Error(
+        'AI is not configured. Set ai.enabled=true and ai.apiKey in settings.'
+      )
     }
-    return this.provider
+
+    return createLLMProvider(config)
   }
 
   async generateCollection(description: string, options?: { dryRun?: boolean }): Promise<CollectionData> {
