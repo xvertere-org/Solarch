@@ -61,6 +61,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Update Homebrew Formula
+        continue-on-error: true
         run: |
           VERSION=${GITHUB_REF#refs/tags/v}
           TARBALL_URL="https://registry.npmjs.org/solarch/-/solarch-${VERSION}.tgz"
