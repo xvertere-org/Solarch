@@ -6,7 +6,7 @@ export default defineConfig({
   base: '/_/',
   build: {
     target: 'es2022',
-    outDir: '../pb_public/admin',
+    outDir: 'dist',
     emptyOutDir: true,
   },
   server: {
