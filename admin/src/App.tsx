@@ -13,6 +13,8 @@ import Backups from './pages/Backups'
 import AIAssistant from './pages/AIAssistant'
 import { api } from './api/client'
 
+import { Toaster } from '@/components/ui/sonner'
+
 function App() {
   const [auth, setAuth] = useState<{ token: string; admin: any } | null>(null)
   const [loading, setLoading] = useState(true)
@@ -48,7 +50,12 @@ function App() {
   }
 
   if (!auth) {
-    return <Login onLogin={handleLogin} />
+    return (
+      <>
+        <Login onLogin={handleLogin} />
+        <Toaster position="bottom-right" theme="dark" />
+      </>
+    )
   }
 
   return (
@@ -67,6 +74,7 @@ function App() {
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </Layout>
+      <Toaster position="bottom-right" theme="dark" />
     </BrowserRouter>
   )
 }

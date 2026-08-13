@@ -1,7 +1,13 @@
 import { useEffect, useState } from 'react'
 import { api } from '../api/client'
-import { Database, HardDrive, Users, Zap, Settings as SettingsIcon } from 'lucide-react'
+import { Database, HardDrive, Users, Zap, Settings as SettingsIcon, ArrowRight } from 'lucide-react'
 import { Link } from 'react-router-dom'
+import { PageHeader } from '@/components/navigation/PageHeader'
+import { StatCard } from '@/components/domain/StatCard'
+import { Card, CardContent } from '@/components/ui/card'
+import { Button } from '@/components/ui/button'
+import { Spinner } from '@/components/ui/spinner'
+import { SolarchLogo } from '@/components/SolarchLogo'
 
 export default function Dashboard() {
   const [stats, setStats] = useState({ collections: 0, records: 0, users: 0 })
@@ -29,63 +35,123 @@ export default function Dashboard() {
     load()
   }, [])
 
-  if (loading) return <div className="empty-state"><div className="spinner" /></div>
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center p-16">
+        <Spinner className="w-8 h-8 text-[#ff5a1f]" />
+      </div>
+    )
+  }
 
   return (
-    <div>
-      <h2 style={{ marginBottom: 24 }}>Dashboard</h2>
+    <div className="space-y-8">
+      <PageHeader
+        title="Dashboard"
+        description="Solarch Backend-as-a-Service Overview."
+      />
+
+      {/* Brand Hero Console Banner */}
+      <Card className="bg-[#150d08] border-[#3a2214] relative overflow-hidden shadow-lg">
+        <div className="absolute -right-12 -bottom-12 opacity-[0.07] pointer-events-none">
+          <SolarchLogo className="w-72 h-72" />
+        </div>
+        <CardContent className="p-6 relative z-10 flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
+          <div className="flex items-start gap-4">
+            <div className="p-3 rounded-xl bg-[#ff5a1f]/10 border border-[#ff5a1f]/30 text-[#ff5a1f] shrink-0">
+              <SolarchLogo className="w-8 h-8" />
+            </div>
+            <div className="space-y-1">
+              <div className="flex items-center gap-2">
+                <h2 className="text-lg font-bold font-display text-[#fdf3ec]">
+                  Solarch Backend Console
+                </h2>
+                <span className="text-[10px] uppercase font-mono px-2 py-0.5 rounded bg-[#ff5a1f]/20 text-[#ff9854] border border-[#ff5a1f]/30 font-semibold">
+                  v0.4.2 Active
+                </span>
+              </div>
+              <p className="text-sm text-[#c9a894] max-w-xl">
+                TypeScript Backend-as-a-Service with SQLite database, Express REST APIs, WebSockets, File Storage, and AI Integration.
+              </p>
+            </div>
+          </div>
+          <Link to="/collections" className="shrink-0">
+            <Button className="bg-[#ff5a1f] hover:bg-[#ff7a1a] text-white font-medium px-4 py-2">
+              <Database size={16} className="mr-2" /> Explore Collections
+            </Button>
+          </Link>
+        </CardContent>
+      </Card>
 
       {showWelcome && (
-        <div className="welcome-banner">
-          <div className="welcome-icon"><Zap size={22} color="#fff" /></div>
-          <div>
-            <h3>Welcome to Solarch!</h3>
-            <p>Get started by creating your first collection to store data.</p>
-            <Link to="/collections" className="btn btn-primary" style={{ marginTop: 12 }}>
-              Create First Collection
-            </Link>
-          </div>
-        </div>
+        <Card className="bg-[#150d08] border-[#ff5a1f]/30">
+          <CardContent className="p-6 flex items-start gap-4">
+            <div className="p-3 rounded-lg bg-[#ff5a1f] text-white shrink-0">
+              <Zap size={20} />
+            </div>
+            <div>
+              <h3 className="text-base font-semibold text-[#fdf3ec]">Welcome to Solarch!</h3>
+              <p className="text-sm text-[#c9a894] mt-1">
+                Get started by creating your first database collection to store structured records.
+              </p>
+              <Link to="/collections">
+                <Button className="mt-4 bg-[#ff5a1f] hover:bg-[#ff7a1a] text-white">
+                  Create First Collection <ArrowRight size={14} className="ml-2" />
+                </Button>
+              </Link>
+            </div>
+          </CardContent>
+        </Card>
       )}
 
-      <div className="stat-grid">
-        <div className="stat-card">
-          <div className="stat-icon" style={{ background: 'rgba(26,111,255,0.15)' }}>
-            <Database size={18} style={{ color: 'var(--blue-bright)' }} />
-          </div>
-          <div className="stat-value">{stats.collections}</div>
-          <div className="stat-label">Collections</div>
-        </div>
-        <div className="stat-card">
-          <div className="stat-icon" style={{ background: 'rgba(0,230,118,0.15)' }}>
-            <HardDrive size={18} style={{ color: 'var(--success)' }} />
-          </div>
-          <div className="stat-value">{stats.records}</div>
-          <div className="stat-label">Total Records</div>
-        </div>
-        <div className="stat-card">
-          <div className="stat-icon" style={{ background: 'rgba(255,179,0,0.15)' }}>
-            <Users size={18} style={{ color: 'var(--warning)' }} />
-          </div>
-          <div className="stat-value">{stats.users}</div>
-          <div className="stat-label">Auth Users</div>
-        </div>
+      {/* Metrics Row */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <StatCard
+          title="Collections"
+          value={stats.collections}
+          icon={<Database size={20} className="text-[#ff5a1f]" />}
+          description="Active database tables"
+        />
+        <StatCard
+          title="Total Records"
+          value={stats.records}
+          icon={<HardDrive size={20} className="text-[#10b981]" />}
+          description="Stored documents & rows"
+        />
+        <StatCard
+          title="Auth Users"
+          value={stats.users}
+          icon={<Users size={20} className="text-[#f59e0b]" />}
+          description="Registered user accounts"
+        />
       </div>
 
-      <div className="action-grid">
-        <Link to="/collections" className="action-card">
-          <div className="action-title">
-            <Database size={16} style={{ color: 'var(--blue-bright)' }} />
-            Manage Collections
-          </div>
-          <div className="action-desc">Create and configure collections to organize your data.</div>
+      {/* Action Shortcut Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <Link to="/collections" className="group">
+          <Card className="bg-[#150d08] border-[#3a2214] transition-all hover:border-[#ff5a1f]/50 hover:bg-[#1f140d] h-full">
+            <CardContent className="p-6 space-y-2">
+              <div className="flex items-center gap-2 font-semibold text-[#fdf3ec] group-hover:text-[#ff9854] transition-colors font-display">
+                <Database size={18} className="text-[#ff5a1f]" />
+                Manage Collections & Schemas
+              </div>
+              <p className="text-sm text-[#c9a894]">
+                Define database collections, specify field types, and set API access rules.
+              </p>
+            </CardContent>
+          </Card>
         </Link>
-        <Link to="/settings" className="action-card">
-          <div className="action-title">
-            <SettingsIcon size={16} style={{ color: 'var(--blue-bright)' }} />
-            Settings
-          </div>
-          <div className="action-desc">Configure app settings, AI options, and more.</div>
+        <Link to="/settings" className="group">
+          <Card className="bg-[#150d08] border-[#3a2214] transition-all hover:border-[#ff5a1f]/50 hover:bg-[#1f140d] h-full">
+            <CardContent className="p-6 space-y-2">
+              <div className="flex items-center gap-2 font-semibold text-[#fdf3ec] group-hover:text-[#ff9854] transition-colors font-display">
+                <SettingsIcon size={18} className="text-[#ff5a1f]" />
+                System & AI Settings
+              </div>
+              <p className="text-sm text-[#c9a894]">
+                Configure OpenAI/Anthropic API keys, system metadata, and SMTP mailer parameters.
+              </p>
+            </CardContent>
+          </Card>
         </Link>
       </div>
     </div>

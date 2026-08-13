@@ -1,6 +1,12 @@
 import { useEffect, useState } from 'react'
 import { api } from '../api/client'
-import { ChevronLeft, ChevronRight } from 'lucide-react'
+import { ChevronLeft, ChevronRight, FileText } from 'lucide-react'
+import { PageHeader } from '@/components/navigation/PageHeader'
+import { Card, CardContent } from '@/components/ui/card'
+import { Table, TableHeader, TableBody, TableHead, TableRow, TableCell } from '@/components/ui/table'
+import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
+import { Spinner } from '@/components/ui/spinner'
 
 export default function Logs() {
   const [logs, setLogs] = useState<any[]>([])
@@ -22,58 +28,92 @@ export default function Logs() {
 
   const totalPages = Math.ceil(totalItems / perPage)
 
-  const badgeClass = (level: string) => {
+  const badgeVariant = (level: string) => {
     switch (level) {
-      case 'error': return 'badge-red'
-      case 'warn': return 'badge-orange'
-      default: return 'badge-gray'
+      case 'error': return 'destructive'
+      case 'warn': return 'secondary'
+      default: return 'outline'
     }
   }
 
-  if (loading && logs.length === 0) return <div className="empty-state"><div className="spinner" /></div>
+  if (loading && logs.length === 0) {
+    return (
+      <div className="flex items-center justify-center p-12">
+        <Spinner className="w-8 h-8 text-[var(--blue-core)]" />
+      </div>
+    )
+  }
 
   return (
-    <div>
-      <h2 style={{ marginBottom: 20 }}>Logs</h2>
-      <div className="card">
+    <div className="space-y-6">
+      <PageHeader
+        title="Logs"
+        description="Audit requests, errors, and system activity events."
+      />
+
+      <Card className="bg-[var(--bg-surface)] border-[var(--bg-border)] overflow-hidden">
         {logs.length === 0 ? (
-          <div className="empty-state">No logs found</div>
+          <CardContent className="flex flex-col items-center justify-center space-y-4 p-12 text-center">
+            <div className="p-4 rounded-full bg-[var(--bg-elevated)] text-[var(--text-muted)]">
+              <FileText size={36} />
+            </div>
+            <p className="text-sm text-[var(--text-muted)]">No logs recorded yet.</p>
+          </CardContent>
         ) : (
-          <div className="table-wrapper">
-            <table>
-              <thead>
-                <tr>
-                  <th>Time</th>
-                  <th>Level</th>
-                  <th>Message</th>
-                </tr>
-              </thead>
-              <tbody>
-                {logs.map((log, i) => (
-                  <tr key={i}>
-                    <td style={{ fontSize: 12, color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>
-                      {new Date(log.created).toLocaleString()}
-                    </td>
-                    <td><span className={`badge ${badgeClass(log.level)}`}>{log.level}</span></td>
-                    <td style={{ color: 'var(--text-secondary)' }}>{log.message}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead className="w-48">Timestamp</TableHead>
+                <TableHead className="w-28">Level</TableHead>
+                <TableHead>Message</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {logs.map((log, i) => (
+                <TableRow key={i}>
+                  <TableCell className="font-mono text-xs text-[var(--text-muted)] whitespace-nowrap">
+                    {new Date(log.created).toLocaleString()}
+                  </TableCell>
+                  <TableCell>
+                    <Badge variant={badgeVariant(log.level)}>
+                      {log.level}
+                    </Badge>
+                  </TableCell>
+                  <TableCell className="text-sm text-[var(--text-secondary)]">
+                    {log.message}
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        )}
+
+        {totalPages > 1 && (
+          <div className="flex items-center justify-between p-4 border-t border-[var(--bg-border)]">
+            <span className="text-xs text-[var(--text-muted)]">
+              Page {page} of {totalPages} ({totalItems} total logs)
+            </span>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={page <= 1}
+                onClick={() => setPage(p => p - 1)}
+              >
+                <ChevronLeft size={14} /> Previous
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={page >= totalPages}
+                onClick={() => setPage(p => p + 1)}
+              >
+                Next <ChevronRight size={14} />
+              </Button>
+            </div>
           </div>
         )}
-      </div>
-      {totalPages > 1 && (
-        <div className="pagination">
-          <button className="btn btn-ghost btn-sm" disabled={page <= 1} onClick={() => setPage(p => p - 1)}>
-            <ChevronLeft size={14} />
-          </button>
-          <span className="pagination-info">Page {page} of {totalPages}</span>
-          <button className="btn btn-ghost btn-sm" disabled={page >= totalPages} onClick={() => setPage(p => p + 1)}>
-            <ChevronRight size={14} />
-          </button>
-        </div>
-      )}
+      </Card>
     </div>
   )
 }

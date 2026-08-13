@@ -1,7 +1,17 @@
 import { useEffect, useState } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { api } from '../api/client'
-import { Plus, Search, ChevronLeft, ChevronRight, ArrowLeft, X, Trash2 } from 'lucide-react'
+import { Plus, Search, ChevronLeft, ChevronRight, ArrowLeft, Trash2, Edit } from 'lucide-react'
+import { PageHeader } from '@/components/navigation/PageHeader'
+import { Card, CardContent } from '@/components/ui/card'
+import { Table, TableHeader, TableBody, TableHead, TableRow, TableCell } from '@/components/ui/table'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
+import { AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, AlertDialogDescription, AlertDialogFooter, AlertDialogCancel, AlertDialogAction } from '@/components/ui/alert-dialog'
+import { Spinner } from '@/components/ui/spinner'
+import { toast } from 'sonner'
 
 export default function Records() {
   const { collectionId } = useParams()
@@ -14,6 +24,8 @@ export default function Records() {
   const [loading, setLoading] = useState(true)
   const [showModal, setShowModal] = useState(false)
   const [newRecord, setNewRecord] = useState<Record<string, any>>({})
+  const [deleteTargetId, setDeleteTargetId] = useState<string | null>(null)
+  const [deleting, setDeleting] = useState(false)
 
   useEffect(() => { loadCollection() }, [collectionId])
   useEffect(() => { loadRecords() }, [collectionId, page, filter])
@@ -38,138 +50,208 @@ export default function Records() {
     e.preventDefault()
     try {
       await api.post(`/api/collections/${collectionId}/records`, newRecord)
+      toast.success('Record created successfully')
       setShowModal(false); setNewRecord({})
       setPage(1); loadRecords()
-    } catch (err: any) { alert(err.message) }
+    } catch (err: any) { toast.error(err.message || 'Failed to create record') }
   }
 
-  async function deleteRecord(id: string) {
-    if (!confirm('Delete this record?')) return
+  async function confirmDeleteRecord() {
+    if (!deleteTargetId) return
+    setDeleting(true)
     try {
-      await api.delete(`/api/collections/${collectionId}/records/${id}`)
+      await api.delete(`/api/collections/${collectionId}/records/${deleteTargetId}`)
+      toast.success('Record deleted')
+      setDeleteTargetId(null)
       loadRecords()
-    } catch (err: any) { alert(err.message) }
+    } catch (err: any) { toast.error(err.message || 'Failed to delete record') }
+    finally { setDeleting(false) }
   }
 
   const totalPages = Math.ceil(totalItems / perPage)
-  const displayFields = collection?.fields?.filter((f: any) => !f.system && f.type !== 'json' && f.type !== 'editor')?.slice(0, 4) || []
+  const displayFields = collection?.fields?.filter((f: any) => !f.system && f.type !== 'json' && f.type !== 'editor') || []
 
   const getFieldValue = (rec: any, field: any) => {
     const val = rec[field.name]
-    if (val === null || val === undefined) return <span style={{ color: 'var(--text-muted)' }}>—</span>
+    if (val === null || val === undefined) return <span className="text-[var(--text-muted)]">—</span>
     if (field.type === 'bool') return val ? 'Yes' : 'No'
     if (field.type === 'date') return new Date(val).toLocaleString()
     if (typeof val === 'object') return JSON.stringify(val).slice(0, 40) + '...'
     return String(val).slice(0, 60)
   }
 
-  if (!collection && loading) return <div className="empty-state"><div className="spinner" /></div>
+  if (!collection && loading) {
+    return (
+      <div className="flex items-center justify-center p-12">
+        <Spinner className="w-8 h-8 text-[var(--blue-core)]" />
+      </div>
+    )
+  }
 
   return (
-    <div>
-      <button className="btn btn-ghost" onClick={() => window.history.back()} style={{ marginBottom: 16 }}>
-        <ArrowLeft size={15} /> Back
-      </button>
-      <div className="card-header">
-        <h2>Records: {collection?.name || '...'}</h2>
-        <button className="btn btn-primary" onClick={() => setShowModal(true)}>
-          <Plus size={15} /> New Record
-        </button>
+    <div className="space-y-6">
+      <div className="flex items-center gap-4">
+        <Button variant="ghost" size="sm" onClick={() => window.history.back()}>
+          <ArrowLeft size={16} /> Back
+        </Button>
       </div>
 
-      <div className="search-bar">
-        <input
+      <PageHeader
+        title={`Records: ${collection?.name || '...'}`}
+        description={`Browse, filter, and modify rows in the "${collection?.name}" collection.`}
+        actions={
+          <Button onClick={() => setShowModal(true)}>
+            <Plus size={16} /> New Record
+          </Button>
+        }
+      />
+
+      <div className="relative max-w-md">
+        <Search className="absolute left-3 top-2.5 h-4 w-4 text-[var(--text-muted)]" />
+        <Input
           placeholder={`Search ${collection?.name || ''} records...`}
           value={filter}
           onChange={e => { setFilter(e.target.value); setPage(1) }}
+          className="pl-9"
         />
-        <button className="btn btn-ghost"><Search size={15} /></button>
       </div>
 
       {loading ? (
-        <div className="empty-state"><div className="spinner" /></div>
-      ) : records.length === 0 ? (
-        <div className="card" style={{ textAlign: 'center', padding: 48 }}>
-          <p style={{ color: 'var(--text-muted)', marginBottom: 16 }}>
-            {filter ? 'No records match your filter.' : 'No records yet.'}
-          </p>
-          {!filter && <button className="btn btn-primary" onClick={() => setShowModal(true)}><Plus size={15} /> Create Record</button>}
+        <div className="flex items-center justify-center p-12">
+          <Spinner className="w-8 h-8 text-[var(--blue-core)]" />
         </div>
+      ) : records.length === 0 ? (
+        <Card className="bg-[var(--bg-surface)] border-[var(--bg-border)] text-center p-12">
+          <CardContent className="flex flex-col items-center justify-center space-y-4">
+            <p className="text-sm text-[var(--text-muted)]">
+              {filter ? 'No records match your filter.' : 'No records yet in this collection.'}
+            </p>
+            {!filter && (
+              <Button onClick={() => setShowModal(true)}>
+                <Plus size={16} /> Create Record
+              </Button>
+            )}
+          </CardContent>
+        </Card>
       ) : (
-        <div className="card">
-          <div className="table-wrapper">
-            <table>
-              <thead>
-                <tr>
-                  <th>ID</th>
-                  {displayFields.map((f: any) => <th key={f.id}>{f.name}</th>)}
-                  <th style={{ textAlign: 'right' }}>Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {records.map(rec => (
-                  <tr key={rec.id}>
-                    <td style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--text-muted)' }}>
-                      {rec.id?.slice(0, 8)}...
-                    </td>
-                    {displayFields.map((f: any) => (
-                      <td key={f.id}>{getFieldValue(rec, f)}</td>
-                    ))}
-                    <td>
-                      <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
-                        <Link to={`/records/${collectionId}/${rec.id}`} className="btn btn-ghost btn-sm">Edit</Link>
-                        <button className="btn btn-danger btn-sm" onClick={() => deleteRecord(rec.id)}>
-                          <Trash2 size={13} />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+        <Card className="bg-[var(--bg-surface)] border-[var(--bg-border)] overflow-hidden">
+          <div className="overflow-x-auto">
+            <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead className="w-32">ID</TableHead>
+                {displayFields.map((f: any) => <TableHead key={f.id}>{f.name}</TableHead>)}
+                <TableHead className="text-right">Actions</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {records.map(rec => (
+                <TableRow key={rec.id}>
+                  <TableCell className="font-mono text-xs text-[var(--text-muted)]">
+                    {rec.id?.slice(0, 8)}...
+                  </TableCell>
+                  {displayFields.map((f: any) => (
+                    <TableCell key={f.id}>{getFieldValue(rec, f)}</TableCell>
+                  ))}
+                  <TableCell className="text-right">
+                    <div className="flex items-center justify-end gap-2">
+                      <Link to={`/records/${collectionId}/${rec.id}`}>
+                        <Button variant="ghost" size="sm">
+                          <Edit size={14} /> Edit
+                        </Button>
+                      </Link>
+                      <Button
+                        variant="destructive"
+                        size="sm"
+                        onClick={() => setDeleteTargetId(rec.id)}
+                        aria-label={`Delete record ${rec.id}`}
+                      >
+                        <Trash2 size={14} />
+                      </Button>
+                    </div>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
           </div>
+
           {totalPages > 1 && (
-            <div className="pagination">
-              <button className="btn btn-ghost btn-sm" disabled={page <= 1} onClick={() => setPage(p => p - 1)}>
-                <ChevronLeft size={14} />
-              </button>
-              <span className="pagination-info">Page {page} of {totalPages} ({totalItems} total)</span>
-              <button className="btn btn-ghost btn-sm" disabled={page >= totalPages} onClick={() => setPage(p => p + 1)}>
-                <ChevronRight size={14} />
-              </button>
+            <div className="flex items-center justify-between p-4 border-t border-[var(--bg-border)]">
+              <span className="text-xs text-[var(--text-muted)]">
+                Page {page} of {totalPages} ({totalItems} total items)
+              </span>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={page <= 1}
+                  onClick={() => setPage(p => p - 1)}
+                >
+                  <ChevronLeft size={14} /> Previous
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={page >= totalPages}
+                  onClick={() => setPage(p => p + 1)}
+                >
+                  Next <ChevronRight size={14} />
+                </Button>
+              </div>
             </div>
           )}
-        </div>
+        </Card>
       )}
 
-      {showModal && (
-        <div className="modal-overlay" onClick={() => setShowModal(false)}>
-          <div className="modal" onClick={e => e.stopPropagation()}>
-            <div className="modal-header">
-              <h3>New Record — {collection?.name}</h3>
-              <button className="modal-close" onClick={() => setShowModal(false)}>
-                <X size={16} />
-              </button>
-            </div>
-            <form onSubmit={createRecord}>
-              {collection?.fields?.filter((f: any) => !f.system).map((field: any) => (
-                <div className="form-group" key={field.id}>
-                  <label>{field.name}</label>
-                  <input
-                    value={newRecord[field.name] || ''}
-                    onChange={e => setNewRecord({ ...newRecord, [field.name]: e.target.value })}
-                    placeholder={`Enter ${field.name}`}
-                  />
-                </div>
-              ))}
-              <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 20 }}>
-                <button type="button" className="btn btn-ghost" onClick={() => setShowModal(false)}>Cancel</button>
-                <button type="submit" className="btn btn-primary">Create Record</button>
+      {/* Create Record Dialog */}
+      <Dialog open={showModal} onOpenChange={setShowModal}>
+        <DialogContent className="bg-[var(--bg-surface)] border-[var(--bg-border)] text-[var(--text-primary)] sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="font-display text-xl">New Record — {collection?.name}</DialogTitle>
+          </DialogHeader>
+          <form onSubmit={createRecord} className="space-y-4 pt-2">
+            {collection?.fields?.filter((f: any) => !f.system).map((field: any) => (
+              <div key={field.id} className="space-y-2">
+                <Label htmlFor={`fld-${field.id}`}>{field.name}</Label>
+                <Input
+                  id={`fld-${field.id}`}
+                  value={newRecord[field.name] || ''}
+                  onChange={e => setNewRecord({ ...newRecord, [field.name]: e.target.value })}
+                  placeholder={`Enter ${field.name}`}
+                />
               </div>
-            </form>
-          </div>
-        </div>
-      )}
+            ))}
+            <DialogFooter className="pt-4">
+              <Button type="button" variant="ghost" onClick={() => setShowModal(false)}>
+                Cancel
+              </Button>
+              <Button type="submit">Create Record</Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Record Confirmation AlertDialog */}
+      <AlertDialog open={!!deleteTargetId} onOpenChange={(open) => !open && setDeleteTargetId(null)}>
+        <AlertDialogContent className="bg-[var(--bg-surface)] border-[var(--bg-border)] text-[var(--text-primary)]">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="font-display">Delete Record</AlertDialogTitle>
+            <AlertDialogDescription className="text-sm text-[var(--text-secondary)]">
+              Are you sure you want to delete this record? This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setDeleteTargetId(null)}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={confirmDeleteRecord}
+              className="bg-[#ef4444] hover:bg-[#dc2626] text-white"
+            >
+              {deleting ? 'Deleting...' : 'Delete Permanently'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }

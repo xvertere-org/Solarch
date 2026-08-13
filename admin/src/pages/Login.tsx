@@ -1,5 +1,12 @@
 import { useState, useEffect } from 'react'
 import { api } from '../api/client'
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { Button } from '@/components/ui/button'
+import { Spinner } from '@/components/ui/spinner'
+
+import { SolarchLogo } from '@/components/SolarchLogo'
 
 interface LoginProps {
   onLogin: (data: { token: string; admin: any }) => void
@@ -50,72 +57,110 @@ export default function Login({ onLogin }: LoginProps) {
 
   if (checking) {
     return (
-      <div className="login-page">
-        <div className="spinner" />
+      <div className="min-h-screen flex items-center justify-center bg-[var(--bg-void)]">
+        <Spinner className="w-8 h-8 text-[var(--blue-core)]" />
       </div>
     )
   }
 
   return (
-    <div className="login-page">
-      <div className="login-orb" />
-      <div className="login-card">
-        <div className="login-logo">
-          <img src="/solarch-logo.png" alt="Solarch" />
-          <span>Solarch</span>
-        </div>
+    <div className="min-h-screen flex items-center justify-center p-4 bg-[var(--bg-void)] relative overflow-hidden">
+      <div className="absolute -top-40 -left-40 w-96 h-96 bg-[var(--blue-core)]/10 rounded-full blur-3xl pointer-events-none" />
+      <Card className="w-full max-w-md bg-[var(--bg-surface)]/90 border-[var(--bg-border)] backdrop-blur-xl shadow-2xl relative z-10">
+        <CardHeader className="text-center pb-4">
+          <div className="flex items-center justify-center gap-2 mb-2">
+            <SolarchLogo className="w-10 h-10" />
+            <span className="text-2xl font-bold font-display tracking-tight text-[var(--text-primary)]">Solarch</span>
+          </div>
+          <CardTitle className="text-2xl font-bold font-display">
+            {isInstaller ? 'Welcome to Solarch' : 'Sign In'}
+          </CardTitle>
+          <CardDescription>
+            {isInstaller ? 'Create your superuser account to get started' : 'Admin Dashboard'}
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          {error && (
+            <div className="mb-4 p-3 rounded-md bg-[var(--error)]/10 border border-[var(--error)]/20 text-[var(--error)] text-xs font-medium">
+              {error}
+            </div>
+          )}
 
-        {isInstaller ? (
-          <>
-            <div className="login-title">
-              <h1>Welcome to Solarch</h1>
-              <p>Create your admin account to get started</p>
-            </div>
-            {error && <div className="login-error">{error}</div>}
-            <form onSubmit={handleInstall}>
-              <div className="form-group">
-                <label>Email</label>
-                <input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="admin@example.com" required />
+          {isInstaller ? (
+            <form onSubmit={handleInstall} className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="email">Email</Label>
+                <Input
+                  id="email"
+                  type="email"
+                  value={email}
+                  onChange={e => setEmail(e.target.value)}
+                  placeholder="admin@example.com"
+                  required
+                />
               </div>
-              <div className="form-group">
-                <label>Password</label>
-                <input type="password" value={password} onChange={e => setPassword(e.target.value)} placeholder="Minimum 6 characters" required minLength={6} />
+              <div className="space-y-2">
+                <Label htmlFor="password">Password</Label>
+                <Input
+                  id="password"
+                  type="password"
+                  value={password}
+                  onChange={e => setPassword(e.target.value)}
+                  placeholder="Minimum 6 characters"
+                  required
+                  minLength={6}
+                />
               </div>
-              <div className="form-group">
-                <label>Confirm Password</label>
-                <input type="password" value={passwordConfirm} onChange={e => setPasswordConfirm(e.target.value)} placeholder="Confirm your password" required minLength={6} />
+              <div className="space-y-2">
+                <Label htmlFor="passwordConfirm">Confirm Password</Label>
+                <Input
+                  id="passwordConfirm"
+                  type="password"
+                  value={passwordConfirm}
+                  onChange={e => setPasswordConfirm(e.target.value)}
+                  placeholder="Confirm your password"
+                  required
+                  minLength={6}
+                />
               </div>
-              <button type="submit" className="btn btn-primary" disabled={loading} style={{ width: '100%', justifyContent: 'center', padding: '10px 24px', fontSize: 14 }}>
+              <Button type="submit" className="w-full" disabled={loading}>
                 {loading ? 'Creating Account...' : 'Create Admin Account'}
-              </button>
+              </Button>
+              <p className="text-xs text-[var(--text-muted)] text-center pt-2">
+                This will create your first superuser account with full admin access.
+              </p>
             </form>
-            <p style={{ marginTop: 20, fontSize: 12, color: 'var(--text-muted)', textAlign: 'center' }}>
-              This will create your first superuser account with full admin access.
-            </p>
-          </>
-        ) : (
-          <>
-            <div className="login-title">
-              <h1>Sign In</h1>
-              <p>Admin Dashboard</p>
-            </div>
-            {error && <div className="login-error">{error}</div>}
-            <form onSubmit={handleLogin}>
-              <div className="form-group">
-                <label>Email</label>
-                <input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="admin@example.com" required />
+          ) : (
+            <form onSubmit={handleLogin} className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="email">Email</Label>
+                <Input
+                  id="email"
+                  type="email"
+                  value={email}
+                  onChange={e => setEmail(e.target.value)}
+                  placeholder="admin@example.com"
+                  required
+                />
               </div>
-              <div className="form-group">
-                <label>Password</label>
-                <input type="password" value={password} onChange={e => setPassword(e.target.value)} placeholder="&#8226;&#8226;&#8226;&#8226;&#8226;&#8226;&#8226;&#8226;" required />
+              <div className="space-y-2">
+                <Label htmlFor="password">Password</Label>
+                <Input
+                  id="password"
+                  type="password"
+                  value={password}
+                  onChange={e => setPassword(e.target.value)}
+                  placeholder="••••••••"
+                  required
+                />
               </div>
-              <button type="submit" className="btn btn-primary" disabled={loading} style={{ width: '100%', justifyContent: 'center', padding: '10px 24px', fontSize: 14 }}>
+              <Button type="submit" className="w-full" disabled={loading}>
                 {loading ? 'Signing in...' : 'Sign In'}
-              </button>
+              </Button>
             </form>
-          </>
-        )}
-      </div>
+          )}
+        </CardContent>
+      </Card>
     </div>
   )
 }
