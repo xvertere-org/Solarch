@@ -278,7 +278,7 @@ describe('NEW-005: Email change uniqueness', () => {
     const db = ctx.app.db().getDataDB()
     const user1Row = db.prepare(`SELECT * FROM _r_${authCollection.id} WHERE email = ?`).get('user1@example.com') as any
 
-    const token = ctx.app.createPasswordResetToken(user1Row.id, `emailChange:${authCollection.id}`, 2, 'user2@example.com')
+    const token = await ctx.app.createPasswordResetToken(user1Row.id, `emailChange:${authCollection.id}`, 2, 'user2@example.com')
 
     const { status, body } = await fetchJson(`${ctx.url}/api/collections/users/confirm-email-change`, {
       method: 'POST',

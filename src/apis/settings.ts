@@ -45,11 +45,8 @@ export function registerSettingsRoutes(app: BaseApp, router: Router): void {
       // FIXED[H-2]: Await async encryptSettings
       settings = await encryption.encryptSettings(settings)
 
-      const db = app.db().getDataDB()
       const now = new Date().toISOString()
-      db.prepare("UPDATE _settings SET value = ?, updated = ? WHERE key = 'main'").run(
-        JSON.stringify(settings), now
-      )
+      await app.db().execute("UPDATE _settings SET value = ?, updated = ? WHERE key = 'main'", [JSON.stringify(settings), now])
       await app.reloadSettings()
       res.json(app.settings())
     } catch (err: any) {

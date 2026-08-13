@@ -123,8 +123,7 @@ async function findRecordById(app: BaseApp, collectionId: string, recordId: stri
   const collection = await app.findCollectionByNameOrId(collectionId)
   if (!collection) return null
 
-  const db = app.db().getDataDB()
-  const row = db.prepare(`SELECT * FROM ${quoteIdentifier(`_r_${collection.id}`)} WHERE id = ?`).get(recordId) as any
+  const row = await app.db().queryOne<any>(`SELECT * FROM ${quoteIdentifier(`_r_${collection.id}`)} WHERE id = ?`, [recordId])
   if (!row) return null
 
   return new PBRecord(collection.id, collection.name, row)

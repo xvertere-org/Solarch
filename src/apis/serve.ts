@@ -1,5 +1,4 @@
 import express, { Express } from 'express'
-import cors from 'cors'
 import helmet from 'helmet'
 import { BaseApp } from '../core/base'
 import { registerAuthRoutes } from './record_auth'
@@ -17,9 +16,7 @@ import { registerInstallerRoutes } from './installer'
 import { registerAIRoutes } from './ai'
 import { registerAdminAuthRoutes } from './admin_auth'
 import { corsMiddleware } from './middlewares_cors'
-import { gzipMiddleware } from './middlewares_gzip'
 import { rateLimitMiddleware } from './middlewares_rate_limit'
-import { bodyLimitMiddleware } from './middlewares_body_limit'
 import { loadAuthToken } from './middlewares_auth'
 import { registerPasswordResetRoutes, registerVerificationRoutes, registerEmailChangeRoutes, registerImpersonateRoutes } from './auth_flows'
 import http from 'http'
@@ -68,13 +65,13 @@ export async function serve(app: BaseApp, port: number): Promise<http.Server> {
     res.setHeader('X-Content-Type-Options', 'nosniff')
     res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin')
     res.setHeader('Strict-Transport-Security', 'max-age=63072000; includeSubDomains')
+    res.setHeader('X-Solarch-Protocol', '1.0')
     next()
   })
 
   server.use(express.json({ limit: '10mb' }))
   server.use(express.urlencoded({ extended: true, limit: '10mb' }))
   server.use(rateLimitMiddleware(app))
-  server.use(bodyLimitMiddleware())
   server.use(loadAuthToken(app))
   const publicDir = path.join(process.cwd(), 'pb_public')
   if (fs.existsSync(publicDir)) {
@@ -107,9 +104,9 @@ export async function serve(app: BaseApp, port: number): Promise<http.Server> {
       res.sendFile(path.join(adminBuildDir, 'index.html'))
     })
   } else {
-    server.get('/_/', (req, res) => {
+    server.get('/_/', async (req, res) => {
       const installerUrl = `http://localhost:${port}/api/installer`
-      const hasAdmin = hasSuperuser(app)
+      const hasAdmin = await hasSuperuser(app)
       res.send(`
         <!DOCTYPE html>
         <html>

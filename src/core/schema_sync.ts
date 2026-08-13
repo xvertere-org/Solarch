@@ -22,10 +22,9 @@ export async function syncRecordTableSchema(
     return { changed: false, addedColumns: [], removedColumns: [], modifiedColumns: [] }
   }
 
-  const db = app.db().getDataDB()
   const tableName = `_r_${collection.id}`
   const quotedTable = quoteIdentifier(tableName)
-  const existingColumns = getExistingColumns(db, tableName)
+  const existingColumns = await app.db().tableInfo(tableName)
   const existingColumnNames = new Set(existingColumns.map(c => c.name))
   const expectedColumns = buildExpectedColumns(collection)
 
@@ -39,7 +38,7 @@ export async function syncRecordTableSchema(
   for (const [colName, colDef] of Object.entries(expectedColumns)) {
     if (!existingColumnNames.has(colName)) {
       try {
-        db.exec(`ALTER TABLE ${quotedTable} ADD COLUMN ${quoteIdentifier(colName)} ${colDef}`)
+        await app.db().execute(`ALTER TABLE ${quotedTable} ADD COLUMN ${quoteIdentifier(colName)} ${colDef}`)
         result.addedColumns.push(colName)
         result.changed = true
       } catch (err: any) {
@@ -65,25 +64,22 @@ export async function createRecordTable(app: BaseApp, collection: Collection): P
 
   if (!collection.isBase() && !collection.isAuth()) return
 
-  const db = app.db().getDataDB()
   const tableName = `_r_${collection.id}`
   const quotedTable = quoteIdentifier(tableName)
 
   const columns = buildExpectedColumns(collection)
   const columnDefs = Object.entries(columns).map(([name, def]) => `${quoteIdentifier(name)} ${def}`)
 
-  db.exec(`CREATE TABLE IF NOT EXISTS ${quotedTable} (${columnDefs.join(', ')})`)
+  await app.db().execute(`CREATE TABLE IF NOT EXISTS ${quotedTable} (${columnDefs.join(', ')})`)
 
   await syncIndexes(app, collection)
 }
 
 async function syncViewCollection(app: BaseApp, collection: Collection): Promise<SchemaSyncResult> {
-  const db = app.db().getDataDB()
   const viewName = `_r_${collection.id}`
-  const quotedView = quoteIdentifier(viewName)
 
   try {
-    db.exec(`DROP VIEW IF EXISTS ${quotedView}`)
+    await app.db().deleteView(viewName)
   } catch {
   }
 
@@ -99,17 +95,19 @@ async function syncViewCollection(app: BaseApp, collection: Collection): Promise
     }
 
     try {
-      const explainResult = db.prepare(`EXPLAIN ${query}`).all() as Array<{ opcode: string }>
-      const writeOpcodes = new Set([
-        'OpenWrite', 'CreateTable', 'CreateIndex', 'Delete', 'Insert', 'Update',
-        'BeginTransaction', 'CommitTransaction', 'RollbackTransaction',
-        'Savepoint', 'Release', 'AttachDatabase', 'DetachDatabase',
-        'CreateTrigger', 'DropTrigger', 'DropIndex', 'DropTable', 'DropView',
-      ])
-      for (const row of explainResult) {
-        if (writeOpcodes.has(row.opcode)) {
-          app.logger().error(`View query contains write opcodes for ${viewName}`, `opcode: ${row.opcode}`)
-          return { changed: false, addedColumns: [], removedColumns: [], modifiedColumns: [] }
+      if (app.db().getDriver().capabilities.explainOpcodes) {
+        const explainResult = await app.db().query<{ opcode: string }>(`EXPLAIN ${query}`)
+        const writeOpcodes = new Set([
+          'OpenWrite', 'CreateTable', 'CreateIndex', 'Delete', 'Insert', 'Update',
+          'BeginTransaction', 'CommitTransaction', 'RollbackTransaction',
+          'Savepoint', 'Release', 'AttachDatabase', 'DetachDatabase',
+          'CreateTrigger', 'DropTrigger', 'DropIndex', 'DropTable', 'DropView',
+        ])
+        for (const row of explainResult) {
+          if (writeOpcodes.has(row.opcode)) {
+            app.logger().error(`View query contains write opcodes for ${viewName}`, `opcode: ${row.opcode}`)
+            return { changed: false, addedColumns: [], removedColumns: [], modifiedColumns: [] }
+          }
         }
       }
     } catch (explainErr: any) {
@@ -119,35 +117,22 @@ async function syncViewCollection(app: BaseApp, collection: Collection): Promise
 
     const trimmed = query.trim().toLowerCase()
     if (!trimmed.startsWith('select')) {
-      app.logger().error(`Invalid view query: ${viewName}`, 'View query must start with SELECT')
+      app.logger().error(`View query rejected for ${viewName}`, 'View query must start with SELECT')
       return { changed: false, addedColumns: [], removedColumns: [], modifiedColumns: [] }
     }
 
     try {
-      validateIdentifier(viewName, 'view name')
-      db.exec(`CREATE VIEW ${quotedView} AS ${query}`)
+      await app.db().saveView(viewName, query)
     } catch (err: any) {
       app.logger().error(`Failed to create view ${viewName}`, err.message)
     }
   }
 
-  return { changed: false, addedColumns: [], removedColumns: [], modifiedColumns: [] }
-}
-
-function getExistingColumns(db: any, tableName: string): Array<{ name: string; type: string }> {
-  try {
-    return db.prepare(`PRAGMA table_info(${quoteIdentifier(tableName)})`).all() as Array<{ name: string; type: string }>
-  } catch {
-    return []
-  }
-}
-
-function isSystemColumn(name: string): boolean {
-  return ['id', 'created', 'updated', 'collectionId', 'collectionName'].includes(name)
+  return { changed: true, addedColumns: [], removedColumns: [], modifiedColumns: [] }
 }
 
 function buildExpectedColumns(collection: Collection): Record<string, string> {
-  const columns: Record<string, string> = {
+  const cols: Record<string, string> = {
     id: 'TEXT PRIMARY KEY',
     created: 'TEXT',
     updated: 'TEXT',
@@ -156,25 +141,26 @@ function buildExpectedColumns(collection: Collection): Record<string, string> {
   }
 
   if (collection.isAuth()) {
-    columns.email = 'TEXT UNIQUE'
-    columns.emailVisibility = 'INTEGER DEFAULT 1'
-    columns.passwordHash = 'TEXT'
-    columns.verified = 'INTEGER DEFAULT 0'
-    columns.lastResetSentAt = 'TEXT'
-    columns.lastVerificationSentAt = 'TEXT'
-    columns.username = 'TEXT'
-    columns.lastLoginAt = 'TEXT'
+    cols.email = 'TEXT UNIQUE'
+    cols.emailVisibility = 'INTEGER DEFAULT 1'
+    cols.passwordHash = 'TEXT'
+    cols.verified = 'INTEGER DEFAULT 0'
+    cols.lastResetSentAt = 'TEXT'
+    cols.lastVerificationSentAt = 'TEXT'
+    cols.lastLoginAt = 'TEXT'
   }
 
   for (const field of collection.fields) {
-    validateIdentifier(field.name, 'field name')
-    columns[field.name] = getSQLiteType(field)
+    cols[field.name] = fieldToSqlType(field)
   }
-
-  return columns
+  return cols
 }
 
-function getSQLiteType(field: Field): string {
+function isSystemColumn(name: string): boolean {
+  return ['id', 'created', 'updated', 'collectionId', 'collectionName', 'email', 'emailVisibility', 'passwordHash', 'verified', 'lastResetSentAt', 'lastVerificationSentAt', 'lastLoginAt'].includes(name)
+}
+
+function fieldToSqlType(field: Field): string {
   switch (field.type) {
     case 'number':
       return 'REAL'
@@ -208,11 +194,10 @@ function getSQLiteType(field: Field): string {
 }
 
 async function syncIndexes(app: BaseApp, collection: Collection): Promise<void> {
-  const db = app.db().getDataDB()
   const tableName = `_r_${collection.id}`
   const quotedTable = quoteIdentifier(tableName)
-  const existingIndexes = db.prepare(`PRAGMA index_list(${quotedTable})`).all() as Array<{ name: string }>
-  const existingIndexNames = new Set(existingIndexes.map(i => i.name))
+  const existingIndexes = await app.db().tableIndexes(tableName)
+  const existingIndexNames = new Set(Object.keys(existingIndexes))
   for (const indexDef of collection.indexes) {
     const indexName = `idx_${collection.id}_${createHash('md5').update(indexDef).digest('hex').slice(0, 8)}`
     if (!existingIndexNames.has(indexName)) {
@@ -235,7 +220,7 @@ async function syncIndexes(app: BaseApp, collection: Collection): Promise<void> 
           }
           return direction ? `${quoteIdentifier(fieldName)} ${direction}` : quoteIdentifier(fieldName)
         })
-        db.exec(`CREATE INDEX IF NOT EXISTS ${quoteIdentifier(indexName)} ON ${quotedTable} (${validatedFields.join(', ')})`)
+        await app.db().execute(`CREATE INDEX IF NOT EXISTS ${quoteIdentifier(indexName)} ON ${quotedTable} (${validatedFields.join(', ')})`)
       } catch (err: any) {
         app.logger().error(`Failed to create index ${indexName}: ${err.message}`)
       }

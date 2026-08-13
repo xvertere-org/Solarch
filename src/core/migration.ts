@@ -23,16 +23,14 @@ export class MigrationRunner {
       throw new Error('App must be bootstrapped before running migrations')
     }
 
-    const db = this.app.db().getDataDB()
-
-    db.exec(`
+    await this.app.db().execute(`
       CREATE TABLE IF NOT EXISTS _applied_migrations (
         id TEXT PRIMARY KEY,
         applied TEXT NOT NULL
       )
     `)
 
-    const applied = db.prepare('SELECT id FROM _applied_migrations').all() as Array<{ id: string }>
+    const applied = await this.app.db().query<{ id: string }>('SELECT id FROM _applied_migrations')
     const appliedIds = new Set(applied.map(a => a.id))
 
     for (const migration of this.migrations) {
@@ -42,7 +40,7 @@ export class MigrationRunner {
         await migration.up(this.app)
 
         const now = new Date().toISOString()
-        db.prepare('INSERT INTO _applied_migrations (id, applied) VALUES (?, ?)').run(migration.id, now)
+        await this.app.db().execute('INSERT INTO _applied_migrations (id, applied) VALUES (?, ?)', [migration.id, now])
 
         console.log(`Migration applied: ${migration.id}`)
       } catch (err) {
@@ -57,16 +55,14 @@ export class MigrationRunner {
       throw new Error('App must be bootstrapped before rolling back migrations')
     }
 
-    const db = this.app.db().getDataDB()
-
-    const applied = db.prepare('SELECT id FROM _applied_migrations ORDER BY applied DESC LIMIT ?').all(count) as Array<{ id: string }>
+    const applied = await this.app.db().query<{ id: string }>('SELECT id FROM _applied_migrations ORDER BY applied DESC LIMIT ?', [count])
 
     for (const { id } of applied) {
       const migration = this.migrations.find(m => m.id === id)
       if (migration && migration.down) {
         try {
           await migration.down(this.app)
-          db.prepare('DELETE FROM _applied_migrations WHERE id = ?').run(id)
+          await this.app.db().execute('DELETE FROM _applied_migrations WHERE id = ?', [id])
           console.log(`Migration rolled back: ${id}`)
         } catch (err) {
           console.error(`Migration rollback failed: ${id}`, err)
@@ -76,13 +72,12 @@ export class MigrationRunner {
     }
   }
 
-  status(): { id: string; applied: boolean; appliedAt?: string }[] {
+  async status(): Promise<{ id: string; applied: boolean; appliedAt?: string }[]> {
     if (!this.app.isBootstrapped()) {
       throw new Error('App must be bootstrapped before checking migration status')
     }
 
-    const db = this.app.db().getDataDB()
-    const appliedRows = db.prepare('SELECT id, applied FROM _applied_migrations').all() as Array<{ id: string; applied: string }>
+    const appliedRows = await this.app.db().query<{ id: string; applied: string }>('SELECT id, applied FROM _applied_migrations')
     const appliedMap = new Map(appliedRows.map(r => [r.id, r.applied]))
 
     return this.migrations.map(m => ({
@@ -96,10 +91,9 @@ export class MigrationRunner {
     return [...this.migrations]
   }
 
-  isApplied(id: string): boolean {
+  async isApplied(id: string): Promise<boolean> {
     if (!this.app.isBootstrapped()) return false
-    const db = this.app.db().getDataDB()
-    const row = db.prepare('SELECT id FROM _applied_migrations WHERE id = ?').get(id) as { id: string } | undefined
+    const row = await this.app.db().queryOne<{ id: string }>('SELECT id FROM _applied_migrations WHERE id = ?', [id])
     return !!row
   }
 }

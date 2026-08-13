@@ -9,6 +9,7 @@ import { OTP } from '../core/auth_models'
 import { createHash, createHmac, randomBytes, randomInt, timingSafeEqual } from 'crypto'
 import { recordFailedAttempt, isLockedOut, clearAttempts } from '../utils/lockout'
 import { quoteIdentifier } from '../utils/sql_safe'
+import { createApiError, normalizeDatabaseError } from '../utils/api_errors'
 
 const authRateLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
@@ -20,12 +21,11 @@ const authRateLimiter = rateLimit({
     const identity = req.body?.identity || 'unknown'
     return `${ip}:${identity}`
   },
-  message: { code: 429, message: 'Too many authentication attempts, please try again later.' },
+  message: createApiError(429, 'RATE_LIMITED', 'Too many authentication attempts, please try again later.'),
   handler: (req: Request, res: Response) => {
-    res.status(429).json({
-      code: 429,
-      message: 'Too many authentication attempts, please try again later.',
-    })
+    res.status(429).json(
+      createApiError(429, 'RATE_LIMITED', 'Too many authentication attempts, please try again later.')
+    )
   },
 })
 
@@ -38,12 +38,11 @@ const otpRateLimiter = rateLimit({
     const email = req.body?.email || req.ip || 'unknown'
     return email
   },
-  message: { code: 429, message: 'Too many OTP requests, please try again later.' },
+  message: createApiError(429, 'RATE_LIMITED', 'Too many OTP requests, please try again later.'),
   handler: (req: Request, res: Response) => {
-    res.status(429).json({
-      code: 429,
-      message: 'Too many OTP requests, please try again later.',
-    })
+    res.status(429).json(
+      createApiError(429, 'RATE_LIMITED', 'Too many OTP requests, please try again later.')
+    )
   },
 })
 const otpVerifyRateLimiter = rateLimit({
@@ -56,13 +55,11 @@ const otpVerifyRateLimiter = rateLimit({
     const ip = req.ip || req.socket.remoteAddress || 'unknown'
     return `${ip}:${otpId}`
   },
-  message: { code: 429, message: 'Too many OTP attempts, please try again later.' },
+  message: createApiError(429, 'RATE_LIMITED', 'Too many OTP attempts, please try again later.'),
   handler: (req: Request, res: Response) => {
-    res.status(429).json({
-      code: 429,
-      message: 'Too many OTP attempts, please try again later.',
-      data: { retryAfter: 60 },
-    })
+    res.status(429).json(
+      createApiError(429, 'RATE_LIMITED', 'Too many OTP attempts, please try again later.', { retryAfter: 60 })
+    )
   },
 })
 
@@ -85,20 +82,21 @@ export function registerAuthRoutes(app: BaseApp, router: Router): void {
         return res.status(429).json({ code: 429, message: 'Account temporarily locked. Try again later.' })
       }
 
-      const db = app.db().getDataDB()
-      const columns = db.prepare(`PRAGMA table_info(${quoteIdentifier(`_r_${collection.id}`)})`).all() as Array<{ name: string }>
-      const hasUsername = columns.some(c => c.name === 'username')
+      const columns = await app.db().tableColumns(`_r_${collection.id}`)
+      const hasUsername = columns.includes('username')
 
       let row: any
       const qt = quoteIdentifier(`_r_${collection.id}`)
       if (hasUsername) {
-        row = db.prepare(
-          `SELECT * FROM ${qt} WHERE email = ? OR username = ?`
-        ).get(identity, identity) as any
+        row = await app.db().queryOne<any>(
+          `SELECT * FROM ${qt} WHERE email = ? OR username = ?`,
+          [identity, identity]
+        )
       } else {
-        row = db.prepare(
-          `SELECT * FROM ${qt} WHERE email = ?`
-        ).get(identity) as any
+        row = await app.db().queryOne<any>(
+          `SELECT * FROM ${qt} WHERE email = ?`,
+          [identity]
+        )
       }
 
       if (!row) {
@@ -117,7 +115,7 @@ export function registerAuthRoutes(app: BaseApp, router: Router): void {
         return res.status(403).json({ code: 403, message: 'Email not verified.' })
       }
 
-      const mfaCheck = db.prepare(`SELECT id, method FROM _mfas WHERE recordRef = ? AND collectionId = ?`).get(row.id, collection.id) as any
+      const mfaCheck = await app.db().queryOne<any>(`SELECT id, method FROM _mfas WHERE recordRef = ? AND collectionId = ?`, [row.id, collection.id])
       if (mfaCheck) {
         const mfaToken = app.generateJWT(
           { id: row.id, type: 'mfa', collectionId: collection.id, mfaId: mfaCheck.id },
@@ -136,7 +134,7 @@ export function registerAuthRoutes(app: BaseApp, router: Router): void {
         app.getJwtSecret(),
         '720h'
       )
-      db.prepare(`UPDATE ${quoteIdentifier(`_r_${collection.id}`)} SET lastLoginAt = ? WHERE id = ?`).run(new Date().toISOString(), record.id)
+      await app.db().execute(`UPDATE ${qt} SET lastLoginAt = ? WHERE id = ?`, [new Date().toISOString(), record.id])
 
       res.json({ token, record: record.toJSON() })
     } catch (err: any) {
@@ -166,19 +164,18 @@ export function registerAuthRoutes(app: BaseApp, router: Router): void {
       if (redirectURL) {
         try {
           const parsed = new URL(redirectURL)
-          const appUrl = app.settings().appURL
-          if (!appUrl) {
-            return res.status(400).json({ code: 400, message: 'appURL is not configured. Set it in settings.' })
+          const appUrl = new URL(app.settings().appURL || 'http://localhost:8090')
+          let isAllowed = parsed.origin === appUrl.origin
+          if (!isAllowed) {
+            const allowedRedirects: string[] = (collection.authOptions as any)?.allowedRedirectURLs || []
+            isAllowed = allowedRedirects.some((pattern: string) => {
+              if (pattern.includes('*')) {
+                const regex = new RegExp('^' + pattern.replace(/\*/g, '.*') + '$')
+                return regex.test(redirectURL)
+              }
+              return pattern === redirectURL
+            })
           }
-          const allowedOrigins = [appUrl, appUrl.replace(/\/+$/, '')]
-          const isAllowed = allowedOrigins.some(ao => {
-            try {
-              const allowedUrl = new URL(ao)
-              return parsed.origin === allowedUrl.origin && parsed.protocol === allowedUrl.protocol
-            } catch {
-              return redirectURL.startsWith(ao)
-            }
-          })
           if (!isAllowed) {
             return res.status(400).json({ code: 400, message: 'Invalid redirect URL.' })
           }
@@ -187,33 +184,33 @@ export function registerAuthRoutes(app: BaseApp, router: Router): void {
         }
       }
 
-      const db = app.db().getDataDB()
-
       if (state) {
-        const stateRow = db.prepare(
-          `SELECT * FROM _oauth2States WHERE state = ? AND collectionId = ? AND expiresAt > ?`
-        ).get(state, collection.id, new Date().toISOString()) as any
+        const stateRow = await app.db().queryOne<any>(
+          `SELECT * FROM _oauth2States WHERE state = ? AND collectionId = ? AND expiresAt > ?`,
+          [state, collection.id, new Date().toISOString()]
+        )
         if (!stateRow) {
           return res.status(403).json({ code: 403, message: 'Invalid or expired OAuth2 state.' })
         }
-        db.prepare(`DELETE FROM _oauth2States WHERE state = ?`).run(state)
+        await app.db().execute(`DELETE FROM _oauth2States WHERE state = ?`, [state])
       }
       const { user: oauthUser } = await handleOAuth2Callback(app, provider, code, codeVerifier, redirectURL)
-      const existingAuth = db.prepare(
-        `SELECT * FROM _externalAuths WHERE provider = ? AND providerId = ?`
-      ).get(provider, oauthUser.id) as any
+      const existingAuth = await app.db().queryOne<any>(
+        `SELECT * FROM _externalAuths WHERE provider = ? AND providerId = ?`,
+        [provider, oauthUser.id]
+      )
 
       let record: PBRecord
 
       if (existingAuth) {
-        const row = db.prepare(`SELECT * FROM ${quoteIdentifier(`_r_${collection.id}`)} WHERE id = ?`).get(existingAuth.recordRef) as any
+        const row = await app.db().queryOne<any>(`SELECT * FROM ${quoteIdentifier(`_r_${collection.id}`)} WHERE id = ?`, [existingAuth.recordRef])
         if (!row) {
           return res.status(400).json({ code: 400, message: 'Associated record not found.' })
         }
         record = new PBRecord(collection.id, collection.name, row)
       } else {
         if (oauthUser.email) {
-          const existingRow = db.prepare(`SELECT * FROM ${quoteIdentifier(`_r_${collection.id}`)} WHERE email = ?`).get(oauthUser.email) as any
+          const existingRow = await app.db().queryOne<any>(`SELECT * FROM ${quoteIdentifier(`_r_${collection.id}`)} WHERE email = ?`, [oauthUser.email])
           if (existingRow) {
             record = new PBRecord(collection.id, collection.name, existingRow)
             await linkExternalAuth(app, record, provider, oauthUser.id)
@@ -272,15 +269,14 @@ export function registerAuthRoutes(app: BaseApp, router: Router): void {
         return res.status(400).json({ code: 400, message: 'Invalid collection.' })
       }
 
-      const db = app.db().getDataDB()
-      const otpRow = db.prepare(`SELECT * FROM _otps WHERE id = ? AND collectionId = ?`).get(otpId, collection.id) as any
+      const otpRow = await app.db().queryOne<any>(`SELECT * FROM _otps WHERE id = ? AND collectionId = ?`, [otpId, collection.id])
       if (!otpRow) {
         return res.status(400).json({ code: 400, message: 'Invalid or expired OTP.' })
       }
 
       const otp = new OTP(otpRow)
       if (otp.isExpired()) {
-        db.prepare(`DELETE FROM _otps WHERE id = ?`).run(otpId)
+        await app.db().execute(`DELETE FROM _otps WHERE id = ?`, [otpId])
         return res.status(400).json({ code: 400, message: 'OTP has expired.' })
       }
       const incomingHash = createHash('sha256').update(password).digest()
@@ -289,7 +285,7 @@ export function registerAuthRoutes(app: BaseApp, router: Router): void {
         return res.status(400).json({ code: 400, message: 'Invalid OTP password.' })
       }
 
-      const recordRow = db.prepare(`SELECT * FROM ${quoteIdentifier(`_r_${collection.id}`)} WHERE id = ?`).get(otp.recordRef) as any
+      const recordRow = await app.db().queryOne<any>(`SELECT * FROM ${quoteIdentifier(`_r_${collection.id}`)} WHERE id = ?`, [otp.recordRef])
       if (!recordRow) {
         return res.status(400).json({ code: 400, message: 'Associated record not found.' })
       }
@@ -300,8 +296,8 @@ export function registerAuthRoutes(app: BaseApp, router: Router): void {
         app.getJwtSecret(),
         '720h'
       )
-      db.prepare(`DELETE FROM _otps WHERE id = ?`).run(otpId)
-      db.prepare(`UPDATE ${quoteIdentifier(`_r_${collection.id}`)} SET lastLoginAt = ? WHERE id = ?`).run(new Date().toISOString(), record.id)
+      await app.db().execute(`DELETE FROM _otps WHERE id = ?`, [otpId])
+      await app.db().execute(`UPDATE ${quoteIdentifier(`_r_${collection.id}`)} SET lastLoginAt = ? WHERE id = ?`, [new Date().toISOString(), record.id])
 
       record.hide('passwordHash')
       record.hide('lastResetSentAt')
@@ -325,8 +321,7 @@ export function registerAuthRoutes(app: BaseApp, router: Router): void {
         return res.status(400).json({ code: 400, message: 'Invalid collection.' })
       }
 
-      const db = app.db().getDataDB()
-      const row = db.prepare(`SELECT * FROM ${quoteIdentifier(`_r_${collection.id}`)} WHERE email = ?`).get(email) as any
+      const row = await app.db().queryOne<any>(`SELECT * FROM ${quoteIdentifier(`_r_${collection.id}`)} WHERE email = ?`, [email])
       if (!row) {
         return res.json({ otpId: '' })
       }
@@ -338,11 +333,12 @@ export function registerAuthRoutes(app: BaseApp, router: Router): void {
       const expiresAt = new Date(Date.now() + 15 * 60 * 1000).toISOString()
       const requestIp = req.ip || req.socket.remoteAddress || 'unknown'
 
-      db.prepare(`DELETE FROM _otps WHERE recordRef = ? AND collectionId = ?`).run(record.id, collection.id)
+      await app.db().execute(`DELETE FROM _otps WHERE recordRef = ? AND collectionId = ?`, [record.id, collection.id])
       const otpHash = createHash('sha256').update(otpPassword).digest('hex')
-      db.prepare(
-        `INSERT INTO _otps (id, recordRef, collectionId, password, sentTo, created, updated, createdAt, expiresAt, requestIp) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-      ).run(otpId, record.id, collection.id, otpHash, email, now, now, now, expiresAt, requestIp)
+      await app.db().execute(
+        `INSERT INTO _otps (id, recordRef, collectionId, password, sentTo, created, updated, createdAt, expiresAt, requestIp) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [otpId, record.id, collection.id, otpHash, email, now, now, now, expiresAt, requestIp]
+      )
       const settings = app.settings()
       if (settings.smtp.host) {
         try {
@@ -371,7 +367,8 @@ export function registerAuthRoutes(app: BaseApp, router: Router): void {
         return res.status(400).json({ code: 400, message: 'Token is required.' })
       }
 
-      if (app.isTokenRevoked(token, 'refresh')) {
+      const isRevoked = await app.isTokenRevoked(token, 'refresh')
+      if (isRevoked) {
         return res.status(401).json({ code: 401, message: 'Token has been revoked.' })
       }
 
@@ -381,7 +378,7 @@ export function registerAuthRoutes(app: BaseApp, router: Router): void {
         return res.status(401).json({ code: 401, message: 'Invalid token.' })
       }
 
-      app.revokeToken(token, 'refresh', payload.id, 5)
+      await app.revokeToken(token, 'refresh', payload.id, 5)
 
       const newToken = app.generateJWT(
         { id: payload.id, type: 'auth', collectionId: payload.collectionId },
@@ -414,8 +411,7 @@ export function registerAuthRoutes(app: BaseApp, router: Router): void {
         return res.status(400).json({ code: 400, message: 'Invalid collection.' })
       }
 
-      const db = app.db().getDataDB()
-      const recordRow = db.prepare(`SELECT * FROM ${quoteIdentifier(`_r_${collection.id}`)} WHERE id = ?`).get(payload.id) as any
+      const recordRow = await app.db().queryOne<any>(`SELECT * FROM ${quoteIdentifier(`_r_${collection.id}`)} WHERE id = ?`, [payload.id])
       if (!recordRow) {
         return res.status(404).json({ code: 404, message: 'Record not found.' })
       }
@@ -423,13 +419,13 @@ export function registerAuthRoutes(app: BaseApp, router: Router): void {
       const secret = generateRandomString(32)
       const rawBackupCodes = Array.from({ length: 8 }, () => randomInt(10000000, 100000000).toString())
       const hashedBackupCodes = rawBackupCodes.map(c => createHash('sha256').update(c).digest('hex'))
-      const backupCodes = rawBackupCodes
 
       const now = new Date().toISOString()
       const mfaId = generateRandomString(16)
-      db.prepare(
-        `INSERT INTO _mfas (id, recordRef, collectionId, method, secret, backupCodes, created, updated, createdAt, expiresAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-      ).run(mfaId, payload.id, collection.id, 'totp', secret, JSON.stringify(hashedBackupCodes), now, now, now, new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString())
+      await app.db().execute(
+        `INSERT INTO _mfas (id, recordRef, collectionId, method, secret, backupCodes, created, updated, createdAt, expiresAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [mfaId, payload.id, collection.id, 'totp', secret, JSON.stringify(hashedBackupCodes), now, now, now, new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString()]
+      )
 
       res.json({
         secret,
@@ -461,8 +457,7 @@ export function registerAuthRoutes(app: BaseApp, router: Router): void {
         return res.status(400).json({ code: 400, message: 'Invalid collection.' })
       }
 
-      const db = app.db().getDataDB()
-      const mfaRow = db.prepare(`SELECT * FROM _mfas WHERE recordRef = ? AND collectionId = ? AND method = 'totp'`).get(payload.id, collection.id) as any
+      const mfaRow = await app.db().queryOne<any>(`SELECT * FROM _mfas WHERE recordRef = ? AND collectionId = ? AND method = 'totp'`, [payload.id, collection.id])
       if (!mfaRow) {
         return res.status(400).json({ code: 400, message: 'MFA not set up.' })
       }
@@ -473,7 +468,7 @@ export function registerAuthRoutes(app: BaseApp, router: Router): void {
       }
 
       if (payload.type === 'mfa') {
-        const recordRow = db.prepare(`SELECT * FROM ${quoteIdentifier(`_r_${collection.id}`)} WHERE id = ?`).get(payload.id) as any
+        const recordRow = await app.db().queryOne<any>(`SELECT * FROM ${quoteIdentifier(`_r_${collection.id}`)} WHERE id = ?`, [payload.id])
         if (!recordRow) {
           return res.status(404).json({ code: 404, message: 'Record not found.' })
         }
@@ -486,7 +481,7 @@ export function registerAuthRoutes(app: BaseApp, router: Router): void {
           app.getJwtSecret(),
           '720h'
         )
-        db.prepare(`UPDATE ${quoteIdentifier(`_r_${collection.id}`)} SET lastLoginAt = ? WHERE id = ?`).run(new Date().toISOString(), payload.id)
+        await app.db().execute(`UPDATE ${quoteIdentifier(`_r_${collection.id}`)} SET lastLoginAt = ? WHERE id = ?`, [new Date().toISOString(), payload.id])
         return res.json({ verified: true, token: authToken, record: record.toJSON() })
       }
 
@@ -540,12 +535,12 @@ export function registerAuthRoutes(app: BaseApp, router: Router): void {
         return res.status(401).json({ code: 401, message: 'Invalid token.' })
       }
 
-      const db = app.db().getDataDB()
-      const rows = db.prepare(
-        `SELECT * FROM _externalAuths WHERE recordRef = ? AND collectionId = ?`
-      ).all(payload.id, collection.id) as any[]
+      const rows = await app.db().query(
+        `SELECT * FROM _externalAuths WHERE recordRef = ? AND collectionId = ?`,
+        [payload.id, collection.id]
+      )
 
-      res.json(rows.map(r => ({
+      res.json(rows.map((r: any) => ({
         id: r.id,
         recordRef: r.recordRef,
         collectionId: r.collectionId,

@@ -52,20 +52,17 @@ export function registerAdminAuthRoutes(app: BaseApp, router: Router): void {
         return res.status(400).json({ code: 400, message: 'Missing identity or password.' })
       }
 
-
       if (isLockedOut(`admin:${identity.toLowerCase()}`)) {
         return res.status(429).json({ code: 429, message: 'Account temporarily locked. Try again later.' })
       }
 
-      const db = app.db().getDataDB()
-      const hasTable = db.prepare(`SELECT COUNT(*) as count FROM sqlite_master WHERE type='table' AND name='_superusers'`).get() as { count: number }
-      if (hasTable.count === 0) {
+      const tableExists = await app.db().hasTable('_superusers')
+      if (!tableExists) {
         recordFailedAttempt(`admin:${identity.toLowerCase()}`)
         return res.status(400).json({ code: 400, message: 'Invalid credentials.' })
       }
 
-      const row = db.prepare(`SELECT * FROM _superusers WHERE email = ?`).get(identity) as any
-
+      const row = await app.db().queryOne<any>(`SELECT * FROM _superusers WHERE email = ?`, [identity])
 
       if (!row) {
         recordFailedAttempt(`admin:${identity.toLowerCase()}`)
@@ -93,17 +90,16 @@ export function registerAdminAuthRoutes(app: BaseApp, router: Router): void {
     }
   })
 
-
   router.post('/api/admins/refresh', adminAuthRateLimiter, async (req: Request, res: Response) => {
     try {
       const authHeader = req.headers.authorization
-      if (!authHeader) {
-        return res.status(401).json({ code: 401, message: 'Missing authorization header.' })
+      if (!authHeader || !authHeader.startsWith('Bearer ')) {
+        return res.status(401).json({ code: 401, message: 'Missing token.' })
       }
 
-      const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : authHeader
+      const token = authHeader.slice(7)
 
-      if (app.isTokenRevoked(token, 'admin_refresh')) {
+      if (await app.isTokenRevoked(token, 'admin_refresh')) {
         return res.status(401).json({ code: 401, message: 'Token has been revoked.' })
       }
 
@@ -113,10 +109,9 @@ export function registerAdminAuthRoutes(app: BaseApp, router: Router): void {
         return res.status(401).json({ code: 401, message: 'Invalid or expired token.' })
       }
 
-      app.revokeToken(token, 'admin_refresh', payload.id, 5)
+      await app.revokeToken(token, 'admin_refresh', payload.id, 5)
 
-      const db = app.db().getDataDB()
-      const row = db.prepare(`SELECT * FROM _superusers WHERE id = ?`).get(payload.id) as any
+      const row = await app.db().queryOne<any>(`SELECT * FROM _superusers WHERE id = ?`, [payload.id])
       if (!row) {
         return res.status(401).json({ code: 401, message: 'Admin not found.' })
       }
@@ -141,18 +136,17 @@ export function registerAdminAuthRoutes(app: BaseApp, router: Router): void {
         return res.status(400).json({ code: 400, message: 'Missing email.' })
       }
 
-      const db = app.db().getDataDB()
-      const hasTable = db.prepare(`SELECT COUNT(*) as count FROM sqlite_master WHERE type='table' AND name='_superusers'`).get() as { count: number }
-      if (hasTable.count === 0) {
+      const tableExists = await app.db().hasTable('_superusers')
+      if (!tableExists) {
         return res.status(204).send()
       }
 
-      const row = db.prepare(`SELECT * FROM _superusers WHERE email = ?`).get(email) as any
+      const row = await app.db().queryOne<any>(`SELECT * FROM _superusers WHERE email = ?`, [email])
       if (!row) {
         return res.status(204).send()
       }
 
-      const token = app.createPasswordResetToken(row.id, 'admin', 1)
+      const token = await app.createPasswordResetToken(row.id, 'admin', 1)
       try {
         const settings = app.settings()
         if (settings.smtp.host) {
@@ -175,7 +169,6 @@ export function registerAdminAuthRoutes(app: BaseApp, router: Router): void {
     }
   })
 
-  // FIXED[H-1]: Added rate limiting to admin password reset confirmation
   router.post('/api/admins/confirm-password-reset', adminResetRateLimiter, async (req: Request, res: Response) => {
     try {
       const { token, password, passwordConfirm } = req.body
@@ -189,24 +182,24 @@ export function registerAdminAuthRoutes(app: BaseApp, router: Router): void {
         return res.status(400).json({ code: 400, message: 'Password must be at least 10 characters.' })
       }
 
-      if (!app.isPasswordResetTokenValid(token, 'admin')) {
+      const validToken = await app.isPasswordResetTokenValid(token, 'admin')
+      if (!validToken) {
         return res.status(400).json({ code: 400, message: 'Invalid or expired token.' })
       }
 
-      const revoked = app.revokePasswordResetToken(token, 'admin')
-      if (!revoked) {
+      const tokenData = await app.getPasswordResetTokenData(token, 'admin')
+      const revoked = await app.revokePasswordResetToken(token, 'admin')
+      if (!revoked || !tokenData) {
         return res.status(400).json({ code: 400, message: 'Token has already been used.' })
       }
 
-      const row = app.db().getDataDB().prepare(`SELECT * FROM _superusers WHERE id = (SELECT userId FROM _passwordResetTokens WHERE tokenHash = ? AND type = ?)`).get(
-        require('crypto').createHash('sha256').update(token).digest('hex'), 'admin'
-      ) as any
+      const row = await app.db().queryOne<any>(`SELECT * FROM _superusers WHERE id = ?`, [tokenData.userId])
       if (!row) {
         return res.status(400).json({ code: 400, message: 'Invalid token.' })
       }
 
       const passwordHash = await hashPasswordAsync(password)
-      app.db().getDataDB().prepare(`UPDATE _superusers SET passwordHash = ? WHERE id = ?`).run(passwordHash, row.id)
+      await app.db().execute(`UPDATE _superusers SET passwordHash = ? WHERE id = ?`, [passwordHash, row.id])
 
       res.json({ code: 200, message: 'Password reset successfully.' })
     } catch (err: any) {

@@ -21,8 +21,8 @@ export async function createStreamingBackup(app: BaseApp, outputPath: string): P
 
   try {
     try {
-      app.db().getDataDB().exec('PRAGMA wal_checkpoint(TRUNCATE)')
-      app.db().getAuxDB().exec('PRAGMA wal_checkpoint(TRUNCATE)')
+      await app.db().checkpoint('data')
+      await app.db().checkpoint('aux')
     } catch {
     }
 
@@ -36,13 +36,13 @@ export async function createStreamingBackup(app: BaseApp, outputPath: string): P
         const destPath = path.join(tempDir, dbFile)
         if (dbFile === 'data.db') {
           try {
-            await app.db().getDataDB().backup(destPath)
+            await app.db().backupToFile(destPath, 'data')
           } catch {
             await streamCopyFile(srcPath, destPath)
           }
         } else if (dbFile === 'auxiliary.db') {
           try {
-            await app.db().getAuxDB().backup(destPath)
+            await app.db().backupToFile(destPath, 'aux')
           } catch {
             await streamCopyFile(srcPath, destPath)
           }
@@ -88,8 +88,11 @@ export async function restoreStreamingBackup(app: BaseApp, backupPath: string): 
   _backupInProgress = true
 
   try {
-    app.db().getDataDB().exec('PRAGMA wal_checkpoint(TRUNCATE)')
-    app.db().getAuxDB().exec('PRAGMA wal_checkpoint(TRUNCATE)')
+    try {
+      await app.db().checkpoint('data')
+      await app.db().checkpoint('aux')
+    } catch {
+    }
     app.resetBootstrapState()
     const restoreDir = path.join(app.dataDir, '.restore_temp')
     if (await fileExists(restoreDir)) {
@@ -99,24 +102,21 @@ export async function restoreStreamingBackup(app: BaseApp, backupPath: string): 
 
     try {
       const unzipper = require('unzipper')
-      const zipStream = createReadStream(backupPath).pipe(unzipper.Parse())
-      for await (const entry of zipStream) {
-        const entryPath = entry.path as string
-        const targetFile = path.join(restoreDir, entryPath)
+      const zip = await unzipper.Open.file(backupPath)
+      for (const file of zip.files) {
+        const targetFile = path.join(restoreDir, file.path)
 
         const resolved = path.resolve(targetFile)
         const base = path.resolve(restoreDir)
         if (!resolved.startsWith(base + path.sep) && resolved !== base) {
-          entry.autodrain()
           continue
         }
 
-        if (entry.type === 'Directory') {
+        if (file.type === 'Directory') {
           await fsPromises.mkdir(targetFile, { recursive: true })
-          entry.autodrain()
         } else {
           await fsPromises.mkdir(path.dirname(targetFile), { recursive: true })
-          await pipeline(entry, createWriteStream(targetFile))
+          await pipeline(file.stream(), createWriteStream(targetFile))
         }
       }
     } catch {

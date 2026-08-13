@@ -200,45 +200,6 @@ export class RecordFieldResolver {
     const fieldName = parts[0]
     if (this.hiddenFields.has(fieldName)) return undefined
 
-    const backRelMatch = fieldName.match(/^(.+?)_via_(.+)$/)
-    if (backRelMatch && this.app) {
-      const targetCollectionName = backRelMatch[1]
-      const relationFieldName = backRelMatch[2]
-      const targetCollection = this.app.findCachedCollectionByNameOrId(targetCollectionName)
-      if (targetCollection) {
-        const targetField = targetCollection.fields.find(f => f.name === relationFieldName)
-        if (!targetField || targetField.type !== 'relation') {
-          return []
-        }
-        validateIdentifier(relationFieldName, `back-relation field "${relationFieldName}"`)
-        try {
-          const db = this.app.db().getDataDB()
-          const qt = quoteIdentifier(`_r_${targetCollection.id}`)
-          const qf = quoteIdentifier(relationFieldName)
-          const rows = db.prepare(
-            `SELECT * FROM ${qt} WHERE json_extract(${qf}, '$') = ? OR ${qf} LIKE ? OR ${qf} LIKE ? OR ${qf} LIKE ? LIMIT 1000`
-          ).all(
-            `"${this.record.id}"`,
-            `%"${this.record.id}"%`,
-            `${this.record.id}`,
-            `%,${this.record.id},%`
-          ) as any[]
-          return rows.map(row => new PBRecord(targetCollection.id, targetCollection.name, row))
-        } catch {
-          try {
-            const db = this.app.db().getDataDB()
-            const qt = quoteIdentifier(`_r_${targetCollection.id}`)
-            const qf = quoteIdentifier(relationFieldName)
-            const rows = db.prepare(`SELECT * FROM ${qt} WHERE ${qf} = ? LIMIT 1000`).all(this.record.id) as any[]
-            return rows.map(row => new PBRecord(targetCollection.id, targetCollection.name, row))
-          } catch {
-            return []
-          }
-        }
-      }
-      return []
-    }
-
     const value = this.record.get(fieldName)
     if (parts.length === 1) return value
 

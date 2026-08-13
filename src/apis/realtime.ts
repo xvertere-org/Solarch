@@ -40,7 +40,7 @@ export function registerRealtimeRoutes(app: BaseApp, router: Router): void {
         sseClients.delete(clientId)
       })
 
-      client.send(JSON.stringify({ type: 'connected', clientId }))
+      client.send(JSON.stringify({ type: 'connected', clientId, protocolVersion: '1.0' }))
     } else {
       res.json({
         code: 200,
@@ -137,7 +137,7 @@ async function canSubscribeToChannel(
 }
 
 export function setupWebSocketRealtime(wss: any, app?: BaseApp): void {
-  wss.on('connection', (ws: WebSocket, req?: any) => {
+  wss.on('connection', async (ws: WebSocket, req?: any) => {
     const clientId = generateClientId()
     const client: Client = {
       id: clientId,
@@ -173,10 +173,9 @@ export function setupWebSocketRealtime(wss: any, app?: BaseApp): void {
             if (payload.type === 'admin' && payload.id) {
               isAdmin = true
             } else if (payload.type === 'auth' && payload.id) {
-              const db = app.db().getDataDB()
               const collection = app.findCachedCollectionByNameOrId(payload.collectionId)
               if (collection) {
-                const row = db.prepare(`SELECT * FROM ${quoteIdentifier(`_r_${collection.id}`)} WHERE id = ?`).get(payload.id) as any
+                const row = await app.db().queryOne<any>(`SELECT * FROM ${quoteIdentifier(`_r_${collection.id}`)} WHERE id = ?`, [payload.id])
                 if (row) {
                   authRecord = new PBRecord(collection.id, collection.name, row)
                 }
@@ -190,7 +189,7 @@ export function setupWebSocketRealtime(wss: any, app?: BaseApp): void {
 
     broker.addClient(client)
 
-    ws.send(JSON.stringify({ type: 'connected', clientId, authenticated: !!(authRecord || isAdmin) }))
+    ws.send(JSON.stringify({ type: 'connected', clientId, protocolVersion: '1.0', authenticated: !!(authRecord || isAdmin) }))
 
     ws.on('message', (data) => {
       try {

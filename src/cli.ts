@@ -23,30 +23,46 @@ program
 program
   .option('--dev', 'enable dev mode')
   .option('--dir <path>', 'data directory', './pb_data')
+  .option('--data-dir <path>', 'data directory alias')
+  .option('--db <provider>', 'database provider (sqlite | postgres)')
+  .option('--db-url <url>', 'database connection URL')
+  .option('--database-url <url>', 'database connection URL alias')
+  .option('--db-driver <driver>', 'database driver (postgres | neon)')
+  .option('--db-mode <mode>', 'database mode (tcp | http | websocket)')
+  .option('--query-timeout <seconds>', 'query timeout in seconds', '30')
+  .option('--queryTimeout <seconds>', 'query timeout alias')
   .option('--encryptionEnv <env>', 'encryption environment variable')
-  .option('--queryTimeout <seconds>', 'query timeout in seconds', '30')
+
+function getCliOptions(cmdOpts: any = {}): any {
+  const root = program.opts()
+  return {
+    defaultDev: cmdOpts.dev ?? root.dev ?? false,
+    defaultDataDir: cmdOpts.dir ?? cmdOpts.dataDir ?? root.dir ?? root.dataDir ?? './pb_data',
+    dbProvider: cmdOpts.db ?? root.db,
+    connectionString: cmdOpts.dbUrl ?? cmdOpts.databaseUrl ?? root.dbUrl ?? root.databaseUrl,
+    dbDriver: cmdOpts.dbDriver ?? root.dbDriver,
+    dbMode: cmdOpts.dbMode ?? root.dbMode,
+    defaultQueryTimeout: parseInt(cmdOpts.queryTimeout ?? root.queryTimeout ?? cmdOpts.queryTimeout ?? root.queryTimeout ?? '30', 10),
+    defaultEncryptionEnv: cmdOpts.encryptionEnv ?? root.encryptionEnv,
+  }
+}
 
 program
   .command('serve')
   .description('start the server')
   .option('--port <number>', 'port number', '8090')
   .option('--hideStartBanner', 'hide start banner')
+  .option('--db <provider>', 'database provider (sqlite | postgres)')
+  .option('--db-url <url>', 'database connection URL')
+  .option('--database-url <url>', 'database connection URL alias')
+  .option('--db-driver <driver>', 'database driver (postgres | neon)')
+  .option('--db-mode <mode>', 'database mode (tcp | http | websocket)')
+  .option('--dir <path>', 'data directory')
   .action(async (opts) => {
-    const dev = program.opts().dev ?? false
-    const dataDir = program.opts().dir ?? './pb_data'
-    const encryptionEnv =
-      program.opts().encryptionEnv ||
-      process.env.SETTINGS_ENCRYPTION_KEY
-    const queryTimeout = parseInt(program.opts().queryTimeout, 10)
+    const config = getCliOptions(opts)
+    config.hideStartBanner = opts.hideStartBanner
 
-    const app = new Solarch({
-      hideStartBanner: opts.hideStartBanner,
-      defaultDev: dev,
-      defaultDataDir: dataDir,
-      defaultEncryptionEnv: encryptionEnv,
-      defaultQueryTimeout: queryTimeout,
-    })
-
+    const app = new Solarch(config)
     await app.start(parseInt(opts.port, 10))
   })
 
@@ -55,13 +71,19 @@ program
   .description('create superuser account')
   .option('--email <email>', 'superuser email')
   .option('--password <password>', 'superuser password')
-  .option('--dir <path>', 'data directory', './pb_data')
+  .option('--dir <path>', 'data directory')
+  .option('--db <provider>', 'database provider (sqlite | postgres)')
+  .option('--db-url <url>', 'database connection URL')
+  .option('--database-url <url>', 'database connection URL alias')
+  .option('--db-driver <driver>', 'database driver (postgres | neon)')
+  .option('--db-mode <mode>', 'database mode (tcp | http | websocket)')
   .action(async (opts) => {
     const { createSuperuser } = await import('./cmd/superuser.js')
+    const config = getCliOptions(opts)
     await createSuperuser({
+      ...config,
       email: opts.email,
       password: opts.password,
-      dataDir: opts.dir,
     })
   })
 
@@ -71,13 +93,19 @@ program
   .description('create superuser account (shorthand: solarch superuser create EMAIL PASS)')
   .argument('[email]', 'superuser email')
   .argument('[password]', 'superuser password')
-  .option('--dir <path>', 'data directory', './pb_data')
+  .option('--dir <path>', 'data directory')
+  .option('--db <provider>', 'database provider (sqlite | postgres)')
+  .option('--db-url <url>', 'database connection URL')
+  .option('--database-url <url>', 'database connection URL alias')
+  .option('--db-driver <driver>', 'database driver (postgres | neon)')
+  .option('--db-mode <mode>', 'database mode (tcp | http | websocket)')
   .action(async (email, password, opts) => {
     const { createSuperuser } = await import('./cmd/superuser.js')
+    const config = getCliOptions(opts)
     await createSuperuser({
+      ...config,
       email,
       password,
-      dataDir: opts.dir,
     })
   })
 
@@ -88,13 +116,16 @@ const migrate = program
 migrate
   .command('up')
   .description('run pending migrations')
-  .option('--dir <path>', 'data directory', './pb_data')
+  .option('--dir <path>', 'data directory')
+  .option('--db <provider>', 'database provider (sqlite | postgres)')
+  .option('--db-url <url>', 'database connection URL')
+  .option('--database-url <url>', 'database connection URL alias')
+  .option('--db-driver <driver>', 'database driver (postgres | neon)')
+  .option('--db-mode <mode>', 'database mode (tcp | http | websocket)')
   .action(async (opts) => {
     const { Solarch } = await import('./solarch.js')
-    const app = new Solarch({
-      defaultDev: false,
-      defaultDataDir: opts.dir,
-    })
+    const config = getCliOptions(opts)
+    const app = new Solarch(config)
     await app.bootstrap()
     await app.migrate()
     console.log('Migrations completed.')
@@ -105,13 +136,16 @@ migrate
   .command('down')
   .description('rollback migrations')
   .argument('[count]', 'number of migrations to rollback', '1')
-  .option('--dir <path>', 'data directory', './pb_data')
+  .option('--dir <path>', 'data directory')
+  .option('--db <provider>', 'database provider (sqlite | postgres)')
+  .option('--db-url <url>', 'database connection URL')
+  .option('--database-url <url>', 'database connection URL alias')
+  .option('--db-driver <driver>', 'database driver (postgres | neon)')
+  .option('--db-mode <mode>', 'database mode (tcp | http | websocket)')
   .action(async (count, opts) => {
     const { Solarch } = await import('./solarch.js')
-    const app = new Solarch({
-      defaultDev: false,
-      defaultDataDir: opts.dir,
-    })
+    const config = getCliOptions(opts)
+    const app = new Solarch(config)
     await app.bootstrap()
     await app.migrateDown(parseInt(count, 10))
     console.log(`Rolled back ${count} migration(s).`)
@@ -121,15 +155,18 @@ migrate
 migrate
   .command('status')
   .description('show migration status')
-  .option('--dir <path>', 'data directory', './pb_data')
+  .option('--dir <path>', 'data directory')
+  .option('--db <provider>', 'database provider (sqlite | postgres)')
+  .option('--db-url <url>', 'database connection URL')
+  .option('--database-url <url>', 'database connection URL alias')
+  .option('--db-driver <driver>', 'database driver (postgres | neon)')
+  .option('--db-mode <mode>', 'database mode (tcp | http | websocket)')
   .action(async (opts) => {
     const { Solarch } = await import('./solarch.js')
-    const app = new Solarch({
-      defaultDev: false,
-      defaultDataDir: opts.dir,
-    })
+    const config = getCliOptions(opts)
+    const app = new Solarch(config)
     await app.bootstrap()
-    const status = app.migrationStatus()
+    const status = await app.migrationStatus()
     console.table(status)
     process.exit(0)
   })
@@ -154,13 +191,13 @@ migrate
 
     const template = `module.exports = {
   async up(app) {
-    const db = app.db().getDataDB()
     // Add your migration here
+    // e.g. await app.db().execute("...")
   },
 
   async down(app) {
-    const db = app.db().getDataDB()
     // Add rollback logic here
+    // e.g. await app.db().execute("...")
   }
 }
 `

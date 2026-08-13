@@ -22,7 +22,7 @@ Solarch can be configured via environment variables, constructor options, and pr
 | `JSVM_MAX_MEMORY_MB` | integer | `64` (16 - 512) | Maximum memory in megabytes allocated per Deno worker process. | [src/tools/jsvm/deno_sandbox.ts:L102](../../src/tools/jsvm/deno_sandbox.ts#L102) |
 | `CORS_ALLOWED_ORIGINS` | string (CSV) | `""` | Comma-separated list of permitted origin domains for Cross-Origin Resource Sharing. | [src/apis/middlewares_cors.ts:L5](../../src/apis/middlewares_cors.ts#L5) |
 | `NODE_ENV` | string | `"development"` | Application runtime environment (`development` / `production`). Controls stack trace output. | [src/apis/middlewares_cors.ts:L12](../../src/apis/middlewares_cors.ts#L12) |
-| `DATABASE_URL` | string | `""` | Connection URL for PostgreSQL databases when configured in multi-database mode. | [src/cli.ts:L222](../../src/cli.ts#L222) |
+| `DATABASE_URL` | string | `""` | PostgreSQL connection string. When set, Solarch runs on PostgreSQL instead of SQLite (`postgres://user:pass@host:5432/db`). For Neon, a pooled serverless URL works with the default `postgres` driver; select the Neon HTTP/websocket driver via `dbDriver`/`dbMode`. | [src/solarch.ts:L37](../../src/solarch.ts#L37) |
 
 ---
 
@@ -39,6 +39,10 @@ export interface SolarchConfig {
   dataMaxIdleConns?: number       // Maximum idle connections to data.db
   auxMaxOpenConns?: number        // Maximum open connections to aux.db
   auxMaxIdleConns?: number        // Maximum idle connections to aux.db
+  dbProvider?: 'sqlite' | 'postgres'   // Database provider (default: sqlite unless DATABASE_URL is set)
+  connectionString?: string       // PostgreSQL connection string (defaults to DATABASE_URL env)
+  dbDriver?: 'postgres' | 'neon'  // Client strategy: standard pg pool, or Neon serverless (default: postgres)
+  dbMode?: 'tcp' | 'http' | 'websocket' // Connection mode; neon driver requires http or websocket
 }
 ```
 
@@ -66,3 +70,5 @@ export default {
   },
 }
 ```
+
+> Note: when `database.type` is `'postgres'`, the runtime reads the connection string from the `DATABASE_URL` environment variable (written to `.env` by `solarch init`). Constructor options `dbProvider`, `connectionString`, `dbDriver`, and `dbMode` (Section 2) override or supplement env-based resolution.

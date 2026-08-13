@@ -1,11 +1,14 @@
 import { BaseApp } from '../core/base'
+import { Solarch } from '../solarch'
+import { SolarchConfigInput } from '../core/config_types'
 import { hashPassword } from '../tools/security/crypto'
 import { randomBytes } from 'crypto'
 
-interface SuperuserOptions {
+export interface SuperuserOptions extends SolarchConfigInput {
   email?: string
   password?: string
-  dataDir: string
+  app?: BaseApp
+  exitOnComplete?: boolean
 }
 
 // FIXED[M-4]: Mask password input with * characters
@@ -65,17 +68,18 @@ export async function createSuperuser(opts: SuperuserOptions): Promise<void> {
 
     rl.close()
 
-    const app = new BaseApp({
-      isDev: false,
-      dataDir: opts.dataDir,
+    const app = opts.app ?? new Solarch({
+      defaultDev: false,
+      defaultDataDir: opts.dataDir ?? opts.defaultDataDir,
+      dbProvider: opts.dbProvider ?? opts.provider,
+      connectionString: opts.connectionString ?? opts.dbUrl ?? opts.databaseUrl,
+      dbDriver: opts.dbDriver ?? opts.driver,
+      dbMode: opts.dbMode ?? opts.mode,
     })
 
     await app.bootstrap()
-    await app.runSystemMigrations()
 
-    const db = app.db().getDataDB()
-
-    db.exec(`
+    await app.db().execute(`
       CREATE TABLE IF NOT EXISTS _superusers (
         id TEXT PRIMARY KEY,
         email TEXT UNIQUE NOT NULL,
@@ -90,26 +94,32 @@ export async function createSuperuser(opts: SuperuserOptions): Promise<void> {
     const id = `su_${randomBytes(8).toString('hex')}`
     const now = new Date().toISOString()
 
-    db.prepare(
-      `INSERT OR REPLACE INTO _superusers (id, email, passwordHash, created, updated) VALUES (?, ?, ?, ?, ?)`
-    ).run(id, email!, passwordHash, now, now)
+    await app.db().execute(`DELETE FROM _superusers WHERE email = ?`, [email!])
+    await app.db().execute(
+      `INSERT INTO _superusers (id, email, passwordHash, created, updated) VALUES (?, ?, ?, ?, ?)`,
+      [id, email!, passwordHash, now, now]
+    )
 
     console.log(`Superuser ${email} created successfully.`)
-    process.exit(0)
+    if (opts.exitOnComplete ?? !opts.app) {
+      process.exit(0)
+    }
   } catch (err: any) {
     rl.close()
-    console.error('Error creating superuser:', err.message)
-    process.exit(1)
+    if (opts.exitOnComplete ?? !opts.app) {
+      console.error('Error creating superuser:', err.message)
+      process.exit(1)
+    }
+    throw err
   }
 }
 
-export function hasSuperuser(app: BaseApp): boolean {
+export async function hasSuperuser(app: BaseApp): Promise<boolean> {
   try {
-    const db = app.db().getDataDB()
-    const hasTable = db.prepare(`SELECT COUNT(*) as count FROM sqlite_master WHERE type='table' AND name='_superusers'`).get() as { count: number }
-    if (hasTable.count === 0) return false
-    const row = db.prepare(`SELECT COUNT(*) as count FROM _superusers`).get() as { count: number }
-    return row.count > 0
+    const tableExists = await app.db().hasTable('_superusers')
+    if (!tableExists) return false
+    const row = await app.db().queryOne<{ count: number }>(`SELECT COUNT(*) as count FROM _superusers`)
+    return (row?.count ?? 0) > 0
   } catch {
     return false
   }

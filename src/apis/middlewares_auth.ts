@@ -51,16 +51,15 @@ async function authenticateRecord(
   }
 }
 
-function authenticateAdmin(
+async function authenticateAdmin(
   app: BaseApp,
   adminId: string
-): boolean {
+): Promise<boolean> {
   try {
-    const db = app.db().getDataDB()
+    const tableExists = await app.db().hasTable('_superusers')
+    if (!tableExists) return false
 
-    const row = db
-      .prepare(`SELECT id FROM _superusers WHERE id = ?`)
-      .get(adminId)
+    const row = await app.db().queryOne<{ id: string }>(`SELECT id FROM _superusers WHERE id = ?`, [adminId])
 
     return !!row
   } catch {
@@ -68,6 +67,7 @@ function authenticateAdmin(
     return false
   }
 }
+
 export function loadAuthToken(app: BaseApp) {
   return async (req: Request, res: Response, next: NextFunction) => {
     const token = extractBearerToken(req.headers.authorization)
@@ -102,7 +102,7 @@ export function loadAuthToken(app: BaseApp) {
     }
 
     if (payload.type === 'admin' && payload.id) {
-      if (authenticateAdmin(app, payload.id)) {
+      if (await authenticateAdmin(app, payload.id)) {
         setAuthContext(req, null, true, token)
         return next()
       }

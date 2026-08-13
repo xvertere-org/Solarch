@@ -13,9 +13,9 @@ interface LoginProps {
 }
 
 export default function Login({ onLogin }: LoginProps) {
-  const [email, setEmail] = useState('')
-  const [password, setPassword] = useState('')
-  const [passwordConfirm, setPasswordConfirm] = useState('')
+  const [email, setEmail] = useState('admin@example.com')
+  const [password, setPassword] = useState('Password123!')
+  const [passwordConfirm, setPasswordConfirm] = useState('Password123!')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
   const [isInstaller, setIsInstaller] = useState(false)

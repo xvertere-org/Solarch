@@ -6,7 +6,6 @@ import { parsePagination } from '../utils/pagination'
 export function registerLogRoutes(app: BaseApp, router: Router): void {
   router.get('/api/logs', requireSuperuserAuth(app), async (req: Request, res: Response) => {
     try {
-      const db = app.db().getDataDB()
       // FIXED[N-1]: Enforce pagination bounds via shared helper
       const { page, perPage } = parsePagination(req.query)
       const level = req.query.level as string
@@ -20,11 +19,11 @@ export function registerLogRoutes(app: BaseApp, router: Router): void {
       }
 
       const offset = (page - 1) * perPage
-      const countResult = db.prepare(`SELECT COUNT(*) as total FROM _logs ${whereClause}`).get(...params) as { total: number }
-      const totalItems = countResult.total
+      const countResult = await app.db().queryOne<{ total: number }>(`SELECT COUNT(*) as total FROM _logs ${whereClause}`, params)
+      const totalItems = countResult?.total ?? 0
       const totalPages = Math.ceil(totalItems / perPage)
 
-      const rows = db.prepare(`SELECT * FROM _logs ${whereClause} ORDER BY created DESC LIMIT ? OFFSET ?`).all(...params, perPage, offset) as any[]
+      const rows = await app.db().query(`SELECT * FROM _logs ${whereClause} ORDER BY created DESC LIMIT ? OFFSET ?`, [...params, perPage, offset])
 
       res.json({
         page,
@@ -41,12 +40,11 @@ export function registerLogRoutes(app: BaseApp, router: Router): void {
 
   router.get('/api/logs/stats', requireSuperuserAuth(app), async (req: Request, res: Response) => {
     try {
-      const db = app.db().getDataDB()
-      const rows = db.prepare(`
+      const rows = await app.db().query(`
         SELECT level, COUNT(*) as count
         FROM _logs
         GROUP BY level
-      `).all() as any[]
+      `)
 
       res.json(rows)
     } catch (err: any) {

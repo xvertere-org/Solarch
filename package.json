@@ -26,12 +26,14 @@
     "prepublishOnly": "npm run build",
     "dev": "tsx watch src/cli.ts serve --dev",
     "test": "vitest run",
+    "test:pg": "bash scripts/pg-test-env.sh vitest run src/tools/database/contracts/postgres.contract.test.ts",
     "test:coverage": "vitest run --coverage",
     "test:watch": "vitest",
     "lint": "eslint src --ext .ts",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@neondatabase/serverless": "^1.1.0",
     "archiver": "^8.0.0",
     "bcryptjs": "^2.4.3",
     "better-sqlite3": "^11.0.0",
@@ -47,9 +49,10 @@
     "morgan": "^1.10.1",
     "multer": "^2.2.0",
     "nodemailer": "^9.0.0",
+    "pg": "^8.23.0",
     "sharp": "^0.35.3",
-    "ws": "^8.21.0",
-    "zod": "^3.22.4"
+    "unzipper": "^0.12.5",
+    "ws": "^8.21.0"
   },
   "overrides": {
     "brace-expansion": "^5.0.8",
@@ -67,6 +70,7 @@
     "@types/multer": "^1.4.11",
     "@types/node": "^20.11.0",
     "@types/nodemailer": "^6.4.14",
+    "@types/pg": "^8.21.0",
     "@types/supertest": "^7.2.0",
     "@types/ws": "^8.5.10",
     "@typescript-eslint/eslint-plugin": "^8.61.0",

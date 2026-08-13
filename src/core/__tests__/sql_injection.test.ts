@@ -121,27 +121,32 @@ describe('SQL Safety Utilities', () => {
 })
 
 describe('Filter/Sort SQL Injection Prevention', () => {
-  it('filter parser rejects dangerous operators', async () => {
-    const { parseFilter, buildSQL } = await import('../../tools/search/filter')
+  it('filter compilation parameterizes values through the driver dialect', async () => {
+    const { parseFilter } = await import('../../tools/search/filter')
+    const { SqliteDriver } = await import('../../tools/database/sqlite/driver')
+    const driver = new SqliteDriver('/tmp/solarch-inj-test')
     const ast1 = parseFilter('name = "test"')
-    const sql1 = buildSQL(ast1)
-    expect(sql1.where).toContain('?')
+    const sql1 = driver.compileFilter(ast1)
+    expect(sql1.text).toContain('?')
     expect(sql1.params).toContain('test')
     const ast2 = parseFilter('name = "test\'; DROP TABLE users; --"')
-    const sql2 = buildSQL(ast2)
-    expect(sql2.where).toContain('?')
+    const sql2 = driver.compileFilter(ast2)
+    expect(sql2.text).toContain('?')
     expect(sql2.params.some((p: string) => typeof p === 'string' && p.includes('DROP'))).toBe(true)
-    expect(sql2.where).not.toContain('DROP')
+    expect(sql2.text).not.toContain('DROP')
+    await driver.close()
   })
 
   it('sort builder validates field names', async () => {
-    const { buildSortSQL } = await import('../../tools/search/filter')
-    const sql1 = buildSortSQL('created')
+    const { SqliteDriver } = await import('../../tools/database/sqlite/driver')
+    const driver = new SqliteDriver('/tmp/solarch-inj-test')
+    const sql1 = driver.buildSort('created')
     expect(sql1).toContain('created')
     try {
-      const sql2 = buildSortSQL('created; DROP TABLE users')
+      const sql2 = driver.buildSort('created; DROP TABLE users')
       expect(sql2).not.toContain('DROP')
     } catch {
     }
+    await driver.close()
   })
 })

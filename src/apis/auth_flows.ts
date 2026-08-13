@@ -41,17 +41,16 @@ export function registerPasswordResetRoutes(app: BaseApp, router: Router): void 
         return res.status(400).json({ code: 400, message: 'Invalid collection.' })
       }
 
-      const db = app.db().getDataDB()
-      const row = db.prepare(`SELECT * FROM _r_${collection.id} WHERE email = ?`).get(email) as any
+      const row = await app.db().queryOne<any>(`SELECT * FROM _r_${collection.id} WHERE email = ?`, [email])
       if (!row) {
         return res.status(204).send()
       }
 
       const record = new PBRecord(collection.id, collection.name, row)
-      const token = app.createPasswordResetToken(record.id, `collection_${collection.id}`, 1)
+      const token = await app.createPasswordResetToken(record.id, `collection_${collection.id}`, 1)
 
       const now = new Date().toISOString()
-      db.prepare(`UPDATE _r_${collection.id} SET lastResetSentAt = ? WHERE id = ?`).run(now, record.id)
+      await app.db().execute(`UPDATE _r_${collection.id} SET lastResetSentAt = ? WHERE id = ?`, [now, record.id])
 
       try {
         const settings = app.settings()
@@ -96,25 +95,24 @@ export function registerPasswordResetRoutes(app: BaseApp, router: Router): void 
       }
 
       const tokenType = `collection_${collection.id}`
-      if (!app.isPasswordResetTokenValid(token, tokenType)) {
+      const validToken = await app.isPasswordResetTokenValid(token, tokenType)
+      if (!validToken) {
         return res.status(400).json({ code: 400, message: 'Invalid or expired token.' })
       }
 
-      const revoked = app.revokePasswordResetToken(token, tokenType)
-      if (!revoked) {
+      const tokenData = await app.getPasswordResetTokenData(token, tokenType)
+      const revoked = await app.revokePasswordResetToken(token, tokenType)
+      if (!revoked || !tokenData) {
         return res.status(400).json({ code: 400, message: 'Token has already been used.' })
       }
 
-      const db = app.db().getDataDB()
-      const row = db.prepare(`SELECT * FROM _r_${collection.id} WHERE id = (SELECT userId FROM _passwordResetTokens WHERE tokenHash = ? AND type = ?)`).get(
-        require('crypto').createHash('sha256').update(token).digest('hex'), tokenType
-      ) as any
+      const row = await app.db().queryOne<any>(`SELECT * FROM _r_${collection.id} WHERE id = ?`, [tokenData.userId])
       if (!row) {
         return res.status(400).json({ code: 400, message: 'Invalid token.' })
       }
 
       const passwordHash = await app.hashPassword(password)
-      db.prepare(`UPDATE _r_${collection.id} SET passwordHash = ?, verified = 1 WHERE id = ?`).run(passwordHash, row.id)
+      await app.db().execute(`UPDATE _r_${collection.id} SET passwordHash = ?, verified = 1 WHERE id = ?`, [passwordHash, row.id])
 
       res.json({ code: 200, message: 'Password reset successfully.' })
     } catch (err: any) {
@@ -138,8 +136,7 @@ export function registerVerificationRoutes(app: BaseApp, router: Router): void {
         return res.status(400).json({ code: 400, message: 'Invalid collection.' })
       }
 
-      const db = app.db().getDataDB()
-      const row = db.prepare(`SELECT * FROM _r_${collection.id} WHERE email = ?`).get(email) as any
+      const row = await app.db().queryOne<any>(`SELECT * FROM _r_${collection.id} WHERE email = ?`, [email])
       if (!row) {
         return res.status(204).send()
       }
@@ -152,7 +149,7 @@ export function registerVerificationRoutes(app: BaseApp, router: Router): void {
       )
 
       const now = new Date().toISOString()
-      db.prepare(`UPDATE _r_${collection.id} SET lastVerificationSentAt = ? WHERE id = ?`).run(now, record.id)
+      await app.db().execute(`UPDATE _r_${collection.id} SET lastVerificationSentAt = ? WHERE id = ?`, [now, record.id])
 
       try {
         const settings = app.settings()
@@ -190,13 +187,12 @@ export function registerVerificationRoutes(app: BaseApp, router: Router): void {
         return res.status(400).json({ code: 400, message: 'Invalid or expired token.' })
       }
 
-      const db = app.db().getDataDB()
-      const row = db.prepare(`SELECT * FROM _r_${collection.id} WHERE id = ?`).get(payload.id) as any
+      const row = await app.db().queryOne<any>(`SELECT * FROM _r_${collection.id} WHERE id = ?`, [payload.id])
       if (!row) {
         return res.status(400).json({ code: 400, message: 'Invalid token.' })
       }
 
-      db.prepare(`UPDATE _r_${collection.id} SET verified = 1 WHERE id = ?`).run(payload.id)
+      await app.db().execute(`UPDATE _r_${collection.id} SET verified = 1 WHERE id = ?`, [payload.id])
 
       res.json({ code: 200, message: 'Email verified successfully.' })
     } catch (err: any) {
@@ -232,15 +228,14 @@ export function registerEmailChangeRoutes(app: BaseApp, router: Router): void {
         return res.status(401).json({ code: 401, message: 'Invalid token.' })
       }
 
-      const db = app.db().getDataDB()
-      const row = db.prepare(`SELECT * FROM _r_${collection.id} WHERE id = ?`).get(payload.id) as any
+      const row = await app.db().queryOne<any>(`SELECT * FROM _r_${collection.id} WHERE id = ?`, [payload.id])
       if (!row) {
         return res.status(400).json({ code: 400, message: 'Invalid user.' })
       }
 
       const record = new PBRecord(collection.id, collection.name, row)
       // FIXED[N-5]: Use opaque token instead of JWT for email change
-      const changeToken = app.createPasswordResetToken(record.id, `emailChange:${collection.id}`, 2, newEmail)
+      const changeToken = await app.createPasswordResetToken(record.id, `emailChange:${collection.id}`, 2, newEmail)
 
       try {
         const settings = app.settings()
@@ -274,32 +269,32 @@ export function registerEmailChangeRoutes(app: BaseApp, router: Router): void {
       }
 
       const tokenType = `emailChange:${collection.id}`
-      if (!app.isPasswordResetTokenValid(token, tokenType)) {
+      const validToken = await app.isPasswordResetTokenValid(token, tokenType)
+      if (!validToken) {
         return res.status(400).json({ code: 400, message: 'Invalid or expired token.' })
       }
 
-      const tokenData = app.getPasswordResetTokenData(token, tokenType)
+      const tokenData = await app.getPasswordResetTokenData(token, tokenType)
       if (!tokenData || !tokenData.data) {
         return res.status(400).json({ code: 400, message: 'Invalid token.' })
       }
 
-      const revoked = app.revokePasswordResetToken(token, tokenType)
+      const revoked = await app.revokePasswordResetToken(token, tokenType)
       if (!revoked) {
         return res.status(400).json({ code: 400, message: 'Token has already been used.' })
       }
 
-      const db = app.db().getDataDB()
-      const row = db.prepare(`SELECT * FROM _r_${collection.id} WHERE id = ?`).get(tokenData.userId) as any
+      const row = await app.db().queryOne<any>(`SELECT * FROM _r_${collection.id} WHERE id = ?`, [tokenData.userId])
       if (!row) {
         return res.status(400).json({ code: 400, message: 'Invalid token.' })
       }
 
       const newEmail = tokenData.data
-      const existingEmail = db.prepare(`SELECT id FROM _r_${collection.id} WHERE email = ? AND id != ?`).get(newEmail, tokenData.userId) as any
+      const existingEmail = await app.db().queryOne<any>(`SELECT id FROM _r_${collection.id} WHERE email = ? AND id != ?`, [newEmail, tokenData.userId])
       if (existingEmail) {
         return res.status(400).json({ code: 400, message: 'Email is already in use.' })
       }
-      db.prepare(`UPDATE _r_${collection.id} SET email = ? WHERE id = ?`).run(newEmail, tokenData.userId)
+      await app.db().execute(`UPDATE _r_${collection.id} SET email = ? WHERE id = ?`, [newEmail, tokenData.userId])
 
       res.json({ code: 200, message: 'Email changed successfully.' })
     } catch (err: any) {
@@ -328,8 +323,7 @@ export function registerImpersonateRoutes(app: BaseApp, router: Router): void {
         return res.status(400).json({ code: 400, message: 'Invalid collection.' })
       }
 
-      const db = app.db().getDataDB()
-      const row = db.prepare(`SELECT * FROM _r_${collection.id} WHERE id = ?`).get(recordId) as any
+      const row = await app.db().queryOne<any>(`SELECT * FROM _r_${collection.id} WHERE id = ?`, [recordId])
       if (!row) {
         return res.status(404).json({ code: 404, message: 'Record not found.' })
       }

@@ -13,15 +13,28 @@ import { SettingsEncryption } from './settings_encrypt'
 import path from 'path'
 import { validateIdentifier, quoteIdentifier } from '../utils/sql_safe'
 
+import { ResolvedAppConfig, SolarchConfigInput } from './config_types'
+import { resolveAppConfig } from './config_loader'
+import { DatabaseError, DatabaseErrorCode } from '../tools/database/errors'
+
 export interface BaseAppConfig {
-  isDev: boolean
-  dataDir: string
+  isDev?: boolean
+  dataDir?: string
   encryptionEnv?: string
   queryTimeout?: number
   dataMaxOpenConns?: number
   dataMaxIdleConns?: number
   auxMaxOpenConns?: number
   auxMaxIdleConns?: number
+  dbProvider?: 'sqlite' | 'postgres'
+  provider?: 'sqlite' | 'postgres'
+  connectionString?: string
+  dbUrl?: string
+  databaseUrl?: string
+  dbDriver?: 'postgres' | 'neon'
+  driver?: 'postgres' | 'neon'
+  dbMode?: 'tcp' | 'http' | 'websocket'
+  mode?: 'tcp' | 'http' | 'websocket'
 }
 
 export class BaseApp {
@@ -31,10 +44,15 @@ export class BaseApp {
   private _store = new Map<string, any>()
   private _collectionCache = new Map<string, Collection>()
 
+  readonly resolvedConfig: ResolvedAppConfig
   readonly isDev: boolean
   readonly dataDir: string
   readonly encryptionEnv: string
   readonly queryTimeout: number
+  readonly dbProvider: 'sqlite' | 'postgres'
+  readonly connectionString?: string
+  readonly dbDriver?: 'postgres' | 'neon'
+  readonly dbMode?: 'tcp' | 'http' | 'websocket'
 
   readonly onBootstrap = new Hook<BootstrapEvent>()
   readonly onServe = new Hook<ServeEvent>()
@@ -85,12 +103,21 @@ export class BaseApp {
   readonly onCollectionAfterDeleteSuccess = new TaggedHook<CollectionEvent>()
   readonly onCollectionAfterDeleteError = new TaggedHook<CollectionEvent>()
 
-  constructor(config: BaseAppConfig) {
-    this.isDev = config.isDev
-    this.dataDir = config.dataDir
+  constructor(config: BaseAppConfig | ResolvedAppConfig | SolarchConfigInput = {}) {
+    if ('db' in config && config.db && typeof config.db === 'object') {
+      this.resolvedConfig = config as ResolvedAppConfig
+    } else {
+      this.resolvedConfig = resolveAppConfig(config as SolarchConfigInput)
+    }
 
-    this.encryptionEnv = config.encryptionEnv ?? ''
-    this.queryTimeout = config.queryTimeout ?? 30
+    this.isDev = this.resolvedConfig.isDev
+    this.dataDir = this.resolvedConfig.dataDir
+    this.dbProvider = this.resolvedConfig.db.provider
+    this.connectionString = this.resolvedConfig.db.connectionString
+    this.dbDriver = this.resolvedConfig.db.driver
+    this.dbMode = this.resolvedConfig.db.mode
+    this.encryptionEnv = this.resolvedConfig.encryptionEnv
+    this.queryTimeout = this.resolvedConfig.queryTimeout
   }
 
   isBootstrapped(): boolean {
@@ -102,11 +129,17 @@ export class BaseApp {
       await this.resetBootstrapState()
     }
 
-    this._db = new DB({
-      dataDir: this.dataDir,
-      isDev: this.isDev,
-      queryTimeout: this.queryTimeout,
-    })
+    this._db = new DB(this.resolvedConfig.db, this.resolvedConfig.dataDir)
+
+    // Pre-flight connectivity check before executing any migrations
+    const ok = await this._db.ping()
+    if (!ok) {
+      throw new DatabaseError(
+        DatabaseErrorCode.DATABASE_UNAVAILABLE,
+        `Database is unreachable during startup. Check connection configuration for ${this.dbProvider}.`,
+        { retryable: true },
+      )
+    }
 
     this._settings = defaultSettings()
 
@@ -161,8 +194,7 @@ export class BaseApp {
 
   async reloadSettings(): Promise<void> {
     if (!this._db) return
-    const db = this._db.getDataDB()
-    const row = db.prepare("SELECT value FROM _settings WHERE key = 'main'").get() as { value: string } | undefined
+    const row = await this._db.queryOne<{ value: string }>("SELECT value FROM _settings WHERE key = 'main'")
     if (row) {
       try {
         const parsed = JSON.parse(row.value)
@@ -177,8 +209,7 @@ export class BaseApp {
 
   async reloadCachedCollections(): Promise<void> {
     if (!this._db) return
-    const db = this._db.getDataDB()
-    const rows = db.prepare("SELECT * FROM _collections").all() as any[]
+    const rows = await this._db.query("SELECT * FROM _collections")
     this._collectionCache.clear()
     for (const row of rows) {
       const data = JSON.parse(row.data)
@@ -199,8 +230,7 @@ export class BaseApp {
     const cached = this._collectionCache.get(nameOrId.toLowerCase())
     if (cached) return cached
 
-    const db = this._db.getDataDB()
-    const row = db.prepare("SELECT * FROM _collections WHERE id = ? OR LOWER(name) = LOWER(?)").get(nameOrId, nameOrId) as any
+    const row = await this._db.queryOne("SELECT * FROM _collections WHERE id = ? OR LOWER(name) = LOWER(?)", [nameOrId, nameOrId])
     if (!row) return null
 
     const data = JSON.parse(row.data)
@@ -222,8 +252,7 @@ export class BaseApp {
 
   async findAllCollections(types?: string[]): Promise<Collection[]> {
     if (!this._db) throw new Error('Database not initialized')
-    const db = this._db.getDataDB()
-    const rows = db.prepare("SELECT data FROM _collections").all() as { data: string }[]
+    const rows = await this._db.query<{ data: string }>("SELECT data FROM _collections")
     const collections = rows.map(row => new Collection(JSON.parse(row.data)))
     if (types && types.length > 0) {
       return collections.filter(c => types.includes(c.type))
@@ -240,7 +269,6 @@ export class BaseApp {
       await this.onRecordValidate.triggerForTag(model.collectionId, { app: this, record: model })
     }
 
-    const db = this._db.getDataDB()
     const now = new Date().toISOString()
 
     if (model.isNew()) {
@@ -252,8 +280,9 @@ export class BaseApp {
       await this.onModelCreateExecute.trigger({ app: this, model })
 
       if (model instanceof Collection) {
-        db.prepare("INSERT INTO _collections (id, name, data, created, updated) VALUES (?, ?, ?, ?, ?)").run(
-          model.id, model.name, JSON.stringify(model.toJSON()), model.created.toISOString(), model.updated.toISOString()
+        await this._db.execute(
+          "INSERT INTO _collections (id, name, data, created, updated) VALUES (?, ?, ?, ?, ?)",
+          [model.id, model.name, JSON.stringify(model.toJSON()), model.created.toISOString(), model.updated.toISOString()]
         )
         this._collectionCache.set(model.id, model)
         this._collectionCache.set(model.name.toLowerCase(), model)
@@ -281,7 +310,7 @@ export class BaseApp {
               columns.push(`${quotedName} TEXT`)
             }
           }
-          db.exec(`CREATE TABLE IF NOT EXISTS ${quoteIdentifier(`_r_${model.id}`)} (${columns.join(', ')})`)
+          await this._db.execute(`CREATE TABLE IF NOT EXISTS ${quoteIdentifier(`_r_${model.id}`)} (${columns.join(', ')})`)
         }
       } else if (model instanceof PBRecord) {
         const tableName = `_r_${model.collectionId}`
@@ -308,11 +337,12 @@ export class BaseApp {
           placeholders.push('?')
         }
 
-        db.prepare(`INSERT INTO ${quotedTable} (${columns.join(', ')}) VALUES (${placeholders.join(', ')})`).run(...values)
+        await this._db.execute(`INSERT INTO ${quotedTable} (${columns.join(', ')}) VALUES (${placeholders.join(', ')})`, values)
       } else {
         const tableName = model.tableName()
-        db.prepare(`INSERT INTO ${tableName} (id, created, updated, data) VALUES (?, ?, ?, ?)`).run(
-          model.id, now, now, JSON.stringify(model.toJSON())
+        await this._db.execute(
+          `INSERT INTO ${tableName} (id, created, updated, data) VALUES (?, ?, ?, ?)`,
+          [model.id, now, now, JSON.stringify(model.toJSON())]
         )
       }
 
@@ -327,8 +357,9 @@ export class BaseApp {
       await this.onModelUpdateExecute.trigger({ app: this, model })
 
       if (model instanceof Collection) {
-        db.prepare("UPDATE _collections SET name = ?, data = ?, updated = ? WHERE id = ?").run(
-          model.name, JSON.stringify(model.toJSON()), now, model.id
+        await this._db.execute(
+          "UPDATE _collections SET name = ?, data = ?, updated = ? WHERE id = ?",
+          [model.name, JSON.stringify(model.toJSON()), now, model.id]
         )
         this._collectionCache.set(model.id, model)
         this._collectionCache.set(model.name.toLowerCase(), model)
@@ -356,11 +387,12 @@ export class BaseApp {
         }
 
         values.push(model.id)
-        db.prepare(`UPDATE ${quotedTable} SET ${setClauses.join(', ')} WHERE id = ?`).run(...values)
+        await this._db.execute(`UPDATE ${quotedTable} SET ${setClauses.join(', ')} WHERE id = ?`, values)
       } else {
         const tableName = model.tableName()
-        db.prepare(`UPDATE ${tableName} SET data = ?, updated = ? WHERE id = ?`).run(
-          JSON.stringify(model.toJSON()), now, model.id
+        await this._db.execute(
+          `UPDATE ${tableName} SET data = ?, updated = ? WHERE id = ?`,
+          [JSON.stringify(model.toJSON()), now, model.id]
         )
       }
 
@@ -377,16 +409,14 @@ export class BaseApp {
     await this.onModelDelete.trigger({ app: this, model })
     await this.onModelDeleteExecute.trigger({ app: this, model })
 
-    const db = this._db.getDataDB()
-
     if (model instanceof Collection) {
-      db.prepare("DELETE FROM _collections WHERE id = ?").run(model.id)
+      await this._db.execute("DELETE FROM _collections WHERE id = ?", [model.id])
       this._collectionCache.delete(model.id)
       this._collectionCache.delete(model.name.toLowerCase())
-      db.exec(`DROP TABLE IF EXISTS ${quoteIdentifier(`_r_${model.id}`)}`)
+      await this._db.deleteTable(`_r_${model.id}`)
     } else if (model instanceof PBRecord) {
       const tableName = `_r_${model.collectionId}`
-      db.prepare(`DELETE FROM ${quoteIdentifier(tableName)} WHERE id = ?`).run(model.id)
+      await this._db.execute(`DELETE FROM ${quoteIdentifier(tableName)} WHERE id = ?`, [model.id])
 
       const collections = await this.findAllCollections()
       for (const col of collections) {
@@ -395,7 +425,7 @@ export class BaseApp {
             const relField = field as any
             if (relField.collectionId === model.collectionId) {
               const refTable = `_r_${col.id}`
-              db.prepare(`UPDATE "${refTable}" SET "${field.name}" = NULL WHERE "${field.name}" = ?`).run(model.id)
+              await this._db.execute(`UPDATE "${refTable}" SET "${field.name}" = NULL WHERE "${field.name}" = ?`, [model.id])
             }
           }
         }
@@ -420,7 +450,7 @@ export class BaseApp {
       } catch { }
     } else {
       const tableName = model.tableName()
-      db.prepare(`DELETE FROM ${quoteIdentifier(tableName)} WHERE id = ?`).run(model.id)
+      await this._db.execute(`DELETE FROM ${quoteIdentifier(tableName)} WHERE id = ?`, [model.id])
     }
 
     await this.onModelAfterDeleteSuccess.trigger({ app: this, model })
@@ -433,9 +463,8 @@ export class BaseApp {
 
   async runSystemMigrations(): Promise<void> {
     if (!this._db) return
-    const db = this._db.getDataDB()
 
-    db.exec(`
+    await this._db.execute(`
       CREATE TABLE IF NOT EXISTS _collections (
         id TEXT PRIMARY KEY,
         name TEXT UNIQUE NOT NULL,
@@ -445,7 +474,7 @@ export class BaseApp {
       )
     `)
 
-    db.exec(`
+    await this._db.execute(`
       CREATE TABLE IF NOT EXISTS _settings (
         key TEXT PRIMARY KEY,
         value TEXT NOT NULL,
@@ -454,14 +483,14 @@ export class BaseApp {
       )
     `)
 
-    db.exec(`
+    await this._db.execute(`
       CREATE TABLE IF NOT EXISTS _migrations (
         id TEXT PRIMARY KEY,
         applied TEXT NOT NULL
       )
     `)
 
-    db.exec(`
+    await this._db.execute(`
       CREATE TABLE IF NOT EXISTS _logs (
         id TEXT PRIMARY KEY,
         level TEXT NOT NULL,
@@ -471,7 +500,7 @@ export class BaseApp {
       )
     `)
 
-    db.exec(`
+    await this._db.execute(`
       CREATE TABLE IF NOT EXISTS _mfas (
         id TEXT PRIMARY KEY,
         recordRef TEXT NOT NULL,
@@ -486,10 +515,10 @@ export class BaseApp {
       )
     `)
 
-    try { db.exec('ALTER TABLE _mfas ADD COLUMN secret TEXT DEFAULT \'\'') } catch { }
-    try { db.exec('ALTER TABLE _mfas ADD COLUMN backupCodes TEXT DEFAULT \'\'') } catch { }
+    try { await this._db.execute('ALTER TABLE _mfas ADD COLUMN secret TEXT DEFAULT \'\'') } catch { }
+    try { await this._db.execute('ALTER TABLE _mfas ADD COLUMN backupCodes TEXT DEFAULT \'\'') } catch { }
 
-    db.exec(`
+    await this._db.execute(`
       CREATE TABLE IF NOT EXISTS _otps (
         id TEXT PRIMARY KEY,
         recordRef TEXT NOT NULL,
@@ -504,7 +533,7 @@ export class BaseApp {
       )
     `)
 
-    db.exec(`
+    await this._db.execute(`
       CREATE TABLE IF NOT EXISTS _authOrigins (
         id TEXT PRIMARY KEY,
         recordRef TEXT NOT NULL,
@@ -519,7 +548,7 @@ export class BaseApp {
       )
     `)
 
-    db.exec(`
+    await this._db.execute(`
       CREATE TABLE IF NOT EXISTS _externalAuths (
         id TEXT PRIMARY KEY,
         recordRef TEXT NOT NULL,
@@ -531,7 +560,7 @@ export class BaseApp {
       )
     `)
 
-    db.exec(`
+    await this._db.execute(`
       CREATE TABLE IF NOT EXISTS _tokenRevocations (
         id TEXT PRIMARY KEY,
         tokenHash TEXT NOT NULL UNIQUE,
@@ -542,7 +571,7 @@ export class BaseApp {
       )
     `)
 
-    db.exec(`
+    await this._db.execute(`
       CREATE TABLE IF NOT EXISTS _oauth2States (
         state TEXT PRIMARY KEY,
         collectionId TEXT NOT NULL,
@@ -552,7 +581,7 @@ export class BaseApp {
       )
     `)
 
-    db.exec(`
+    await this._db.execute(`
       CREATE TABLE IF NOT EXISTS _passwordResetTokens (
         tokenHash TEXT PRIMARY KEY,
         userId TEXT NOT NULL,
@@ -563,14 +592,16 @@ export class BaseApp {
       )
     `)
 
-
-    // FIXED[N-5]: Add data column to _passwordResetTokens for storing opaque token metadata
-    try { db.exec('ALTER TABLE _passwordResetTokens ADD COLUMN data TEXT DEFAULT \'\'') } catch { }
+    try { await this._db.execute('ALTER TABLE _passwordResetTokens ADD COLUMN data TEXT DEFAULT \'\'') } catch { }
 
     const now = new Date().toISOString()
-    db.prepare("INSERT OR IGNORE INTO _settings (key, value, created, updated) VALUES (?, ?, ?, ?)").run(
-      'main', JSON.stringify(defaultSettings()), now, now
-    )
+    const existing = await this._db.queryOne("SELECT key FROM _settings WHERE key = 'main'")
+    if (!existing) {
+      await this._db.execute(
+        "INSERT INTO _settings (key, value, created, updated) VALUES (?, ?, ?, ?)",
+        ['main', JSON.stringify(defaultSettings()), now, now]
+      )
+    }
   }
 
   async runAppMigrations(): Promise<void> {
@@ -660,84 +691,93 @@ export class BaseApp {
     return parseJWT(token, secret)
   }
 
-  revokeToken(token: string, type: string, recordRef?: string, ttlMinutes = 60): void {
-    const db = this.db().getDataDB()
+  async revokeToken(token: string, type: string, recordRef?: string, ttlMinutes = 60): Promise<void> {
+    if (!token || typeof token !== 'string') return
     const crypto = require('crypto')
     const tokenHash = crypto.createHash('sha256').update(token).digest('hex')
     const expiresAt = new Date(Date.now() + ttlMinutes * 60 * 1000).toISOString()
     const now = new Date().toISOString()
     const id = crypto.randomBytes(8).toString('hex')
-    db.prepare(
-      `INSERT OR REPLACE INTO _tokenRevocations (id, tokenHash, type, recordRef, expiresAt, created) VALUES (?, ?, ?, ?, ?, ?)`
-    ).run(id, tokenHash, type, recordRef || null, expiresAt, now)
+    await this.db().execute(`DELETE FROM _tokenRevocations WHERE tokenHash = ?`, [tokenHash])
+    await this.db().execute(
+      `INSERT INTO _tokenRevocations (id, tokenHash, type, recordRef, expiresAt, created) VALUES (?, ?, ?, ?, ?, ?)`,
+      [id, tokenHash, type, recordRef || null, expiresAt, now]
+    )
   }
 
-  isTokenRevoked(token: string, type: string): boolean {
-    const db = this.db().getDataDB()
+  async isTokenRevoked(token: string, type: string): Promise<boolean> {
+    if (!token || typeof token !== 'string') return false
     const crypto = require('crypto')
     const tokenHash = crypto.createHash('sha256').update(token).digest('hex')
-    const row = db.prepare(
-      `SELECT * FROM _tokenRevocations WHERE tokenHash = ? AND type = ? AND expiresAt > ?`
-    ).get(tokenHash, type, new Date().toISOString()) as any
+    const row = await this.db().queryOne(
+      `SELECT * FROM _tokenRevocations WHERE tokenHash = ? AND type = ? AND expiresAt > ?`,
+      [tokenHash, type, new Date().toISOString()]
+    )
     return !!row
   }
 
-  createOAuth2State(collectionId: string, redirectUri?: string, ttlMinutes = 10): string {
-    const db = this.db().getDataDB()
+  async createOAuth2State(collectionId: string, redirectUri?: string, ttlMinutes = 10): Promise<string> {
     const crypto = require('crypto')
     const state = crypto.randomBytes(16).toString('hex')
     const expiresAt = new Date(Date.now() + ttlMinutes * 60 * 1000).toISOString()
     const now = new Date().toISOString()
-    db.prepare(
-      `INSERT OR REPLACE INTO _oauth2States (state, collectionId, redirectUri, expiresAt, created) VALUES (?, ?, ?, ?, ?)`
-    ).run(state, collectionId, redirectUri || null, expiresAt, now)
+    await this.db().execute(`DELETE FROM _oauth2States WHERE state = ?`, [state])
+    await this.db().execute(
+      `INSERT INTO _oauth2States (state, collectionId, redirectUri, expiresAt, created) VALUES (?, ?, ?, ?, ?)`,
+      [state, collectionId, redirectUri || null, expiresAt, now]
+    )
     return state
   }
 
-  revokePasswordResetToken(token: string, type: string): boolean {
-    const db = this.db().getDataDB()
+  async revokePasswordResetToken(token: string, type: string): Promise<boolean> {
+    if (!token || typeof token !== 'string') return false
     const crypto = require('crypto')
     const tokenHash = crypto.createHash('sha256').update(token).digest('hex')
-    const row = db.prepare(
-      `SELECT * FROM _passwordResetTokens WHERE tokenHash = ? AND type = ? AND usedAt IS NULL AND expiresAt > ?`
-    ).get(tokenHash, type, new Date().toISOString()) as any
+    const row = await this.db().queryOne(
+      `SELECT * FROM _passwordResetTokens WHERE tokenHash = ? AND type = ? AND usedAt IS NULL AND expiresAt > ?`,
+      [tokenHash, type, new Date().toISOString()]
+    )
     if (!row) return false
-    db.prepare(`UPDATE _passwordResetTokens SET usedAt = ? WHERE tokenHash = ? AND type = ?`).run(
-      new Date().toISOString(), tokenHash, type
+    await this.db().execute(
+      `UPDATE _passwordResetTokens SET usedAt = ? WHERE tokenHash = ? AND type = ?`,
+      [new Date().toISOString(), tokenHash, type]
     )
     return true
   }
 
-  isPasswordResetTokenValid(token: string, type: string): boolean {
-    const db = this.db().getDataDB()
+  async isPasswordResetTokenValid(token: string, type: string): Promise<boolean> {
+    if (!token || typeof token !== 'string') return false
     const crypto = require('crypto')
     const tokenHash = crypto.createHash('sha256').update(token).digest('hex')
-    const row = db.prepare(
-      `SELECT * FROM _passwordResetTokens WHERE tokenHash = ? AND type = ? AND usedAt IS NULL AND expiresAt > ?`
-    ).get(tokenHash, type, new Date().toISOString()) as any
+    const row = await this.db().queryOne(
+      `SELECT * FROM _passwordResetTokens WHERE tokenHash = ? AND type = ? AND usedAt IS NULL AND expiresAt > ?`,
+      [tokenHash, type, new Date().toISOString()]
+    )
     return !!row
   }
 
-  createPasswordResetToken(userId: string, type: string, ttlHours = 1, data?: string): string {
-    const db = this.db().getDataDB()
+  async createPasswordResetToken(userId: string, type: string, ttlHours = 1, data?: string): Promise<string> {
     const crypto = require('crypto')
     const token = crypto.randomBytes(32).toString('hex')
     const tokenHash = crypto.createHash('sha256').update(token).digest('hex')
     const expiresAt = new Date(Date.now() + ttlHours * 60 * 60 * 1000).toISOString()
     const now = new Date().toISOString()
-    db.prepare(
-      `INSERT OR REPLACE INTO _passwordResetTokens (tokenHash, userId, type, data, expiresAt, created) VALUES (?, ?, ?, ?, ?, ?)`
-    ).run(tokenHash, userId, type, data || '', expiresAt, now)
+    await this.db().execute(`DELETE FROM _passwordResetTokens WHERE tokenHash = ?`, [tokenHash])
+    await this.db().execute(
+      `INSERT INTO _passwordResetTokens (tokenHash, userId, type, data, expiresAt, created) VALUES (?, ?, ?, ?, ?, ?)`,
+      [tokenHash, userId, type, data || '', expiresAt, now]
+    )
     return token
   }
 
-  getPasswordResetTokenData(token: string, type: string): { userId: string; data: string } | null {
-    const db = this.db().getDataDB()
+  async getPasswordResetTokenData(token: string, type: string): Promise<{ userId: string; data: string } | null> {
+    if (!token || typeof token !== 'string') return null
     const crypto = require('crypto')
     const tokenHash = crypto.createHash('sha256').update(token).digest('hex')
-    const row = db.prepare(
-      `SELECT * FROM _passwordResetTokens WHERE tokenHash = ? AND type = ? AND usedAt IS NULL AND expiresAt > ?`
-    ).get(tokenHash, type, new Date().toISOString()) as any
+    const row = await this.db().queryOne<{ userId: string; data?: string }>(
+      `SELECT * FROM _passwordResetTokens WHERE tokenHash = ? AND type = ? AND usedAt IS NULL AND expiresAt > ?`,
+      [tokenHash, type, new Date().toISOString()]
+    )
     if (!row) return null
     return { userId: row.userId, data: row.data || '' }
   }

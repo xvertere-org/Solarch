@@ -227,26 +227,27 @@ export async function linkExternalAuth(
   provider: string,
   providerId: string
 ): Promise<void> {
-  const db = app.db().getDataDB()
-  const existing = db.prepare(
-    `SELECT * FROM _externalAuths WHERE provider = ? AND providerId = ?`
-  ).get(provider, providerId) as any
+  const existing = await app.db().queryOne<any>(
+    `SELECT * FROM _externalAuths WHERE provider = ? AND providerId = ?`,
+    [provider, providerId]
+  )
 
   if (existing) {
     throw new Error('This external auth is already linked to another account.')
   }
 
   const now = new Date().toISOString()
-  db.prepare(
-    `INSERT INTO _externalAuths (id, recordRef, collectionId, provider, providerId, created, updated) VALUES (?, ?, ?, ?, ?, ?, ?)`
-  ).run(
-    generateToken(16),
-    record.id,
-    record.collectionId,
-    provider,
-    providerId,
-    now,
-    now
+  await app.db().execute(
+    `INSERT INTO _externalAuths (id, recordRef, collectionId, provider, providerId, created, updated) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+    [
+      generateToken(16),
+      record.id,
+      record.collectionId,
+      provider,
+      providerId,
+      now,
+      now
+    ]
   )
 }
 
@@ -255,8 +256,8 @@ export async function unlinkExternalAuth(
   record: PBRecord,
   provider: string
 ): Promise<void> {
-  const db = app.db().getDataDB()
-  db.prepare(
-    `DELETE FROM _externalAuths WHERE recordRef = ? AND collectionId = ? AND provider = ?`
-  ).run(record.id, record.collectionId, provider)
+  await app.db().execute(
+    `DELETE FROM _externalAuths WHERE recordRef = ? AND collectionId = ? AND provider = ?`,
+    [record.id, record.collectionId, provider]
+  )
 }

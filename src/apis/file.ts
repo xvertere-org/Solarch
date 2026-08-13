@@ -103,8 +103,7 @@ export function registerFileRoutes(app: BaseApp, router: Router): void {
         return res.status(404).json({ code: 404, message: 'Collection not found.' })
       }
 
-      const db = app.db().getDataDB()
-      const row = db.prepare(`SELECT * FROM ${quoteIdentifier(`_r_${collection.id}`)} WHERE id = ?`).get(recordId) as any
+      const row = await app.db().queryOne(`SELECT * FROM ${quoteIdentifier(`_r_${collection.id}`)} WHERE id = ?`, [recordId])
       if (!row) {
         return res.status(404).json({ code: 404, message: 'Record not found.' })
       }
@@ -148,8 +147,7 @@ export function registerFileRoutes(app: BaseApp, router: Router): void {
         return res.status(404).json({ code: 404, message: 'Collection not found.' })
       }
 
-      const db = app.db().getDataDB()
-      const row = db.prepare(`SELECT * FROM ${quoteIdentifier(`_r_${collection.id}`)} WHERE id = ?`).get(recordId) as any
+      const row = await app.db().queryOne<any>(`SELECT * FROM ${quoteIdentifier(`_r_${collection.id}`)} WHERE id = ?`, [recordId])
       if (!row) {
         return res.status(404).json({ code: 404, message: 'Record not found.' })
       }
@@ -216,7 +214,7 @@ export function registerFileRoutes(app: BaseApp, router: Router): void {
     try {
       const { collectionIdOrName, recordId, filename } = req.params
       const thumb = req.query.thumb as string
-      const download = req.query.download === '1'
+      const download = req.query.download === '1' || req.query.download === 'true'
       const fileToken = req.query.token as string
 
       const collection = await app.findCollectionByNameOrId(collectionIdOrName)
@@ -224,8 +222,7 @@ export function registerFileRoutes(app: BaseApp, router: Router): void {
         return res.status(404).json({ code: 404, message: 'Collection not found.' })
       }
 
-      const db = app.db().getDataDB()
-      const row = db.prepare(`SELECT * FROM ${quoteIdentifier(`_r_${collection.id}`)} WHERE id = ?`).get(recordId) as any
+      const row = await app.db().queryOne<any>(`SELECT * FROM ${quoteIdentifier(`_r_${collection.id}`)} WHERE id = ?`, [recordId])
       if (!row) {
         return res.status(404).json({ code: 404, message: 'Record not found.' })
       }
@@ -322,8 +319,7 @@ export function registerFileRoutes(app: BaseApp, router: Router): void {
         return res.status(404).json({ code: 404, message: 'Collection not found.' })
       }
 
-      const db = app.db().getDataDB()
-      const row = db.prepare(`SELECT * FROM ${quoteIdentifier(`_r_${collection.id}`)} WHERE id = ?`).get(recordId) as any
+      const row = await app.db().queryOne<any>(`SELECT * FROM ${quoteIdentifier(`_r_${collection.id}`)} WHERE id = ?`, [recordId])
       if (!row) {
         return res.status(404).json({ code: 404, message: 'Record not found.' })
       }

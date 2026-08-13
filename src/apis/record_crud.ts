@@ -7,6 +7,7 @@ import { RequestInfo } from '../core/record_field_resolver'
 import { validateAndCreateRecord, validateAndUpdateRecord } from '../core/record_upsert'
 import { broadcastRecordEvent } from './realtime'
 import { parsePagination } from '../utils/pagination'
+import { createApiError, normalizeDatabaseError } from '../utils/api_errors'
 
 export function registerRecordCRUDRoutes(app: BaseApp, router: Router): void {
   const recordRouter = Router({ mergeParams: true })
@@ -16,7 +17,7 @@ export function registerRecordCRUDRoutes(app: BaseApp, router: Router): void {
       const collectionIdOrName = req.params.collectionIdOrName
       const collection = await app.findCollectionByNameOrId(collectionIdOrName)
       if (!collection) {
-        return res.status(404).json({ code: 404, message: 'Collection not found.' })
+        return res.status(404).json(createApiError(404, 'NOT_FOUND', 'Collection not found.'))
       }
 
       const requestInfo = buildRequestInfo(req)
@@ -68,7 +69,7 @@ export function registerRecordCRUDRoutes(app: BaseApp, router: Router): void {
       })
     } catch (err: any) {
       app.logger().error(err.message || err)
-      res.status(500).json({ code: 500, message: 'Internal server error' })
+      res.status(500).json(createApiError(500, 'INTERNAL_ERROR', 'Internal server error'))
     }
   })
 
@@ -76,12 +77,12 @@ export function registerRecordCRUDRoutes(app: BaseApp, router: Router): void {
     try {
       const collection = await app.findCollectionByNameOrId(req.params.collectionIdOrName)
       if (!collection) {
-        return res.status(404).json({ code: 404, message: 'Collection not found.' })
+        return res.status(404).json(createApiError(404, 'NOT_FOUND', 'Collection not found.'))
       }
 
       const { field, vector, limit, minSimilarity } = req.body
       if (!field || !Array.isArray(vector)) {
-        return res.status(400).json({ code: 400, message: 'Missing required fields: field, vector' })
+        return res.status(400).json(createApiError(400, 'VALIDATION_FAILED', 'Missing required fields: field, vector'))
       }
 
       const requestInfo = buildRequestInfo(req)
@@ -122,7 +123,7 @@ export function registerRecordCRUDRoutes(app: BaseApp, router: Router): void {
       })
     } catch (err: any) {
       app.logger().error(err.message || err)
-      res.status(500).json({ code: 500, message: 'Internal server error' })
+      res.status(500).json(createApiError(500, 'INTERNAL_ERROR', 'Internal server error'))
     }
   })
 
@@ -130,24 +131,24 @@ export function registerRecordCRUDRoutes(app: BaseApp, router: Router): void {
     try {
       const collection = await app.findCollectionByNameOrId(req.params.collectionIdOrName)
       if (!collection) {
-        return res.status(404).json({ code: 404, message: 'Collection not found.' })
+        return res.status(404).json(createApiError(404, 'NOT_FOUND', 'Collection not found.'))
       }
 
       const record = await findRecordById(app, req.params.collectionIdOrName, req.params.recordId)
       if (!record) {
-        return res.status(404).json({ code: 404, message: 'Record not found.' })
+        return res.status(404).json(createApiError(404, 'NOT_FOUND', 'Record not found.'))
       }
 
       const requestInfo = buildRequestInfo(req)
       requestInfo.context = 'view'
 
       if (collection.viewRule === null) {
-        return res.status(404).json({ code: 404, message: 'Record not found.' })
+        return res.status(404).json(createApiError(404, 'NOT_FOUND', 'Record not found.'))
       }
       if (collection.viewRule !== '') {
         const accessible = await canAccessRecord(app, record, collection, collection.viewRule, requestInfo)
         if (!accessible) {
-          return res.status(404).json({ code: 404, message: 'Record not found.' })
+          return res.status(404).json(createApiError(404, 'NOT_FOUND', 'Record not found.'))
         }
       }
 
@@ -163,7 +164,7 @@ export function registerRecordCRUDRoutes(app: BaseApp, router: Router): void {
       res.json(enriched.toJSON())
     } catch (err: any) {
       app.logger().error(err.message || err)
-      res.status(500).json({ code: 500, message: 'Internal server error' })
+      res.status(500).json(createApiError(500, 'INTERNAL_ERROR', 'Internal server error'))
     }
   })
 
@@ -171,7 +172,7 @@ export function registerRecordCRUDRoutes(app: BaseApp, router: Router): void {
     try {
       const collection = await app.findCollectionByNameOrId(req.params.collectionIdOrName)
       if (!collection) {
-        return res.status(404).json({ code: 404, message: 'Collection not found.' })
+        return res.status(404).json(createApiError(404, 'NOT_FOUND', 'Collection not found.'))
       }
 
       const requestInfo = buildRequestInfo(req)
@@ -179,18 +180,18 @@ export function registerRecordCRUDRoutes(app: BaseApp, router: Router): void {
 
       // Enforce createRule before validation
       if (collection.createRule === null) {
-        return res.status(403).json({ code: 403, message: 'Access denied.' })
+        return res.status(403).json(createApiError(403, 'FORBIDDEN', 'Access denied.'))
       }
 
       const { record, errors } = await validateAndCreateRecord(app, collection, req.body)
       if (errors.length > 0) {
-        return res.status(400).json({ code: 400, message: 'Validation failed.', data: errors })
+        return res.status(400).json(createApiError(400, 'VALIDATION_FAILED', 'Validation failed.', { errors }))
       }
 
       if (collection.createRule !== '') {
         const accessible = await canAccessRecord(app, record, collection, collection.createRule, requestInfo)
         if (!accessible) {
-          return res.status(403).json({ code: 403, message: 'Access denied.' })
+          return res.status(403).json(createApiError(403, 'FORBIDDEN', 'Access denied.'))
         }
       }
 
@@ -213,11 +214,12 @@ export function registerRecordCRUDRoutes(app: BaseApp, router: Router): void {
         res.status(201).json(response)
       }
     } catch (err: any) {
-      if (err.code === 'SQLITE_CONSTRAINT_UNIQUE' || err.message?.includes('UNIQUE constraint failed')) {
-        return res.status(400).json({ code: 400, message: 'Validation failed.', errors: [{ field: 'email', message: 'Value must be unique.' }] })
+      const dbError = normalizeDatabaseError(err)
+      if (dbError.code !== 500) {
+        return res.status(dbError.code).json(dbError)
       }
       app.logger().error(err.message || err)
-      res.status(500).json({ code: 500, message: 'Internal server error' })
+      res.status(500).json(createApiError(500, 'INTERNAL_ERROR', 'Internal server error'))
     }
   })
 
@@ -225,30 +227,30 @@ export function registerRecordCRUDRoutes(app: BaseApp, router: Router): void {
     try {
       const collection = await app.findCollectionByNameOrId(req.params.collectionIdOrName)
       if (!collection) {
-        return res.status(404).json({ code: 404, message: 'Collection not found.' })
+        return res.status(404).json(createApiError(404, 'NOT_FOUND', 'Collection not found.'))
       }
 
       const existingRecord = await findRecordById(app, req.params.collectionIdOrName, req.params.recordId)
       if (!existingRecord) {
-        return res.status(404).json({ code: 404, message: 'Record not found.' })
+        return res.status(404).json(createApiError(404, 'NOT_FOUND', 'Record not found.'))
       }
 
       const requestInfo = buildRequestInfo(req)
       requestInfo.context = 'update'
 
       if (collection.updateRule === null) {
-        return res.status(403).json({ code: 403, message: 'Access denied.' })
+        return res.status(403).json(createApiError(403, 'FORBIDDEN', 'Access denied.'))
       }
       if (collection.updateRule !== '') {
         const accessible = await canAccessRecord(app, existingRecord, collection, collection.updateRule, requestInfo)
         if (!accessible) {
-          return res.status(403).json({ code: 403, message: 'Access denied.' })
+          return res.status(403).json(createApiError(403, 'FORBIDDEN', 'Access denied.'))
         }
       }
 
       const { record, errors } = await validateAndUpdateRecord(app, collection, existingRecord, req.body)
       if (errors.length > 0) {
-        return res.status(400).json({ code: 400, message: 'Validation failed.', data: errors })
+        return res.status(400).json(createApiError(400, 'VALIDATION_FAILED', 'Validation failed.', { errors }))
       }
 
       await app.save(record)
@@ -260,8 +262,12 @@ export function registerRecordCRUDRoutes(app: BaseApp, router: Router): void {
 
       res.json(enriched.toJSON())
     } catch (err: any) {
+      const dbError = normalizeDatabaseError(err)
+      if (dbError.code !== 500) {
+        return res.status(dbError.code).json(dbError)
+      }
       app.logger().error(err.message || err)
-      res.status(500).json({ code: 500, message: 'Internal server error' })
+      res.status(500).json(createApiError(500, 'INTERNAL_ERROR', 'Internal server error'))
     }
   })
 
@@ -269,24 +275,24 @@ export function registerRecordCRUDRoutes(app: BaseApp, router: Router): void {
     try {
       const collection = await app.findCollectionByNameOrId(req.params.collectionIdOrName)
       if (!collection) {
-        return res.status(404).json({ code: 404, message: 'Collection not found.' })
+        return res.status(404).json(createApiError(404, 'NOT_FOUND', 'Collection not found.'))
       }
 
       const record = await findRecordById(app, req.params.collectionIdOrName, req.params.recordId)
       if (!record) {
-        return res.status(404).json({ code: 404, message: 'Record not found.' })
+        return res.status(404).json(createApiError(404, 'NOT_FOUND', 'Record not found.'))
       }
 
       const requestInfo = buildRequestInfo(req)
       requestInfo.context = 'delete'
 
       if (collection.deleteRule === null) {
-        return res.status(403).json({ code: 403, message: 'Access denied.' })
+        return res.status(403).json(createApiError(403, 'FORBIDDEN', 'Access denied.'))
       }
       if (collection.deleteRule !== '') {
         const accessible = await canAccessRecord(app, record, collection, collection.deleteRule, requestInfo)
         if (!accessible) {
-          return res.status(403).json({ code: 403, message: 'Access denied.' })
+          return res.status(403).json(createApiError(403, 'FORBIDDEN', 'Access denied.'))
         }
       }
 
@@ -298,7 +304,7 @@ export function registerRecordCRUDRoutes(app: BaseApp, router: Router): void {
       res.status(204).send()
     } catch (err: any) {
       app.logger().error(err.message || err)
-      res.status(500).json({ code: 500, message: 'Internal server error' })
+      res.status(500).json(createApiError(500, 'INTERNAL_ERROR', 'Internal server error'))
     }
   })
 

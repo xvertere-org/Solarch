@@ -1,8 +1,9 @@
 import { BaseApp } from './base'
 import { RecordModel as PBRecord, RecordData } from './record'
 import { Collection } from './collection'
-import { parseFilter, buildSQL, buildSortSQL, FilterAST, evaluateFilterAST } from '../tools/search/filter'
+import { parseFilter, FilterAST } from '../tools/search/filter'
 import { validateIdentifier, quoteIdentifier } from '../utils/sql_safe'
+import { calculateTotalPages } from '../utils/pagination'
 
 export interface RecordQueryOptions {
   filter?: string
@@ -30,9 +31,8 @@ export async function findRecordById(
   const collection = await app.findCollectionByNameOrId(collectionIdOrName)
   if (!collection) return null
 
-  const db = app.db().getDataDB()
   const qt = quoteIdentifier(`_r_${collection.id}`)
-  const row = db.prepare(`SELECT * FROM ${qt} WHERE id = ?`).get(recordId) as any
+  const row = await app.db().queryOne<any>(`SELECT * FROM ${qt} WHERE id = ?`, [recordId])
   if (!row) return null
 
   return new PBRecord(collection.id, collection.name, row)
@@ -47,9 +47,8 @@ export async function findRecordsByIds(
   if (!collection || recordIds.length === 0) return []
 
   const placeholders = recordIds.map(() => '?').join(',')
-  const db = app.db().getDataDB()
   const qt = quoteIdentifier(`_r_${collection.id}`)
-  const rows = db.prepare(`SELECT * FROM ${qt} WHERE id IN (${placeholders})`).all(...recordIds) as any[]
+  const rows = await app.db().query<any>(`SELECT * FROM ${qt} WHERE id IN (${placeholders})`, recordIds)
 
   return rows.map(row => new PBRecord(collection.id, collection.name, row))
 }
@@ -64,7 +63,6 @@ export async function findAllRecords(
     return { page: 1, perPage: 0, totalItems: 0, totalPages: 0, items: [] }
   }
 
-  const db = app.db().getDataDB()
   const qt = quoteIdentifier(`_r_${collection.id}`)
   const page = options.page ?? 1
   const perPage = options.perPage ?? 30
@@ -76,26 +74,26 @@ export async function findAllRecords(
 
   if (filter) {
     const ast = parseFilter(filter)
-    const { where, params: sqlParams } = buildSQL(ast)
+    const { text: where, params: sqlParams } = app.db().getDriver().compileFilter(ast)
     if (where && where !== '1=1') {
       whereClause = `WHERE ${where}`
       params = sqlParams
     }
   }
 
-  const orderBy = buildSortSQL(sort || '')
+  const orderBy = app.db().getDriver().buildSort(sort || '')
   const offset = (page - 1) * perPage
 
   let totalItems = 0
   let totalPages = 1
 
   if (!options.skipTotal) {
-    const countResult = db.prepare(`SELECT COUNT(*) as total FROM ${qt} ${whereClause}`).get(...params) as { total: number }
-    totalItems = countResult.total
-    totalPages = Math.ceil(totalItems / perPage) || 1
+    const countResult = await app.db().queryOne<{ total: number }>(`SELECT COUNT(*) as total FROM ${qt} ${whereClause}`, params)
+    totalItems = countResult?.total ?? 0
+    totalPages = calculateTotalPages(totalItems, perPage)
   }
 
-  const rows = db.prepare(`SELECT * FROM ${qt} ${whereClause} ORDER BY ${orderBy} LIMIT ? OFFSET ?`).all(...params, perPage, offset) as any[]
+  const rows = await app.db().query<any>(`SELECT * FROM ${qt} ${whereClause} ORDER BY ${orderBy} LIMIT ? OFFSET ?`, [...params, perPage, offset])
 
   const items = rows.map(row => new PBRecord(collection.id, collection.name, row))
   return { page, perPage, totalItems, totalPages, items }
@@ -110,12 +108,11 @@ export async function findFirstRecordByFilter(
   if (!collection) return null
 
   const ast = parseFilter(filter)
-  const { where, params } = buildSQL(ast)
+  const { text: where, params } = app.db().getDriver().compileFilter(ast)
   const whereClause = where && where !== '1=1' ? `WHERE ${where}` : ''
 
-  const db = app.db().getDataDB()
   const qt = quoteIdentifier(`_r_${collection.id}`)
-  const row = db.prepare(`SELECT * FROM ${qt} ${whereClause} LIMIT 1`).get(...params) as any
+  const row = await app.db().queryOne<any>(`SELECT * FROM ${qt} ${whereClause} LIMIT 1`, params)
   if (!row) return null
 
   return new PBRecord(collection.id, collection.name, row)
@@ -133,14 +130,13 @@ export async function findRecordsByFilter(
   if (!collection) return []
 
   const ast = parseFilter(filter)
-  const { where, params } = buildSQL(ast)
+  const { text: where, params } = app.db().getDriver().compileFilter(ast)
   const whereClause = where && where !== '1=1' ? `WHERE ${where}` : ''
 
-  const orderBy = buildSortSQL(sort)
+  const orderBy = app.db().getDriver().buildSort(sort)
 
-  const db = app.db().getDataDB()
   const qt = quoteIdentifier(`_r_${collection.id}`)
-  const rows = db.prepare(`SELECT * FROM ${qt} ${whereClause} ORDER BY ${orderBy} LIMIT ? OFFSET ?`).all(...params, limit, offset) as any[]
+  const rows = await app.db().query<any>(`SELECT * FROM ${qt} ${whereClause} ORDER BY ${orderBy} LIMIT ? OFFSET ?`, [...params, limit, offset])
 
   return rows.map(row => new PBRecord(collection.id, collection.name, row))
 }
@@ -158,17 +154,16 @@ export async function countRecords(
 
   if (filter) {
     const ast = parseFilter(filter)
-    const { where, params: sqlParams } = buildSQL(ast)
+    const { text: where, params: sqlParams } = app.db().getDriver().compileFilter(ast)
     if (where && where !== '1=1') {
       whereClause = `WHERE ${where}`
       params = sqlParams
     }
   }
 
-  const db = app.db().getDataDB()
   const qt = quoteIdentifier(`_r_${collection.id}`)
-  const result = db.prepare(`SELECT COUNT(*) as total FROM ${qt} ${whereClause}`).get(...params) as { total: number }
-  return result.total
+  const result = await app.db().queryOne<{ total: number }>(`SELECT COUNT(*) as total FROM ${qt} ${whereClause}`, params)
+  return result?.total ?? 0
 }
 
 export async function findAuthRecordByEmail(
@@ -179,9 +174,8 @@ export async function findAuthRecordByEmail(
   const collection = await app.findCollectionByNameOrId(collectionIdOrName)
   if (!collection || !collection.isAuth()) return null
 
-  const db = app.db().getDataDB()
   const qt = quoteIdentifier(`_r_${collection.id}`)
-  const row = db.prepare(`SELECT * FROM ${qt} WHERE email = ?`).get(email) as any
+  const row = await app.db().queryOne<any>(`SELECT * FROM ${qt} WHERE email = ?`, [email])
   if (!row) return null
 
   return new PBRecord(collection.id, collection.name, row)
@@ -195,9 +189,8 @@ export async function findAuthRecordByUsername(
   const collection = await app.findCollectionByNameOrId(collectionIdOrName)
   if (!collection || !collection.isAuth()) return null
 
-  const db = app.db().getDataDB()
   const qt = quoteIdentifier(`_r_${collection.id}`)
-  const row = db.prepare(`SELECT * FROM ${qt} WHERE username = ?`).get(username) as any
+  const row = await app.db().queryOne<any>(`SELECT * FROM ${qt} WHERE username = ?`, [username])
   if (!row) return null
 
   return new PBRecord(collection.id, collection.name, row)
@@ -219,8 +212,7 @@ export async function findAuthRecordByToken(
     const collection = await app.findCollectionByNameOrId(payload.collectionId)
     if (!collection) return null
 
-    const db = app.db().getDataDB()
-    const row = db.prepare(`SELECT * FROM ${quoteIdentifier(`_r_${collection.id}`)} WHERE id = ?`).get(payload.id) as any
+    const row = await app.db().queryOne<any>(`SELECT * FROM ${quoteIdentifier(`_r_${collection.id}`)} WHERE id = ?`, [payload.id])
     if (!row) return null
 
     return new PBRecord(collection.id, collection.name, row)
@@ -246,10 +238,9 @@ export async function deleteRecordById(
   const collection = await app.findCollectionByNameOrId(collectionIdOrName)
   if (!collection) return false
 
-  const db = app.db().getDataDB()
   const qt = quoteIdentifier(`_r_${collection.id}`)
-  const result = db.prepare(`DELETE FROM ${qt} WHERE id = ?`).run(recordId)
-  return result.changes > 0
+  const result = await app.db().execute(`DELETE FROM ${qt} WHERE id = ?`, [recordId])
+  return result.rowsAffected > 0
 }
 
 export interface VectorSearchResult {
@@ -270,12 +261,15 @@ export async function vectorSearch(
 
   validateIdentifier(fieldName, 'vector field name')
 
+  if (!app.db().getDriver().capabilities.vectorFunctions) {
+    throw new Error('Vector search is not supported by this database provider')
+  }
+
   const field = collection.fields.find(f => f.name === fieldName)
   if (!field || field.type !== 'vector') {
     throw new Error(`Field "${fieldName}" is not a vector field`)
   }
 
-  const db = app.db().getDataDB()
   const tableName = `_r_${collection.id}`
   const qt = quoteIdentifier(tableName)
   const qf = quoteIdentifier(fieldName)
@@ -284,14 +278,14 @@ export async function vectorSearch(
   const minSimClause = minSimilarity !== undefined ? `AND vector_cosine_similarity(${qf}, ?) >= ?` : ''
   const minSimParams = minSimilarity !== undefined ? [vectorJson, minSimilarity] : []
 
-  const rows = db.prepare(`
+  const rows = await app.db().query<any>(`
     SELECT *, vector_cosine_similarity(${qf}, ?) as similarity
     FROM ${qt}
     WHERE ${qf} IS NOT NULL AND ${qf} != ''
     ${minSimClause}
     ORDER BY similarity DESC
     LIMIT ?
-  `).all(vectorJson, ...minSimParams, limit) as any[]
+  `, [vectorJson, ...minSimParams, limit])
 
   return rows.map(row => {
     const similarity = row.similarity as number

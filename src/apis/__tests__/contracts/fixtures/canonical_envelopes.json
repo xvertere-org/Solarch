@@ -1,0 +1,84 @@
+{
+  "paginated_response": {
+    "page": 1,
+    "perPage": 30,
+    "totalItems": 100,
+    "totalPages": 4,
+    "items": [
+      {
+        "id": "rec_sample1",
+        "created": "2026-08-14T00:00:00.000Z",
+        "updated": "2026-08-14T00:00:00.000Z",
+        "collectionId": "col_posts",
+        "collectionName": "posts",
+        "title": "Sample Post"
+      }
+    ]
+  },
+  "api_error_validation": {
+    "code": 400,
+    "status": "VALIDATION_FAILED",
+    "message": "Validation failed.",
+    "data": {
+      "fieldErrors": {
+        "email": {
+          "code": "validation_not_unique",
+          "message": "Value must be unique."
+        }
+      }
+    }
+  },
+  "api_error_not_found": {
+    "code": 404,
+    "status": "NOT_FOUND",
+    "message": "Record not found."
+  },
+  "api_error_unauthorized": {
+    "code": 401,
+    "status": "UNAUTHORIZED",
+    "message": "Missing or invalid auth token."
+  },
+  "api_error_forbidden": {
+    "code": 403,
+    "status": "FORBIDDEN",
+    "message": "Access denied."
+  },
+  "api_error_rate_limited": {
+    "code": 429,
+    "status": "RATE_LIMITED",
+    "message": "Too many authentication attempts, please try again later.",
+    "data": {
+      "retryAfter": 900
+    }
+  },
+  "auth_response": {
+    "token": "sample.jwt.token",
+    "record": {
+      "id": "rec_user1",
+      "created": "2026-08-14T00:00:00.000Z",
+      "updated": "2026-08-14T00:00:00.000Z",
+      "collectionId": "col_users",
+      "collectionName": "users",
+      "email": "user@example.com"
+    }
+  },
+  "realtime_connected": {
+    "type": "connected",
+    "clientId": "c_abc123",
+    "protocolVersion": "1.0",
+    "authenticated": false
+  },
+  "realtime_event": {
+    "type": "event",
+    "channel": "collections.col_posts.records",
+    "data": {
+      "action": "create",
+      "collectionId": "col_posts",
+      "record": {
+        "id": "rec_post1",
+        "title": "New Post"
+      },
+      "timestamp": "2026-08-14T00:00:00.000Z"
+    }
+  }
+}

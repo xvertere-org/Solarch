@@ -47,20 +47,13 @@ export function registerBatchRoutes(app: BaseApp, router: Router): void {
       }
 
       const results: BatchResponse[] = []
-      const db = app.db().getDataDB()
 
-      db.exec('BEGIN TRANSACTION')
-
-      try {
+      await app.db().transaction(async (txDriver) => {
         for (const batchReq of requests) {
           const result = await processBatchRequest(app, req, batchReq)
           results.push(result)
         }
-        db.exec('COMMIT')
-      } catch (err) {
-        db.exec('ROLLBACK')
-        throw err
-      }
+      })
 
       res.json(results)
     } catch (err: any) {

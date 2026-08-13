@@ -177,7 +177,7 @@ describe('Auth Flows', () => {
     expect(reqStatus).toBe(200)
 
     // 2. Generate token
-    const changeToken = ctx.app.createPasswordResetToken(userId, `emailChange:${authCollection.id}`, 2, newEmail)
+    const changeToken = await ctx.app.createPasswordResetToken(userId, `emailChange:${authCollection.id}`, 2, newEmail)
 
     // 3. Confirm email change
     const { status: confStatus } = await fetchJson(`${ctx.url}/api/collections/users/confirm-email-change`, {

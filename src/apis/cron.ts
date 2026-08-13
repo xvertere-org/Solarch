@@ -1,7 +1,6 @@
 import { Router, Request, Response } from 'express'
 import { BaseApp } from '../core/base'
 import { requireSuperuserAuth } from './middlewares_auth'
-import { Cron } from '../tools/cron/cron'
 
 const cronJobs = new Map<string, any>()
 

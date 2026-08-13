@@ -5,13 +5,7 @@ const VALID_DIRECTIONS = new Set(['ASC', 'DESC'])
 // FIXED[M-4]: Reject sort expressions exceeding maximum safe length
 const MAX_FILTER_LENGTH = 4096
 
-export interface QueryBuilder {
-  buildWhere(ast: FilterAST, paramOffset?: number): { where: string; params: any[] }
-  buildSort(sort: string): string
-  escapeField(field: string): string
-}
-
-export class SqliteQueryBuilder implements QueryBuilder {
+export class SqliteQueryBuilder {
   buildWhere(ast: FilterAST, paramOffset = 0): { where: string; params: any[] } {
     const params: any[] = []
 

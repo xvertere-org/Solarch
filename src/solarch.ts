@@ -1,4 +1,7 @@
 import { BaseApp, BaseAppConfig } from './core/base'
+import { ResolvedAppConfig, SolarchConfigInput } from './core/config_types'
+import { resolveAppConfig } from './core/config_loader'
+import { formatDatabaseDestination } from './utils/secret_mask'
 import { serve } from './apis/serve'
 import { BootstrapEvent } from './core/events'
 import { hasSuperuser } from './cmd/superuser'
@@ -17,36 +20,19 @@ function loadVersion(): string {
   }
 }
 
-export interface SolarchConfig {
-  hideStartBanner?: boolean
-  defaultDev?: boolean
-  defaultDataDir?: string
-  defaultEncryptionEnv?: string
-  defaultQueryTimeout?: number
-  dataMaxOpenConns?: number
-  dataMaxIdleConns?: number
-  auxMaxOpenConns?: number
-  auxMaxIdleConns?: number
-}
+export type SolarchConfig = SolarchConfigInput
 
 export class Solarch extends BaseApp {
   hideStartBanner: boolean
   version: string
   private _migrationRunner?: MigrationRunner
 
-  constructor(config: SolarchConfig = {}) {
-    const baseConfig: BaseAppConfig = {
-      isDev: config.defaultDev ?? false,
-      dataDir: config.defaultDataDir ?? './pb_data',
-      encryptionEnv: config.defaultEncryptionEnv,
-      queryTimeout: config.defaultQueryTimeout,
-      dataMaxOpenConns: config.dataMaxOpenConns,
-      dataMaxIdleConns: config.dataMaxIdleConns,
-      auxMaxOpenConns: config.auxMaxOpenConns,
-      auxMaxIdleConns: config.auxMaxIdleConns,
-    }
-    super(baseConfig)
-    this.hideStartBanner = config.hideStartBanner ?? false
+  constructor(config: SolarchConfigInput | ResolvedAppConfig = {}) {
+    const resolved = 'db' in config && config.db && typeof config.db === 'object'
+      ? (config as ResolvedAppConfig)
+      : resolveAppConfig(config as SolarchConfigInput)
+    super(resolved)
+    this.hideStartBanner = resolved.hideStartBanner
     // FIXED[L-4]: Load version from package.json instead of hardcoding
     this.version = loadVersion()
     this._migrationRunner = undefined
@@ -57,12 +43,14 @@ export class Solarch extends BaseApp {
     await this.migrate()
     await this.loadJSHooks()
 
-    const hasAdmin = hasSuperuser(this)
+    const hasAdmin = await hasSuperuser(this)
     const installerUrl = `http://localhost:${port}/_/#/install`
 
     if (!this.hideStartBanner) {
+      const dbSummary = formatDatabaseDestination(this.resolvedConfig.db, this.dataDir)
       console.log(`
 Solarch v${this.version}
+Database: ${dbSummary}
 Server started at http://localhost:${port}
 - REST API: http://localhost:${port}/api/
 - Admin UI: http://localhost:${port}/_/
@@ -88,10 +76,9 @@ Server started at http://localhost:${port}
         const { deleteExpiredOTPs, deleteExpiredMFAs } = await import('./core/auth_queries.js')
         await deleteExpiredOTPs(this)
         await deleteExpiredMFAs(this)
-        const db = this.db().getDataDB()
         const now = new Date().toISOString()
-        db.prepare(`DELETE FROM _passwordResetTokens WHERE expiresAt < ?`).run(now)
-        db.prepare(`DELETE FROM _oauth2States WHERE expiresAt < ?`).run(now)
+        await this.db().execute(`DELETE FROM _passwordResetTokens WHERE expiresAt < ?`, [now])
+        await this.db().execute(`DELETE FROM _oauth2States WHERE expiresAt < ?`, [now])
       } catch {}
     }
     // Run immediately on start, then every 30 minutes
@@ -105,9 +92,9 @@ Server started at http://localhost:${port}
       const forceExit = setTimeout(() => process.exit(1), 10000)
       await new Promise<void>(resolve => httpServer.close(() => resolve()))
       clearTimeout(forceExit)
-      try { this.db().getDataDB().exec('PRAGMA wal_checkpoint(TRUNCATE)') } catch {}
-      try { this.db().getAuxDB().exec('PRAGMA wal_checkpoint(TRUNCATE)') } catch {}
-      this.db().close()
+      try { await this.db().checkpoint('data') } catch {}
+      try { await this.db().checkpoint('aux') } catch {}
+      await this.db().close()
       process.exit(0)
     }
 
@@ -132,12 +119,12 @@ Server started at http://localhost:${port}
     await this._migrationRunner.rollback(count)
   }
 
-  migrationStatus(): { id: string; applied: boolean; appliedAt?: string }[] {
+  async migrationStatus(): Promise<{ id: string; applied: boolean; appliedAt?: string }[]> {
     if (!this._migrationRunner) {
       this._migrationRunner = new MigrationRunner(this)
       this._loadJSMigrations()
     }
-    return this._migrationRunner.status()
+    return await this._migrationRunner.status()
   }
 
   private _loadJSMigrations(): void {

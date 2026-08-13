@@ -9,10 +9,10 @@ import { createStreamingBackup, restoreStreamingBackup, isBackupInProgress, Back
 
 const BACKUP_FILE_SIZE_LIMIT = 1024 * 1024 * 1024
 
-function checkpointWalIfPossible(app: BaseApp): void {
+async function checkpointWalIfPossible(app: BaseApp): Promise<void> {
   try {
-    app.db().getDataDB().exec('PRAGMA wal_checkpoint(TRUNCATE)')
-    app.db().getAuxDB().exec('PRAGMA wal_checkpoint(TRUNCATE)')
+    await app.db().checkpoint('data')
+    await app.db().checkpoint('aux')
   } catch {
   }
 }
@@ -21,6 +21,15 @@ async function pathExists(filePath: string): Promise<boolean> {
   try {
     await fsPromises.access(filePath)
     return true
+  } catch {
+    return false
+  }
+}
+
+function isBackupSupported(app: BaseApp): boolean {
+  try {
+    const driver = app.db().getDriver()
+    return 'backupToFile' in driver && typeof (driver as any).backupToFile === 'function'
   } catch {
     return false
   }
@@ -60,6 +69,13 @@ export function registerBackupRoutes(app: BaseApp, router: Router): void {
 
   router.post('/api/backups', requireSuperuserAuth(app), async (req: Request, res: Response) => {
     try {
+      if (!isBackupSupported(app)) {
+        return res.status(400).json({
+          code: 400,
+          message: 'Database backup via /api/backups is not supported for this database provider. Use provider-native backup tools (e.g. pg_dump).',
+        })
+      }
+
       const { name } = req.body
       const sanitized = name
         ? name.replace(/[^a-zA-Z0-9._-]/g, '_').replace(/\.\./g, '_')
@@ -103,6 +119,16 @@ export function registerBackupRoutes(app: BaseApp, router: Router): void {
 
   router.post('/api/backups/upload', requireSuperuserAuth(app), upload.single('file'), async (req: Request, res: Response) => {
     try {
+      if (!isBackupSupported(app)) {
+        if (req.file && await pathExists(req.file.path)) {
+          await fsPromises.unlink(req.file.path)
+        }
+        return res.status(400).json({
+          code: 400,
+          message: 'Database backup via /api/backups is not supported for this database provider. Use provider-native backup tools (e.g. pg_dump).',
+        })
+      }
+
       if (!req.file) {
         return res.status(400).json({ code: 400, message: 'No file provided' })
       }
@@ -138,6 +164,13 @@ export function registerBackupRoutes(app: BaseApp, router: Router): void {
 
   router.post('/api/backups/:key/restore', requireSuperuserAuth(app), async (req: Request, res: Response) => {
     try {
+      if (!isBackupSupported(app)) {
+        return res.status(400).json({
+          code: 400,
+          message: 'Database restore via /api/backups is not supported for this database provider. Use provider-native backup tools (e.g. pg_restore).',
+        })
+      }
+
       const backupKey = path.basename(req.params.key).replace(/\.\./g, '')
       const backupPath = path.join(backupDir, backupKey)
 

@@ -1,99 +1,130 @@
-import { SqliteDriver, ColumnInfo } from '../tools/database/sqlite-driver'
-import Database from 'better-sqlite3'
-import path from 'path'
-import fs from 'fs'
+import { createDatabaseDriver, DatabaseDriverConfig } from '../tools/database/factory'
+import { DatabaseDriver, ColumnInfo } from '../tools/database/types'
 import { validateIdentifier, quoteIdentifier } from '../utils/sql_safe'
+
+import { ResolvedDatabaseConfig } from './config_types'
 
 export const DEFAULT_QUERY_TIMEOUT = 30
 
 export interface DBConfig {
-  dataDir: string
-  isDev: boolean
+  provider?: 'sqlite' | 'postgres'
+  dataDir?: string
   queryTimeout?: number
-  maxOpenConns?: number
-  maxIdleConns?: number
+  connectionString?: string
+  dbDriver?: 'postgres' | 'neon'
+  driver?: 'postgres' | 'neon'
+  dbMode?: 'tcp' | 'http' | 'websocket'
+  mode?: 'tcp' | 'http' | 'websocket'
+  pool?: {
+    max?: number
+    idleTimeoutMs?: number
+    connectionTimeoutMs?: number
+  }
 }
 
 export class DB {
-  private driver: SqliteDriver
+  private driver: DatabaseDriver
 
-  constructor(config: DBConfig) {
-    this.driver = new SqliteDriver(config.dataDir, config.isDev, config.queryTimeout ?? DEFAULT_QUERY_TIMEOUT)
+  constructor(config: DBConfig | ResolvedDatabaseConfig, fallbackDataDir = './pb_data') {
+    const provider = config.provider ?? 'sqlite'
+    const driverConfig: DatabaseDriverConfig =
+      provider === 'postgres'
+        ? {
+            provider: 'postgres',
+            connectionString: config.connectionString ?? '',
+            driver: (config as any).driver ?? (config as any).dbDriver,
+            mode: (config as any).mode ?? (config as any).dbMode,
+            queryTimeout: config.queryTimeout ?? DEFAULT_QUERY_TIMEOUT,
+            pool: config.pool,
+          }
+        : {
+            provider: 'sqlite',
+            dataDir: (config as any).dataDir ?? fallbackDataDir,
+            queryTimeout: config.queryTimeout ?? DEFAULT_QUERY_TIMEOUT,
+          }
+    this.driver = createDatabaseDriver(driverConfig)
   }
 
-  getDataDB(): Database.Database {
-    return this.driver.getDataDB()
-  }
-
-  getAuxDB(): Database.Database {
-    return this.driver.getAuxDB()
-  }
-
-  getDriver(): SqliteDriver {
+  getDriver(): DatabaseDriver {
     return this.driver
   }
 
-  hasTable(tableName: string, db: 'data' | 'aux' = 'data'): boolean {
-    const database = db === 'data' ? this.driver.getDataDB() : this.driver.getAuxDB()
-    const result = database.prepare(
-      `SELECT COUNT(*) as count FROM sqlite_master WHERE type IN ('table', 'view') AND LOWER(name) = LOWER(?)`
-    ).get(tableName) as { count: number }
-    return result.count > 0
+  /** @deprecated Replaced by contractual driver methods */
+  getDataDB() {
+    return (this.driver as any).getDataDB()
   }
 
-  tableColumns(tableName: string, db: 'data' | 'aux' = 'data'): string[] {
-    validateIdentifier(tableName, 'table name')
-    const database = db === 'data' ? this.driver.getDataDB() : this.driver.getAuxDB()
-    const rows = database.prepare(`PRAGMA table_info(${quoteIdentifier(tableName)})`).all() as Array<{ name: string }>
-    return rows.map(r => r.name)
+  /** @deprecated Replaced by contractual driver methods */
+  getAuxDB() {
+    return (this.driver as any).getAuxDB()
   }
 
-  tableInfo(tableName: string, db: 'data' | 'aux' = 'data'): ColumnInfo[] {
-    validateIdentifier(tableName, 'table name')
-    const database = db === 'data' ? this.driver.getDataDB() : this.driver.getAuxDB()
-    return database.prepare(`PRAGMA table_info(${quoteIdentifier(tableName)})`).all() as ColumnInfo[]
+  async query<T = any>(sql: string, params?: unknown[]): Promise<T[]> {
+    return (await this.driver.query(sql, params)) as T[]
   }
 
-  tableIndexes(tableName: string, db: 'data' | 'aux' = 'data'): Record<string, string> {
-    validateIdentifier(tableName, 'table name')
-    const database = db === 'data' ? this.driver.getDataDB() : this.driver.getAuxDB()
-    const rows = database.prepare(`PRAGMA index_list(${quoteIdentifier(tableName)})`).all() as Array<{ name: string; sql: string | null }>
-    const result: Record<string, string> = {}
-    for (const row of rows) {
-      if (row.sql) result[row.name] = row.sql
+  async queryOne<T = any>(sql: string, params?: unknown[]): Promise<T | null> {
+    return (await this.driver.queryOne(sql, params)) as T | null
+  }
+
+  async execute(sql: string, params?: unknown[]) {
+    return this.driver.execute(sql, params)
+  }
+
+  async ping(): Promise<boolean> {
+    return this.driver.ping()
+  }
+
+  async checkpoint(target?: string): Promise<void> {
+    if ('checkpoint' in this.driver && typeof (this.driver as any).checkpoint === 'function') {
+      await (this.driver as any).checkpoint(target)
     }
-    return result
   }
 
-  deleteTable(tableName: string, db: 'data' | 'aux' = 'data'): void {
-    validateIdentifier(tableName, 'table name')
-    const database = db === 'data' ? this.driver.getDataDB() : this.driver.getAuxDB()
-    database.exec(`DROP TABLE IF EXISTS ${quoteIdentifier(tableName)}`)
+  async backupToFile(destPath: string, target?: string): Promise<void> {
+    if ('backupToFile' in this.driver && typeof (this.driver as any).backupToFile === 'function') {
+      await (this.driver as any).backupToFile(destPath, target)
+    }
   }
 
-  deleteView(viewName: string, db: 'data' | 'aux' = 'data'): void {
-    validateIdentifier(viewName, 'view name')
-    const database = db === 'data' ? this.driver.getDataDB() : this.driver.getAuxDB()
-    database.exec(`DROP VIEW IF EXISTS ${quoteIdentifier(viewName)}`)
+  async hasTable(tableName: string): Promise<boolean> {
+    return this.driver.hasTable(tableName)
   }
 
-  saveView(viewName: string, selectQuery: string, db: 'data' | 'aux' = 'data'): void {
-    validateIdentifier(viewName, 'view name')
-    const database = db === 'data' ? this.driver.getDataDB() : this.driver.getAuxDB()
-    database.exec(`DROP VIEW IF EXISTS ${quoteIdentifier(viewName)}`)
-    database.exec(`CREATE VIEW ${quoteIdentifier(viewName)} AS ${selectQuery}`)
+  async tableColumns(tableName: string): Promise<string[]> {
+    const info = await this.driver.tableInfo(tableName)
+    return info.map(c => c.name)
   }
 
-  vacuum(db: 'data' | 'aux' = 'data'): void {
-    const database = db === 'data' ? this.driver.getDataDB() : this.driver.getAuxDB()
-    database.exec('VACUUM')
+  async tableInfo(tableName: string): Promise<ColumnInfo[]> {
+    return this.driver.tableInfo(tableName)
   }
 
-  transaction<T>(fn: (db: DB) => T): T {
-    return this.driver.getDataDB().transaction(() => fn(this))()
+  async tableIndexes(tableName: string): Promise<Record<string, string>> {
+    return this.driver.tableIndexes(tableName)
   }
 
-  close(): void {
-    this.driver.close()
+  async deleteTable(tableName: string): Promise<void> {
+    return this.driver.dropTable(tableName)
+  }
+
+  async deleteView(viewName: string): Promise<void> {
+    return this.driver.dropView(viewName)
+  }
+
+  async saveView(viewName: string, selectQuery: string): Promise<void> {
+    return this.driver.saveView(viewName, selectQuery)
+  }
+
+  async vacuum(): Promise<void> {
+    await this.driver.execute('VACUUM')
+  }
+
+  async transaction<T>(fn: (tx: DB) => Promise<T>): Promise<T> {
+    return this.driver.transaction(() => fn(this))
+  }
+
+  async close(): Promise<void> {
+    await this.driver.close()
   }
 }
