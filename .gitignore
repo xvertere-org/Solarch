@@ -52,8 +52,8 @@ graphify-out/
 pocketbase
 
 # Empty / leftover dirs
-uploads/
-ui/
+/uploads/
+/ui/
 
 # Test scripts
 test1.sh
