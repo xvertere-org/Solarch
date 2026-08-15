@@ -1,257 +1,638 @@
-import { useEffect, useState } from 'react'
-import { useParams, Link } from 'react-router-dom'
-import { solarch } from '../lib/solarch'
-import type { CollectionModel, RecordModel } from '@solarch/core-client'
-import { Plus, Search, ChevronLeft, ChevronRight, ArrowLeft, Trash2, Edit } from 'lucide-react'
+import { useEffect, useState, useCallback, useMemo, useRef } from 'react'
+import { useParams, Link, useNavigate } from 'react-router-dom'
+import { solarch } from '@/lib/solarch'
+import {
+  Plus,
+  Search,
+  ChevronLeft,
+  ChevronRight,
+  ArrowLeft,
+  Trash2,
+  Edit,
+  Copy,
+  Check,
+  RefreshCw,
+  Database,
+  X,
+  FileText,
+  AlertTriangle,
+  Eye,
+} from 'lucide-react'
 import { PageHeader } from '@/components/navigation/PageHeader'
-import { Card, CardContent } from '@/components/ui/card'
-import { Table, TableHeader, TableBody, TableHead, TableRow, TableCell } from '@/components/ui/table'
+import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card'
+import {
+  Table,
+  TableHeader,
+  TableBody,
+  TableHead,
+  TableRow,
+  TableCell,
+} from '@/components/ui/table'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
-import { AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, AlertDialogDescription, AlertDialogFooter, AlertDialogCancel, AlertDialogAction } from '@/components/ui/alert-dialog'
-import { Spinner } from '@/components/ui/spinner'
+import { Checkbox } from '@/components/ui/checkbox'
+import { Textarea } from '@/components/ui/textarea'
+import { Badge } from '@/components/ui/badge'
+import {
+  Select,
+  SelectTrigger,
+  SelectValue,
+  SelectContent,
+  SelectItem,
+} from '@/components/ui/select'
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from '@/components/ui/dialog'
+import {
+  AlertDialog,
+  AlertDialogContent,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogCancel,
+  AlertDialogAction,
+} from '@/components/ui/alert-dialog'
+import { Skeleton } from '@/components/ui/Skeleton'
+import { EmptyState } from '@/components/ui/EmptyState'
+import { ErrorState } from '@/components/ui/ErrorState'
 import { toast } from 'sonner'
+import { cn } from '@/lib/utils'
+
+interface Collection {
+  id: string
+  name: string
+  type: string
+  system?: boolean
+  schema: any[]
+}
 
 export default function Records() {
-  const { collectionId } = useParams()
-  const [collection, setCollection] = useState<CollectionModel | null>(null)
-  const [records, setRecords] = useState<RecordModel[]>([])
-  const [page, setPage] = useState(1)
-  const [perPage] = useState(20)
+  const { collectionId } = useParams<{ collectionId: string }>()
+  const navigate = useNavigate()
+
+  const [collection, setCollection] = useState<Collection | null>(null)
+  const [records, setRecords] = useState<any[]>([])
   const [totalItems, setTotalItems] = useState(0)
-  const [filter, setFilter] = useState('')
+  const [totalPages, setTotalPages] = useState(1)
+  const [page, setPage] = useState(1)
+  const [perPage, setPerPage] = useState(20)
+  const [search, setSearch] = useState('')
+  const [sort, setSort] = useState('-created')
+
   const [loading, setLoading] = useState(true)
-  const [showModal, setShowModal] = useState(false)
-  const [newRecord, setNewRecord] = useState<Record<string, any>>({})
-  const [deleteTargetId, setDeleteTargetId] = useState<string | null>(null)
+  const [refreshing, setRefreshing] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  // Selection state
+  const [selectedIds, setSelectedIds] = useState<string[]>([])
+
+  // Modal states
+  const [showCreateModal, setShowCreateModal] = useState(false)
+  const [newRecordData, setNewRecordData] = useState<Record<string, any>>({})
+  const [creating, setCreating] = useState(false)
+
+  // Delete modal state
+  const [deleteTarget, setDeleteTarget] = useState<any | null>(null)
   const [deleting, setDeleting] = useState(false)
+  const [bulkDeleting, setBulkDeleting] = useState(false)
+  const [showBulkDeleteConfirm, setShowBulkDeleteConfirm] = useState(false)
 
-  useEffect(() => { loadCollection() }, [collectionId])
-  useEffect(() => { loadRecords() }, [collectionId, page, filter])
-
-  async function loadCollection() {
+  const fetchRecords = useCallback(async () => {
     if (!collectionId) return
-    try { setCollection(await solarch.collections.getOne(collectionId)) }
-    catch (err: any) { console.error('Failed to load collection', err) }
-  }
-
-  async function loadRecords() {
-    if (!collectionId) return
-    setLoading(true)
     try {
-      const data = await solarch.collection(collectionId).getList(page, perPage, {
-        filter: filter ? filter : undefined,
-      })
-      setRecords(data.items || []); setTotalItems(data.totalItems || 0)
-    } catch (err: any) { console.error('Failed to load records', err) }
-    finally { setLoading(false) }
+      setError(null)
+
+      // 1. Fetch collection definition
+      const colData: any = await solarch.collections.getOne(collectionId)
+      setCollection(colData)
+
+      // 2. Fetch records
+      const options: any = {
+        sort,
+      }
+      if (search.trim()) {
+        // Simple search query or filter string
+        if (search.includes('=') || search.includes('~') || search.includes('>')) {
+          options.filter = search.trim()
+        }
+      }
+
+      const res = await solarch.collection(collectionId).getList(page, perPage, options)
+      setRecords(res.items || [])
+      setTotalItems(res.totalItems || 0)
+      setTotalPages(res.totalPages || 1)
+    } catch (err: any) {
+      console.error('Failed to fetch records:', err)
+      setError(err.message || 'Failed to load records.')
+      toast.error('Failed to load records')
+    } finally {
+      setLoading(false)
+      setRefreshing(false)
+    }
+  }, [collectionId, page, perPage, sort, search])
+
+  useEffect(() => {
+    fetchRecords()
+  }, [fetchRecords])
+
+  const handleRefresh = () => {
+    setRefreshing(true)
+    fetchRecords()
   }
 
-  async function createRecord(e: React.FormEvent) {
+  // Schema columns to display (up to 5 columns)
+  const displayColumns = useMemo(() => {
+    if (!collection || !collection.schema) return []
+    return collection.schema.slice(0, 5)
+  }, [collection])
+
+  // Select all toggle
+  const allSelected = records.length > 0 && selectedIds.length === records.length
+  const handleToggleSelectAll = () => {
+    if (allSelected) {
+      setSelectedIds([])
+    } else {
+      setSelectedIds(records.map((r) => r.id))
+    }
+  }
+
+  const handleToggleSelect = (id: string) => {
+    if (selectedIds.includes(id)) {
+      setSelectedIds(selectedIds.filter((item) => item !== id))
+    } else {
+      setSelectedIds([...selectedIds, id])
+    }
+  }
+
+  // Handlers
+  const handleCreateRecord = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!collectionId) return
+    if (!collectionId || creating) return
+
     try {
-      await solarch.collection(collectionId).create(newRecord)
+      setCreating(true)
+      await solarch.collection(collectionId).create(newRecordData)
       toast.success('Record created successfully')
-      setShowModal(false); setNewRecord({})
-      setPage(1); loadRecords()
-    } catch (err: any) { toast.error(err.message || 'Failed to create record') }
+      setShowCreateModal(false)
+      setNewRecordData({})
+      await fetchRecords()
+    } catch (err: any) {
+      console.error('Create record failed:', err)
+      toast.error(err.message || 'Failed to create record')
+    } finally {
+      setCreating(false)
+    }
   }
 
-  async function confirmDeleteRecord() {
-    if (!deleteTargetId || !collectionId) return
-    setDeleting(true)
+  const handleDeleteRecord = async () => {
+    if (!collectionId || !deleteTarget || deleting) return
+
     try {
-      await solarch.collection(collectionId).delete(deleteTargetId)
+      setDeleting(true)
+      await solarch.collection(collectionId).delete(deleteTarget.id)
       toast.success('Record deleted')
-      setDeleteTargetId(null)
-      loadRecords()
-    } catch (err: any) { toast.error(err.message || 'Failed to delete record') }
-    finally { setDeleting(false) }
+      setDeleteTarget(null)
+      setSelectedIds((prev) => prev.filter((id) => id !== deleteTarget.id))
+      await fetchRecords()
+    } catch (err: any) {
+      console.error('Delete record failed:', err)
+      toast.error(err.message || 'Failed to delete record')
+    } finally {
+      setDeleting(false)
+    }
   }
 
-  const totalPages = Math.ceil(totalItems / perPage)
-  const displayFields = collection?.fields?.filter((f: any) => !f.system && f.type !== 'json' && f.type !== 'editor') || []
+  const handleBulkDelete = async () => {
+    if (!collectionId || selectedIds.length === 0 || bulkDeleting) return
 
-  const getFieldValue = (rec: any, field: any) => {
-    const val = rec[field.name]
-    if (val === null || val === undefined) return <span className="text-[var(--text-muted)]">—</span>
-    if (field.type === 'bool') return val ? 'Yes' : 'No'
-    if (field.type === 'date') return new Date(val).toLocaleString()
-    if (typeof val === 'object') return JSON.stringify(val).slice(0, 40) + '...'
-    return String(val).slice(0, 60)
+    try {
+      setBulkDeleting(true)
+      for (const recId of selectedIds) {
+        try {
+          await solarch.collection(collectionId).delete(recId)
+        } catch {
+          // Continue
+        }
+      }
+      toast.success(`Deleted ${selectedIds.length} records`)
+      setSelectedIds([])
+      setShowBulkDeleteConfirm(false)
+      await fetchRecords()
+    } catch (err: any) {
+      console.error('Bulk delete failed:', err)
+      toast.error('Bulk delete encountered an issue')
+    } finally {
+      setBulkDeleting(false)
+    }
   }
 
-  if (!collection && loading) {
+  if (loading) {
     return (
-      <div className="flex items-center justify-center p-12">
-        <Spinner className="w-8 h-8 text-[var(--blue-core)]" />
+      <div className="space-y-6">
+        <PageHeader title="Records" description="Persistent collection records." />
+        <Skeleton className="h-96 rounded-xl" />
+      </div>
+    )
+  }
+
+  if (error && records.length === 0) {
+    return (
+      <div className="space-y-6">
+        <PageHeader title="Records" description="Persistent collection records." />
+        <ErrorState title="Unable to load records" message={error} onRetry={fetchRecords} />
       </div>
     )
   }
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center gap-4">
-        <Button variant="ghost" size="sm" onClick={() => window.history.back()}>
-          <ArrowLeft size={16} /> Back
-        </Button>
-      </div>
-
+      {/* 1. Header with Breadcrumb & Create Action */}
       <PageHeader
-        title={`Records: ${collection?.name || '...'}`}
-        description={`Browse, filter, and modify rows in the "${collection?.name}" collection.`}
-        actions={
-          <Button onClick={() => setShowModal(true)}>
-            <Plus size={16} /> New Record
-          </Button>
+        title={
+          <div className="flex items-center gap-2">
+            <Link
+              to="/collections"
+              className="p-1 rounded-md text-text-muted hover:text-text-primary hover:bg-bg-elevated transition-colors"
+            >
+              <ArrowLeft size={16} />
+            </Link>
+            <span>{collection?.name || 'Collection Records'}</span>
+            <Badge variant="secondary" className="font-mono text-[11px] px-2 py-0.5 ml-1">
+              {totalItems} records
+            </Badge>
+          </div>
+        }
+        description={`Collection: ${collection?.id || collectionId}`}
+        action={
+          <div className="flex items-center gap-2">
+            <Button
+              variant="default"
+              size="sm"
+              onClick={() => {
+                setNewRecordData({})
+                setShowCreateModal(true)
+              }}
+              className="flex items-center gap-1.5 text-xs h-8 cursor-pointer"
+            >
+              <Plus size={13} />
+              <span>New Record</span>
+            </Button>
+          </div>
         }
       />
 
-      <div className="relative max-w-md">
-        <Search className="absolute left-3 top-2.5 h-4 w-4 text-[var(--text-muted)]" />
-        <Input
-          placeholder={`Search ${collection?.name || ''} records...`}
-          value={filter}
-          onChange={e => { setFilter(e.target.value); setPage(1) }}
-          className="pl-9"
-        />
-      </div>
-
-      {loading ? (
-        <div className="flex items-center justify-center p-12">
-          <Spinner className="w-8 h-8 text-[var(--blue-core)]" />
-        </div>
-      ) : records.length === 0 ? (
-        <Card className="bg-[var(--bg-surface)] border-[var(--bg-border)] text-center p-12">
-          <CardContent className="flex flex-col items-center justify-center space-y-4">
-            <p className="text-sm text-[var(--text-muted)]">
-              {filter ? 'No records match your filter.' : 'No records yet in this collection.'}
-            </p>
-            {!filter && (
-              <Button onClick={() => setShowModal(true)}>
-                <Plus size={16} /> Create Record
+      {/* 2. Records Table Card */}
+      <Card className="border border-border/70 bg-card rounded-xl overflow-hidden shadow-none">
+        {/* Table Controls */}
+        <CardHeader className="p-4 border-b border-border/60 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div className="flex items-center gap-2">
+            {selectedIds.length > 0 && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setShowBulkDeleteConfirm(true)}
+                className="h-8 text-xs text-status-danger hover:bg-status-danger/10 border-status-danger/30 flex items-center gap-1.5 cursor-pointer"
+              >
+                <Trash2 size={13} />
+                <span>Delete Selected ({selectedIds.length})</span>
               </Button>
             )}
-          </CardContent>
-        </Card>
-      ) : (
-        <Card className="bg-[var(--bg-surface)] border-[var(--bg-border)] overflow-hidden">
-          <div className="overflow-x-auto">
-            <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead className="w-32">ID</TableHead>
-                {displayFields.map((f: any) => <TableHead key={f.id}>{f.name}</TableHead>)}
-                <TableHead className="text-right">Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {records.map(rec => (
-                <TableRow key={rec.id}>
-                  <TableCell className="font-mono text-xs text-[var(--text-muted)]">
-                    {rec.id?.slice(0, 8)}...
-                  </TableCell>
-                  {displayFields.map((f: any) => (
-                    <TableCell key={f.id}>{getFieldValue(rec, f)}</TableCell>
-                  ))}
-                  <TableCell className="text-right">
-                    <div className="flex items-center justify-end gap-2">
-                      <Link to={`/records/${collectionId}/${rec.id}`}>
-                        <Button variant="ghost" size="sm">
-                          <Edit size={14} /> Edit
-                        </Button>
-                      </Link>
-                      <Button
-                        variant="destructive"
-                        size="sm"
-                        onClick={() => setDeleteTargetId(rec.id)}
-                        aria-label={`Delete record ${rec.id}`}
-                      >
-                        <Trash2 size={14} />
-                      </Button>
-                    </div>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
           </div>
 
-          {totalPages > 1 && (
-            <div className="flex items-center justify-between p-4 border-t border-[var(--bg-border)]">
-              <span className="text-xs text-[var(--text-muted)]">
-                Page {page} of {totalPages} ({totalItems} total items)
-              </span>
-              <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
+            <div className="relative">
+              <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-text-muted pointer-events-none" />
+              <Input
+                type="text"
+                placeholder="Filter expression..."
+                value={search}
+                onChange={(e) => {
+                  setSearch(e.target.value)
+                  setPage(1)
+                }}
+                className="pl-8 h-8 text-xs w-44 sm:w-64"
+              />
+            </div>
+
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleRefresh}
+              disabled={refreshing}
+              className="h-8 w-8 p-0 text-text-muted hover:text-text-primary cursor-pointer"
+              title="Refresh"
+            >
+              <RefreshCw size={13} className={cn(refreshing && 'animate-spin')} />
+            </Button>
+          </div>
+        </CardHeader>
+
+        {/* Table View */}
+        <CardContent className="p-0">
+          {records.length === 0 ? (
+            <EmptyState
+              icon={Database}
+              title="No records found"
+              message="This collection does not contain any records yet."
+              action={
                 <Button
-                  variant="outline"
                   size="sm"
-                  disabled={page <= 1}
-                  onClick={() => setPage(p => p - 1)}
+                  variant="default"
+                  onClick={() => setShowCreateModal(true)}
+                  className="text-xs mt-2"
                 >
-                  <ChevronLeft size={14} /> Previous
+                  Create Record
                 </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  disabled={page >= totalPages}
-                  onClick={() => setPage(p => p + 1)}
-                >
-                  Next <ChevronRight size={14} />
-                </Button>
-              </div>
+              }
+              className="py-12"
+            />
+          ) : (
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader className="bg-bg-elevated/40">
+                  <TableRow className="border-b border-border/50 hover:bg-transparent">
+                    <TableHead className="w-9 h-9 text-center">
+                      <Checkbox
+                        checked={allSelected}
+                        onCheckedChange={handleToggleSelectAll}
+                        aria-label="Select all"
+                      />
+                    </TableHead>
+                    <TableHead className="h-9 text-[11px] font-semibold text-text-secondary">ID</TableHead>
+                    {displayColumns.map((col) => (
+                      <TableHead key={col.id} className="h-9 text-[11px] font-semibold text-text-secondary">
+                        {col.name}
+                      </TableHead>
+                    ))}
+                    <TableHead className="h-9 text-[11px] font-semibold text-text-secondary">Created</TableHead>
+                    <TableHead className="h-9 text-[11px] font-semibold text-text-secondary text-right">Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {records.map((rec) => (
+                    <TableRow
+                      key={rec.id}
+                      className="border-b border-border/40 hover:bg-bg-surface-hover/50 transition-colors group"
+                    >
+                      <TableCell className="py-2.5 text-center">
+                        <Checkbox
+                          checked={selectedIds.includes(rec.id)}
+                          onCheckedChange={() => handleToggleSelect(rec.id)}
+                          aria-label={`Select record ${rec.id}`}
+                        />
+                      </TableCell>
+                      <TableCell className="py-2.5 font-mono text-xs text-text-primary font-medium">
+                        <Link
+                          to={`/records/${collectionId}/${rec.id}`}
+                          className="hover:text-brand-bright hover:underline"
+                        >
+                          {rec.id}
+                        </Link>
+                      </TableCell>
+                      {displayColumns.map((col) => (
+                        <TableCell key={col.id} className="py-2.5 text-xs text-text-secondary max-w-[200px] truncate">
+                          {typeof rec[col.name] === 'object'
+                            ? JSON.stringify(rec[col.name])
+                            : String(rec[col.name] ?? '—')}
+                        </TableCell>
+                      ))}
+                      <TableCell className="py-2.5 font-mono text-[11px] text-text-muted">
+                        {rec.created ? new Date(rec.created).toLocaleDateString() : '—'}
+                      </TableCell>
+                      <TableCell className="py-2.5 text-right">
+                        <div className="flex items-center justify-end gap-1">
+                          <Link to={`/records/${collectionId}/${rec.id}`}>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-7 px-2 text-xs text-text-muted hover:text-text-primary cursor-pointer"
+                              title="Edit Record"
+                            >
+                              <Edit size={13} />
+                            </Button>
+                          </Link>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => setDeleteTarget(rec)}
+                            className="h-7 px-2 text-xs text-status-danger hover:bg-status-danger/10 cursor-pointer"
+                            title="Delete Record"
+                          >
+                            <Trash2 size={13} />
+                          </Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
             </div>
           )}
-        </Card>
-      )}
+        </CardContent>
 
-      {/* Create Record Dialog */}
-      <Dialog open={showModal} onOpenChange={setShowModal}>
-        <DialogContent className="bg-[var(--bg-surface)] border-[var(--bg-border)] text-[var(--text-primary)] sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle className="font-display text-xl">New Record — {collection?.name}</DialogTitle>
+        {/* Pagination Footer */}
+        {totalPages > 1 && (
+          <div className="p-3 border-t border-border/50 bg-bg-surface flex items-center justify-between">
+            <span className="text-xs text-text-muted">
+              Page {page} of {totalPages} ({totalItems} total)
+            </span>
+            <div className="flex items-center gap-1.5">
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={page <= 1}
+                onClick={() => setPage((p) => Math.max(1, p - 1))}
+                className="h-7 w-7 p-0 cursor-pointer"
+              >
+                <ChevronLeft size={14} />
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={page >= totalPages}
+                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                className="h-7 w-7 p-0 cursor-pointer"
+              >
+                <ChevronRight size={14} />
+              </Button>
+            </div>
+          </div>
+        )}
+      </Card>
+
+      {/* 3. Create Record Modal */}
+      <Dialog open={showCreateModal} onOpenChange={setShowCreateModal}>
+        <DialogContent className="p-6 space-y-4 max-h-[85vh] overflow-y-auto">
+          <DialogHeader className="space-y-1.5">
+            <DialogTitle>New Record</DialogTitle>
+            <DialogDescription>
+              Add a new record to the <span className="font-mono">{collection?.name}</span> collection.
+            </DialogDescription>
           </DialogHeader>
-          <form onSubmit={createRecord} className="space-y-4 pt-2">
-            {collection?.fields?.filter((f: any) => !f.system).map((field: any) => (
-              <div key={field.id} className="space-y-2">
-                <Label htmlFor={`fld-${field.id}`}>{field.name}</Label>
-                <Input
-                  id={`fld-${field.id}`}
-                  value={newRecord[field.name] || ''}
-                  onChange={e => setNewRecord({ ...newRecord, [field.name]: e.target.value })}
-                  placeholder={`Enter ${field.name}`}
-                />
+
+          <form onSubmit={handleCreateRecord} className="space-y-3.5">
+            {collection?.type === 'auth' && (
+              <>
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-medium text-text-secondary">Email / Username</Label>
+                  <Input
+                    required
+                    value={newRecordData.email || ''}
+                    onChange={(e) => setNewRecordData({ ...newRecordData, email: e.target.value })}
+                    className="h-8 text-xs"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-medium text-text-secondary">Password</Label>
+                  <Input
+                    type="password"
+                    required
+                    value={newRecordData.password || ''}
+                    onChange={(e) => setNewRecordData({ ...newRecordData, password: e.target.value })}
+                    className="h-8 text-xs"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-medium text-text-secondary">Password Confirm</Label>
+                  <Input
+                    type="password"
+                    required
+                    value={newRecordData.passwordConfirm || ''}
+                    onChange={(e) => setNewRecordData({ ...newRecordData, passwordConfirm: e.target.value })}
+                    className="h-8 text-xs"
+                  />
+                </div>
+              </>
+            )}
+
+            {collection?.schema?.map((field) => (
+              <div key={field.id} className="space-y-1.5">
+                <Label className="text-xs font-medium text-text-secondary">
+                  {field.name} {field.required && <span className="text-status-danger">*</span>}
+                </Label>
+                {field.type === 'bool' ? (
+                  <label className="flex items-center gap-2 text-xs text-text-secondary cursor-pointer">
+                    <Checkbox
+                      checked={!!newRecordData[field.name]}
+                      onCheckedChange={(checked) =>
+                        setNewRecordData({ ...newRecordData, [field.name]: !!checked })
+                      }
+                    />
+                    <span>True / Enabled</span>
+                  </label>
+                ) : field.type === 'json' ? (
+                  <Textarea
+                    value={
+                      typeof newRecordData[field.name] === 'object'
+                        ? JSON.stringify(newRecordData[field.name], null, 2)
+                        : newRecordData[field.name] || ''
+                    }
+                    onChange={(e) => {
+                      try {
+                        const parsed = JSON.parse(e.target.value)
+                        setNewRecordData({ ...newRecordData, [field.name]: parsed })
+                      } catch {
+                        setNewRecordData({ ...newRecordData, [field.name]: e.target.value })
+                      }
+                    }}
+                    placeholder="{}"
+                    className="font-mono text-xs h-20"
+                  />
+                ) : (
+                  <Input
+                    type={field.type === 'number' ? 'number' : field.type === 'date' ? 'datetime-local' : 'text'}
+                    required={field.required}
+                    value={newRecordData[field.name] || ''}
+                    onChange={(e) =>
+                      setNewRecordData({
+                        ...newRecordData,
+                        [field.name]: field.type === 'number' ? Number(e.target.value) : e.target.value,
+                      })
+                    }
+                    className="h-8 text-xs"
+                  />
+                )}
               </div>
             ))}
-            <DialogFooter className="pt-4">
-              <Button type="button" variant="ghost" onClick={() => setShowModal(false)}>
+
+            <DialogFooter className="pt-2 border-t border-border gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setShowCreateModal(false)}
+                disabled={creating}
+                className="text-xs h-9"
+              >
                 Cancel
               </Button>
-              <Button type="submit">Create Record</Button>
+              <Button type="submit" variant="default" disabled={creating} className="text-xs h-9">
+                {creating ? 'Saving...' : 'Create Record'}
+              </Button>
             </DialogFooter>
           </form>
         </DialogContent>
       </Dialog>
 
-      {/* Delete Record Confirmation AlertDialog */}
-      <AlertDialog open={!!deleteTargetId} onOpenChange={(open) => !open && setDeleteTargetId(null)}>
-        <AlertDialogContent className="bg-[var(--bg-surface)] border-[var(--bg-border)] text-[var(--text-primary)]">
-          <AlertDialogHeader>
-            <AlertDialogTitle className="font-display">Delete Record</AlertDialogTitle>
-            <AlertDialogDescription className="text-sm text-[var(--text-secondary)]">
-              Are you sure you want to delete this record? This action cannot be undone.
-            </AlertDialogDescription>
+      {/* 4. Delete Record AlertDialog */}
+      <AlertDialog open={!!deleteTarget} onOpenChange={(open: boolean) => !open && setDeleteTarget(null)}>
+        <AlertDialogContent className="p-6 space-y-4">
+          <AlertDialogHeader className="space-y-3">
+            <div className="flex items-center gap-3">
+              <div className="p-2 rounded-lg bg-status-danger/10 text-status-danger border border-status-danger/20 shrink-0">
+                <Trash2 size={18} />
+              </div>
+              <div>
+                <AlertDialogTitle className="font-display text-lg font-semibold text-text-primary">
+                  Delete Record
+                </AlertDialogTitle>
+                <AlertDialogDescription className="text-xs text-text-secondary mt-0.5">
+                  Permanently remove record <span className="font-mono font-bold">{deleteTarget?.id}</span>.
+                </AlertDialogDescription>
+              </div>
+            </div>
           </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel onClick={() => setDeleteTargetId(null)}>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={confirmDeleteRecord}
-              className="bg-[#ef4444] hover:bg-[#dc2626] text-white"
-            >
-              {deleting ? 'Deleting...' : 'Delete Permanently'}
+          <AlertDialogFooter className="pt-2 border-t border-border gap-2.5">
+            <AlertDialogCancel onClick={() => setDeleteTarget(null)} className="text-xs h-9 px-4">
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction onClick={handleDeleteRecord} variant="destructive" className="text-xs h-9 px-4">
+              {deleting ? 'Deleting...' : 'Delete'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* 5. Bulk Delete AlertDialog */}
+      <AlertDialog open={showBulkDeleteConfirm} onOpenChange={setShowBulkDeleteConfirm}>
+        <AlertDialogContent className="p-6 space-y-4">
+          <AlertDialogHeader className="space-y-3">
+            <div className="flex items-center gap-3">
+              <div className="p-2 rounded-lg bg-status-danger/10 text-status-danger border border-status-danger/20 shrink-0">
+                <Trash2 size={18} />
+              </div>
+              <div>
+                <AlertDialogTitle className="font-display text-lg font-semibold text-text-primary">
+                  Delete Selected Records
+                </AlertDialogTitle>
+                <AlertDialogDescription className="text-xs text-text-secondary mt-0.5">
+                  Permanently delete {selectedIds.length} selected records.
+                </AlertDialogDescription>
+              </div>
+            </div>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="pt-2 border-t border-border gap-2.5">
+            <AlertDialogCancel onClick={() => setShowBulkDeleteConfirm(false)} className="text-xs h-9 px-4">
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction onClick={handleBulkDelete} variant="destructive" className="text-xs h-9 px-4">
+              {bulkDeleting ? 'Deleting...' : `Delete ${selectedIds.length} Records`}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

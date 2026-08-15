@@ -76,12 +76,12 @@ Check that `my-app` was created containing:
 Before serving requests, create an administrative superuser account.
 
 ```bash
-solarch superuser-create admin@example.com SecretPassword123 --dir ./pb_data
+solarch superuser-create admin SecretPassword123 --dir ./pb_data
 ```
 
 ### Expected Terminal Output
 ```text
-Created superuser admin@example.com
+Superuser admin created successfully.
 ```
 
 ---

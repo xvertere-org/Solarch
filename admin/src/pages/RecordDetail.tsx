@@ -1,142 +1,335 @@
-import { useEffect, useState } from 'react'
-import { useParams, useNavigate } from 'react-router-dom'
-import { solarch } from '../lib/solarch'
-import type { CollectionModel, RecordModel } from '@solarch/core-client'
-import { ArrowLeft, Save } from 'lucide-react'
+import { useEffect, useState, useCallback } from 'react'
+import { useParams, useNavigate, Link } from 'react-router-dom'
+import { solarch } from '@/lib/solarch'
+import {
+  ArrowLeft,
+  Save,
+  Trash2,
+  Copy,
+  Check,
+  RefreshCw,
+  Database,
+  Calendar,
+  Clock,
+  FileText,
+  AlertTriangle,
+  Info,
+} from 'lucide-react'
 import { PageHeader } from '@/components/navigation/PageHeader'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Label } from '@/components/ui/label'
-import { Spinner } from '@/components/ui/spinner'
+import { Badge } from '@/components/ui/badge'
+import {
+  Select,
+  SelectTrigger,
+  SelectValue,
+  SelectContent,
+  SelectItem,
+} from '@/components/ui/select'
+import {
+  AlertDialog,
+  AlertDialogContent,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogCancel,
+  AlertDialogAction,
+} from '@/components/ui/alert-dialog'
+import { Skeleton } from '@/components/ui/Skeleton'
+import { ErrorState } from '@/components/ui/ErrorState'
 import { toast } from 'sonner'
+import { cn } from '@/lib/utils'
+
+interface Collection {
+  id: string
+  name: string
+  type: string
+  schema: any[]
+}
 
 export default function RecordDetail() {
-  const { collectionId, recordId } = useParams()
+  const { collectionId, recordId } = useParams<{ collectionId: string; recordId: string }>()
   const navigate = useNavigate()
-  const [collection, setCollection] = useState<CollectionModel | null>(null)
-  const [record, setRecord] = useState<RecordModel | null>(null)
+
+  const [collection, setCollection] = useState<Collection | null>(null)
+  const [record, setRecord] = useState<any | null>(null)
+  const [formData, setFormData] = useState<Record<string, any>>({})
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
+  const [deleting, setDeleting] = useState(false)
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [copiedId, setCopiedId] = useState(false)
 
-  useEffect(() => { loadData() }, [collectionId, recordId])
-
-  async function loadData() {
+  const fetchRecord = useCallback(async () => {
     if (!collectionId || !recordId) return
     try {
-      const [col, rec] = await Promise.all([
-        solarch.collections.getOne(collectionId),
-        solarch.collection(collectionId).getOne(recordId),
-      ])
-      setCollection(col); setRecord(rec)
-    } catch (err: any) { console.error('Failed to load record', err) }
-    finally { setLoading(false) }
+      setError(null)
+      const colData: any = await solarch.collections.getOne(collectionId)
+      setCollection(colData)
+
+      const recData: any = await solarch.collection(collectionId).getOne(recordId)
+      setRecord(recData)
+      setFormData({ ...recData })
+    } catch (err: any) {
+      console.error('Failed to load record:', err)
+      setError(err.message || 'Record not found or access denied.')
+    } finally {
+      setLoading(false)
+    }
+  }, [collectionId, recordId])
+
+  useEffect(() => {
+    fetchRecord()
+  }, [fetchRecord])
+
+  const handleCopyId = () => {
+    if (!recordId) return
+    navigator.clipboard.writeText(recordId)
+    setCopiedId(true)
+    toast.success('Record ID copied')
+    setTimeout(() => setCopiedId(false), 2000)
   }
 
-  async function saveRecord(e: React.FormEvent) {
-    e.preventDefault(); setSaving(true)
-    if (!collectionId || !recordId || !record) return
+  const handleSave = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!collectionId || !recordId || saving) return
+
     try {
-      await solarch.collection(collectionId).update(recordId, record)
+      setSaving(true)
+      // Exclude system fields
+      const { id, created, updated, ...payload } = formData
+      await solarch.collection(collectionId).update(recordId, payload)
       toast.success('Record updated successfully')
+      await fetchRecord()
     } catch (err: any) {
+      console.error('Update record error:', err)
       toast.error(err.message || 'Failed to update record')
     } finally {
       setSaving(false)
     }
   }
 
+  const handleDelete = async () => {
+    if (!collectionId || !recordId || deleting) return
+
+    try {
+      setDeleting(true)
+      await solarch.collection(collectionId).delete(recordId)
+      toast.success('Record deleted')
+      navigate(`/records/${collectionId}`)
+    } catch (err: any) {
+      console.error('Delete record error:', err)
+      toast.error(err.message || 'Failed to delete record')
+    } finally {
+      setDeleting(false)
+    }
+  }
+
   if (loading) {
     return (
-      <div className="flex items-center justify-center p-12">
-        <Spinner className="w-8 h-8 text-[var(--blue-core)]" />
+      <div className="space-y-6">
+        <PageHeader title="Record Details" description="Inspect and modify record attributes." />
+        <Skeleton className="h-96 rounded-xl" />
       </div>
     )
   }
 
-  if (!record) {
+  if (error || !record) {
     return (
-      <div className="text-center p-12 text-[var(--text-secondary)] space-y-4">
-        <p>Record not found</p>
-        <Button variant="outline" onClick={() => navigate(`/records/${collectionId}`)}>
-          <ArrowLeft size={16} /> Back to Records
-        </Button>
+      <div className="space-y-6">
+        <PageHeader title="Record Details" description="Inspect and modify record attributes." />
+        <ErrorState
+          title="Record not found"
+          message={error || 'Unable to locate the requested record.'}
+          onRetry={fetchRecord}
+        />
       </div>
     )
   }
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center gap-4">
-        <Button variant="ghost" size="sm" onClick={() => navigate(`/records/${collectionId}`)}>
-          <ArrowLeft size={16} /> Back to Records
-        </Button>
-      </div>
-
+      {/* 1. Header with Breadcrumb & Actions */}
       <PageHeader
-        title={`Edit Record — ${collection?.name}`}
-        description={`Modify record ID: ${recordId}`}
+        title={
+          <div className="flex items-center gap-2">
+            <Link
+              to={`/records/${collectionId}`}
+              className="p-1 rounded-md text-text-muted hover:text-text-primary hover:bg-bg-elevated transition-colors"
+            >
+              <ArrowLeft size={16} />
+            </Link>
+            <span>Record Details</span>
+            <button
+              type="button"
+              onClick={handleCopyId}
+              className="flex items-center gap-1 font-mono text-xs px-2 py-0.5 rounded bg-bg-elevated border border-border text-text-secondary hover:text-text-primary hover:border-brand-primary/40 transition-colors ml-1 cursor-pointer"
+              title="Click to copy Record ID"
+            >
+              <span>{recordId}</span>
+              {copiedId ? <Check size={11} className="text-status-success" /> : <Copy size={11} />}
+            </button>
+          </div>
+        }
+        description={`Collection: ${collection?.name || collectionId}`}
+        action={
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setShowDeleteConfirm(true)}
+              className="text-xs text-status-danger hover:bg-status-danger/10 border-border/60 h-8 cursor-pointer"
+            >
+              <Trash2 size={13} />
+              <span>Delete</span>
+            </Button>
+            <Button
+              variant="default"
+              size="sm"
+              onClick={handleSave}
+              disabled={saving}
+              className="flex items-center gap-1.5 text-xs h-8 cursor-pointer"
+            >
+              <Save size={13} />
+              <span>{saving ? 'Saving...' : 'Save Changes'}</span>
+            </Button>
+          </div>
+        }
       />
 
-      <form onSubmit={saveRecord} className="space-y-6">
-        <Card className="bg-[var(--bg-surface)] border-[var(--bg-border)]">
-          <CardHeader>
-            <CardTitle className="font-display text-lg">Record Fields</CardTitle>
+      {/* 2. Record Form Grid */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Main Fields Form (2 cols) */}
+        <Card className="lg:col-span-2 border border-border/70 bg-card rounded-xl overflow-hidden shadow-none">
+          <CardHeader className="p-4 border-b border-border/60">
+            <CardTitle className="text-sm font-semibold font-display text-text-primary">
+              Fields & Values
+            </CardTitle>
+            <CardDescription className="text-xs text-text-secondary mt-0.5">
+              Edit the attribute values stored in this record.
+            </CardDescription>
           </CardHeader>
-          <CardContent className="space-y-4">
-            {collection?.fields?.filter((f: any) => !f.system).map((field: any) => (
-              <div key={field.id} className="space-y-2">
-                <Label htmlFor={`fld-${field.id}`}>{field.name}</Label>
-                {field.type === 'bool' ? (
-                  <div className="flex items-center gap-2 pt-1">
-                    <Checkbox
-                      id={`fld-${field.id}`}
-                      checked={!!record[field.name]}
-                      onCheckedChange={(val) => setRecord({ ...record, [field.name]: !!val })}
+
+          <CardContent className="p-4 space-y-4">
+            <form onSubmit={handleSave} className="space-y-4">
+              {collection?.schema?.map((field) => (
+                <div key={field.id} className="space-y-1.5">
+                  <Label className="text-xs font-medium text-text-secondary">
+                    {field.name} {field.required && <span className="text-status-danger">*</span>}
+                  </Label>
+
+                  {field.type === 'bool' ? (
+                    <label className="flex items-center gap-2 text-xs text-text-secondary cursor-pointer">
+                      <Checkbox
+                        checked={!!formData[field.name]}
+                        onCheckedChange={(checked) =>
+                          setFormData({ ...formData, [field.name]: !!checked })
+                        }
+                      />
+                      <span>True / Enabled</span>
+                    </label>
+                  ) : field.type === 'json' ? (
+                    <Textarea
+                      value={
+                        typeof formData[field.name] === 'object'
+                          ? JSON.stringify(formData[field.name], null, 2)
+                          : formData[field.name] || ''
+                      }
+                      onChange={(e) => {
+                        try {
+                          const parsed = JSON.parse(e.target.value)
+                          setFormData({ ...formData, [field.name]: parsed })
+                        } catch {
+                          setFormData({ ...formData, [field.name]: e.target.value })
+                        }
+                      }}
+                      className="font-mono text-xs h-28"
                     />
-                    <Label htmlFor={`fld-${field.id}`} className="cursor-pointer text-sm">
-                      {record[field.name] ? 'True / Yes' : 'False / No'}
-                    </Label>
-                  </div>
-                ) : field.type === 'json' || field.type === 'editor' ? (
-                  <Textarea
-                    id={`fld-${field.id}`}
-                    rows={5}
-                    className="font-mono text-xs"
-                    value={typeof record[field.name] === 'object' ? JSON.stringify(record[field.name], null, 2) : (record[field.name] || '')}
-                    onChange={e => {
-                      try { setRecord({ ...record, [field.name]: JSON.parse(e.target.value) }) }
-                      catch { setRecord({ ...record, [field.name]: e.target.value }) }
-                    }}
-                  />
-                ) : (
-                  <Input
-                    id={`fld-${field.id}`}
-                    value={record[field.name] || ''}
-                    onChange={e => setRecord({ ...record, [field.name]: e.target.value })}
-                  />
-                )}
-              </div>
-            ))}
+                  ) : (
+                    <Input
+                      type={field.type === 'number' ? 'number' : field.type === 'date' ? 'datetime-local' : 'text'}
+                      required={field.required}
+                      value={formData[field.name] ?? ''}
+                      onChange={(e) =>
+                        setFormData({
+                          ...formData,
+                          [field.name]: field.type === 'number' ? Number(e.target.value) : e.target.value,
+                        })
+                      }
+                      className="h-8 text-xs font-sans"
+                    />
+                  )}
+                </div>
+              ))}
+            </form>
           </CardContent>
         </Card>
 
-        <div className="flex justify-end">
-          <Button type="submit" disabled={saving} className="px-6">
-            {saving ? (
-              <>
-                <Spinner className="w-4 h-4 mr-2" /> Saving...
-              </>
-            ) : (
-              <>
-                <Save size={16} /> Save Record
-              </>
-            )}
-          </Button>
-        </div>
-      </form>
+        {/* Record Metadata Card (1 col) */}
+        <Card className="border border-border/70 bg-card rounded-xl overflow-hidden shadow-none h-fit">
+          <CardHeader className="p-4 border-b border-border/60">
+            <CardTitle className="text-sm font-semibold font-display text-text-primary">
+              Metadata
+            </CardTitle>
+            <CardDescription className="text-xs text-text-secondary mt-0.5">
+              System managed timestamps
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="p-4 space-y-3">
+            <div className="p-2.5 rounded-lg border border-border/50 bg-bg-surface space-y-1">
+              <span className="text-[11px] text-text-muted">Record ID</span>
+              <div className="font-mono text-xs text-text-primary">{record.id}</div>
+            </div>
+            <div className="p-2.5 rounded-lg border border-border/50 bg-bg-surface space-y-1">
+              <span className="text-[11px] text-text-muted">Created</span>
+              <div className="font-mono text-xs text-text-primary">
+                {record.created ? new Date(record.created).toLocaleString() : '—'}
+              </div>
+            </div>
+            <div className="p-2.5 rounded-lg border border-border/50 bg-bg-surface space-y-1">
+              <span className="text-[11px] text-text-muted">Last Updated</span>
+              <div className="font-mono text-xs text-text-primary">
+                {record.updated ? new Date(record.updated).toLocaleString() : '—'}
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Delete Confirmation AlertDialog */}
+      <AlertDialog open={showDeleteConfirm} onOpenChange={setShowDeleteConfirm}>
+        <AlertDialogContent className="p-6 space-y-4">
+          <AlertDialogHeader className="space-y-3">
+            <div className="flex items-center gap-3">
+              <div className="p-2 rounded-lg bg-status-danger/10 text-status-danger border border-status-danger/20 shrink-0">
+                <Trash2 size={18} />
+              </div>
+              <div>
+                <AlertDialogTitle className="font-display text-lg font-semibold text-text-primary">
+                  Delete Record
+                </AlertDialogTitle>
+                <AlertDialogDescription className="text-xs text-text-secondary mt-0.5">
+                  Are you sure you want to permanently delete this record?
+                </AlertDialogDescription>
+              </div>
+            </div>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="pt-2 border-t border-border gap-2.5">
+            <AlertDialogCancel onClick={() => setShowDeleteConfirm(false)} className="text-xs h-9 px-4">
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction onClick={handleDelete} variant="destructive" className="text-xs h-9 px-4">
+              {deleting ? 'Deleting...' : 'Delete Permanently'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }

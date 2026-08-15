@@ -52,7 +52,6 @@ graphify-out/
 pocketbase
 
 # Empty / leftover dirs
-/uploads/
 /ui/
 
 # Test scripts
@@ -71,3 +70,7 @@ torque/node_modules/
 
 # Vercel deployment metadata
 **/.vercel/
+
+# Large / generated archives
+Solarch.zip
+*.db

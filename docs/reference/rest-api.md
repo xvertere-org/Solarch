@@ -24,10 +24,8 @@ Exhaustive reference table of all REST API endpoints exposed by Solarch ([src/ap
 
 | Method | Endpoint Path | Auth Required | Description |
 | :--- | :--- | :--- | :--- |
-| `POST` | `/api/admins/auth-with-password` | None | Authenticate superuser with email and password. Rate limited (10 requests/15 min). |
+| `POST` | `/api/admins/auth-with-password` | None | Authenticate superuser with username and password. Rate limited (10 requests/15 min). |
 | `POST` | `/api/admins/refresh` | Superuser | Refresh superuser JWT authentication token. |
-| `POST` | `/api/admins/request-password-reset` | None | Request superuser password reset email. |
-| `POST` | `/api/admins/confirm-password-reset` | None | Confirm superuser password reset using token. |
 
 ---
 

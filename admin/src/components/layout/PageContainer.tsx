@@ -8,7 +8,7 @@ interface PageContainerProps {
 
 export const PageContainer: React.FC<PageContainerProps> = ({ children, className }) => {
   return (
-    <div className={cn("p-6 max-w-7xl mx-auto space-y-6 text-[var(--text-primary)]", className)}>
+    <div className={cn("px-4 sm:px-6 lg:px-8 py-6 max-w-7xl mx-auto text-text-primary w-full", className)}>
       {children}
     </div>
   )

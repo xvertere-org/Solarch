@@ -10,12 +10,12 @@ interface PageHeaderProps {
 
 export const PageHeader: React.FC<PageHeaderProps> = ({ title, description, actions, className }) => {
   return (
-    <div className={cn("flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-[#3a2214]", className)}>
+    <div className={cn("flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-border", className)}>
       <div>
-        <h1 className="text-2xl font-bold tracking-tight text-[#fdf3ec] font-display">{title}</h1>
-        {description && <p className="text-sm text-[#c9a894] mt-1">{description}</p>}
+        <h1 className="text-2xl font-semibold tracking-tight text-text-primary font-display leading-tight">{title}</h1>
+        {description && <p className="text-sm text-text-secondary mt-0.5 leading-normal">{description}</p>}
       </div>
-      {actions && <div className="flex items-center gap-3">{actions}</div>}
+      {actions && <div className="flex flex-wrap items-center gap-2 shrink-0">{actions}</div>}
     </div>
   )
 }

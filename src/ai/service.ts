@@ -165,7 +165,7 @@ Respond with ONLY the filter expression string, or the word "null" for no restri
     return created
   }
 
-  async chat(message: string, context?: { collections?: string[] }): Promise<string> {
+  async chat(clientMessages: { role: 'user' | 'assistant', content: string }[], context?: { collections?: string[] }): Promise<string> {
     const collections = await this.app.findAllCollections()
     const collectionInfo = collections.map(c => ({
       name: c.name,
@@ -188,7 +188,7 @@ Be concise and helpful. If the user asks to create or modify data, explain how t
 
     const messages: LLMMessage[] = [
       { role: 'system', content: systemPrompt },
-      { role: 'user', content: message },
+      ...clientMessages
     ]
 
     const response = await this.getProvider().complete(messages)

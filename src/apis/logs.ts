@@ -10,13 +10,26 @@ export function registerLogRoutes(app: BaseApp, router: Router): void {
       // FIXED[N-1]: Enforce pagination bounds via shared helper
       const { page, perPage } = parsePagination(req.query)
       const level = req.query.level as string
+      const search = req.query.search as string
 
       let whereClause = ''
       let params: any[] = []
 
-      if (level) {
-        whereClause = 'WHERE level = ?'
-        params = [level]
+      const conditions: string[] = []
+
+      if (level && level !== 'all') {
+        conditions.push('level = ?')
+        params.push(level)
+      }
+
+      if (search && search.trim() !== '') {
+        conditions.push('(message LIKE ? OR data LIKE ?)')
+        const pattern = `%${search.trim()}%`
+        params.push(pattern, pattern)
+      }
+
+      if (conditions.length > 0) {
+        whereClause = 'WHERE ' + conditions.join(' AND ')
       }
 
       const offset = (page - 1) * perPage

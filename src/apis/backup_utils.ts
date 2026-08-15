@@ -170,8 +170,12 @@ export async function restoreStreamingBackup(app: BaseApp, backupPath: string): 
     }
 
     await fsPromises.rm(restoreDir, { recursive: true, force: true })
-    await app.bootstrap()
   } finally {
+    try {
+      await app.bootstrap()
+    } catch {
+      // In worst case if bootstrap fails (e.g. database corrupted), the app will need manual restart
+    }
     _backupInProgress = false
   }
 }

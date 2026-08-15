@@ -61,11 +61,38 @@ export function registerAIRoutes(app: BaseApp, router: Router): void {
   })
   aiRouter.post('/test', async (req: Request, res: Response) => {
     try {
-      const reply = await aiService.chat('Reply with exactly: Connection successful.')
+      const { config } = req.body
+      let settings = app.settings()
+      
+      if (config) {
+        // dynamically import to avoid circular dependencies if any, but wait, mergeIncomingSettings is exported
+        const { mergeIncomingSettings } = require('./settings')
+        settings = mergeIncomingSettings(settings, config)
+      }
+
+      if (!settings.ai.enabled || !settings.ai.apiKey) {
+        return res.status(400).json({ code: 400, message: 'AI is not configured or disabled.' })
+      }
+
+      // We need to pass the temporary config to AIService. 
+      // AIService gets config via `this.app.settings()`. 
+      // But we don't want to save it! 
+      // Let's modify AIService to accept optional config, or we instantiate a temporary provider.
+      // The easiest way without modifying AIService drastically is to just create the provider here.
+      const { createLLMProvider } = require('../ai/provider')
+      const provider = createLLMProvider(settings.ai)
+      
+      const systemPrompt = `You are Solarch AI Assistant. Reply with exactly: Connection successful.`
+      const messages = [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: 'Test connection' }
+      ]
+
+      const response = await provider.complete(messages)
 
       res.json({
         success: true,
-        reply,
+        reply: response.content.trim(),
       })
     } catch (err: any) {
       app.logger().error(err.message || err)
@@ -79,16 +106,56 @@ export function registerAIRoutes(app: BaseApp, router: Router): void {
 
   aiRouter.post('/chat', async (req: Request, res: Response) => {
     try {
-      const { message } = req.body
+      const { messages } = req.body
 
-      if (!message) {
-        return res.status(400).json({
-          code: 400,
-          message: 'Message is required.',
+      if (!messages || !Array.isArray(messages) || messages.length === 0) {
+        return res.status(400).json({ code: 400, message: 'Messages array is required and must not be empty.' })
+      }
+
+      if (messages.length > 50) {
+        return res.status(400).json({ code: 400, message: 'Message limit exceeded. Maximum is 50.' })
+      }
+
+      let totalChars = 0
+      const validatedMessages = []
+
+      for (let i = 0; i < messages.length; i++) {
+        const msg = messages[i]
+        
+        if (msg.role !== 'user' && msg.role !== 'assistant') {
+          return res.status(400).json({ code: 400, message: `Invalid role "${msg.role}" at index ${i}. Only user and assistant are allowed.` })
+        }
+        
+        if (typeof msg.content !== 'string') {
+          return res.status(400).json({ code: 400, message: `Message content must be a string at index ${i}.` })
+        }
+
+        const trimmed = msg.content.trim()
+        if (!trimmed) {
+          return res.status(400).json({ code: 400, message: `Message content cannot be empty at index ${i}.` })
+        }
+
+        if (trimmed.length > 10000) {
+          return res.status(400).json({ code: 400, message: `Message content exceeds individual limit of 10,000 characters at index ${i}.` })
+        }
+
+        totalChars += trimmed.length
+        if (totalChars > 64000) {
+          return res.status(400).json({ code: 400, message: 'Total conversation content exceeds aggregate limit of 64,000 characters.' })
+        }
+
+        validatedMessages.push({
+          role: msg.role,
+          content: trimmed
         })
       }
 
-      const reply = await aiService.chat(message)
+      const finalMessage = validatedMessages[validatedMessages.length - 1]
+      if (finalMessage.role !== 'user') {
+        return res.status(400).json({ code: 400, message: 'The final message must be from the user.' })
+      }
+
+      const reply = await aiService.chat(validatedMessages)
       res.json({ reply })
     } catch (err: any) {
       app.logger().error(err.message || err)
