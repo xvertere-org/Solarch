@@ -70,4 +70,40 @@ describe('CORE-CLIENT-8: Security Verification Suite', () => {
     expect(capturedHeaders['X-Solarch-Protocol']).toBe('1.0')
     expect(capturedUrl.includes('jwt_token_abc')).toBe(false)
   })
+
+  it('ensures token is not leaked into error messages, thrown serialized objects, or debug metadata', async () => {
+    const sensitiveToken = 'sensitive_jwt_token_xyz_987'
+    const mockFailingFetch = async (_url: string, _init?: any) => {
+      return {
+        status: 401,
+        statusText: 'Unauthorized',
+        headers: { get: () => 'application/json' },
+        json: async () => ({
+          code: 401,
+          status: 'UNAUTHORIZED',
+          message: 'The request requires valid authentication credentials.',
+          data: {},
+        }),
+      } as any
+    }
+
+    const authStore = new MemoryAuthStore(sensitiveToken)
+    const http = new HttpClient({
+      baseUrl: 'http://127.0.0.1:8090',
+      authStore,
+      fetch: mockFailingFetch,
+    })
+
+    try {
+      await http.get('/api/collections/secrets/records')
+      expect.unreachable('Should have thrown ClientResponseError')
+    } catch (err: any) {
+      expect(err).toBeInstanceOf(ClientResponseError)
+      expect(err.message.includes(sensitiveToken)).toBe(false)
+      expect(JSON.stringify(err).includes(sensitiveToken)).toBe(false)
+      expect(err.statusCode).toBe(401)
+      expect(err.isUnauthorized()).toBe(true)
+    }
+  })
 })
+

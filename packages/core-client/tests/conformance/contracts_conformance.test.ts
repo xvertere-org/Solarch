@@ -183,5 +183,79 @@ describe('CORE-CLIENT-1.5: Backend ↔ SDK Contract Conformance Gate', () => {
 
     ws.close()
   })
+
+  it('Gate 4: Pagination semantic authorization ensures 0 count leakage on locked or restricted collections', async () => {
+    // Locked collection with null listRule
+    const lockedCol = new Collection({
+      name: 'conformance_locked',
+      type: 'base',
+      listRule: null,
+      viewRule: null,
+      createRule: '',
+      fields: [{ name: 'secret', type: 'text' }],
+    })
+    await app.save(lockedCol)
+
+    // Insert 5 records into locked collection
+    for (let i = 1; i <= 5; i++) {
+      await fetch(`http://127.0.0.1:${port}/api/collections/conformance_locked/records`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ secret: `Secret ${i}` }),
+      })
+    }
+
+    // Public list request must return totalItems: 0 (no information leak of the 5 hidden records)
+    const res = await fetch(`http://127.0.0.1:${port}/api/collections/conformance_locked/records?page=1&perPage=10`)
+    const body = (await res.json()) as ListResult<RecordModel>
+
+    expect(res.status).toBe(200)
+    expect(body.totalItems).toBe(0)
+    expect(body.totalPages).toBe(1)
+    expect(body.items).toEqual([])
+  })
+
+  it('Gate 5: Realtime broadcast isolation prevents raw record data leakage to unauthorized subscribers', async () => {
+    const ws = new WebSocket(`ws://127.0.0.1:${port}/api/realtime`)
+    const messages: any[] = []
+
+    ws.on('message', (data) => {
+      messages.push(JSON.parse(data.toString()))
+    })
+
+    await new Promise<void>((resolve, reject) => {
+      ws.on('open', () => resolve())
+      ws.on('error', reject)
+    })
+
+    await new Promise((r) => setTimeout(r, 60))
+    ws.send(JSON.stringify({ type: 'subscribe', channels: ['conformance_posts'] }))
+    await new Promise((r) => setTimeout(r, 60))
+
+    // Insert post with confidential fields
+    const createRes = await fetch(`http://127.0.0.1:${port}/api/collections/conformance_posts/records`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        title: 'Sensitive Title',
+        confidentialNote: 'Top Secret Payload 12345',
+      }),
+    })
+    const created = await createRes.json()
+
+    await new Promise((r) => setTimeout(r, 60))
+    const events = messages.filter((m) => m.type === 'event')
+    expect(events.length).toBeGreaterThan(0)
+
+    const lastEvent = events[events.length - 1]
+    expect(lastEvent.data.data.id).toBe(created.id)
+    // Absolute invariant: broadcast MUST NOT leak confidential fields directly in websocket frame
+    expect(lastEvent.data.confidentialNote).toBeUndefined()
+    expect(lastEvent.data.record).toBeUndefined()
+    expect(JSON.stringify(lastEvent).includes('Top Secret Payload 12345')).toBe(false)
+
+    ws.close()
+  })
 })
+
 
