@@ -27,11 +27,15 @@ jobs:
         run: npm ci
 
       - name: Build project
-        run: npm run build
+        run: |
+          npm run build
+          npm run build --workspace=@solarch/core-client
 
       - name: Publish to NPM
         continue-on-error: true
-        run: npm publish --access public
+        run: |
+          npm publish --access public
+          npm publish --workspace=@solarch/core-client --access public
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
