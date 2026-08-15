@@ -1,3 +1,5 @@
+import { RecordModel as PBRecord } from '../../core/record'
+
 export interface Message {
   type: string
   channel: string
@@ -5,9 +7,21 @@ export interface Message {
   clientId?: string
 }
 
+/**
+ * Auth context stored on each broker Client so that per-record event
+ * authorization can be evaluated at broadcast time without relying on
+ * closure variables that are inaccessible from broadcastRecordEvent.
+ */
+export interface RealtimeAuthContext {
+  record: PBRecord | null
+  isAdmin: boolean
+}
+
 export interface Client {
   id: string
   channels: Set<string>
+  /** Auth context resolved at connection time. Always present. */
+  authContext: RealtimeAuthContext
   send: (message: string) => void
   close: () => void
 }
@@ -18,6 +32,10 @@ export class Broker {
 
   addClient(client: Client): void {
     this.clients.set(client.id, client)
+  }
+
+  getClient(clientId: string): Client | undefined {
+    return this.clients.get(clientId)
   }
 
   removeClient(clientId: string): void {

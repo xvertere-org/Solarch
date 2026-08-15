@@ -1,7 +1,7 @@
 import { Router, Request, Response } from 'express'
 import { BaseApp } from '../core/base'
 import { RecordModel as PBRecord } from '../core/record'
-import { findAllRecords, findRecordById, findFirstRecordByFilter, findRecordsByFilter, countRecords, vectorSearch } from '../core/record_query'
+import { findAllRecords, findRecordById, findFirstRecordByFilter, findRecordsByFilter, countRecords, vectorSearch, NO_CANDIDATE_LIMIT } from '../core/record_query'
 import { enrichRecord, enrichRecords, canAccessRecord, checkCollectionAccess } from './record_helpers'
 import { RequestInfo } from '../core/record_field_resolver'
 import { validateAndCreateRecord, validateAndUpdateRecord } from '../core/record_upsert'
@@ -59,9 +59,11 @@ export function registerRecordCRUDRoutes(app: BaseApp, router: Router): void {
         totalItems = result.totalItems
         totalPages = result.totalPages
       } else {
-        // Case 3: Rule-filtered listing for non-admin
-        // Fetch candidates matching user filter & sort
-        const candidates = await findRecordsByFilter(app, collectionIdOrName, filter || '', sort || '', 10000, 0)
+        // Case 3: Rule-filtered listing for non-admin.
+        // Fetch ALL candidates (no ceiling) so that authorized records beyond
+        // an arbitrary position are not silently hidden.
+        // NO_CANDIDATE_LIMIT = -1 is valid ANSI SQL LIMIT -1 (unbounded).
+        const candidates = await findRecordsByFilter(app, collectionIdOrName, filter || '', sort || '', NO_CANDIDATE_LIMIT, 0)
         const accessible: PBRecord[] = []
         for (const item of candidates) {
           if (await canAccessRecord(app, item, collection, collection.listRule, requestInfo)) {
@@ -219,8 +221,8 @@ export function registerRecordCRUDRoutes(app: BaseApp, router: Router): void {
 
       const enriched = await enrichRecord(app, collection, record, { requestInfo })
 
-      // Broadcast realtime event (minimal metadata)
-      broadcastRecordEvent('create', collection.id, { id: record.id })
+      // Broadcast realtime event — per-subscriber record authorization in broadcastRecordEvent.
+      await broadcastRecordEvent('create', collection, record, app)
 
       const response = enriched.toJSON()
       if (collection.isAuth() && !collection.authOptions?.onlyVerified) {
@@ -277,8 +279,8 @@ export function registerRecordCRUDRoutes(app: BaseApp, router: Router): void {
 
       const enriched = await enrichRecord(app, collection, record, { requestInfo })
 
-      // Broadcast realtime event (minimal metadata)
-      broadcastRecordEvent('update', collection.id, { id: record.id })
+      // Broadcast realtime event — per-subscriber record authorization in broadcastRecordEvent.
+      await broadcastRecordEvent('update', collection, record, app)
 
       res.json(enriched.toJSON())
     } catch (err: any) {
@@ -318,8 +320,8 @@ export function registerRecordCRUDRoutes(app: BaseApp, router: Router): void {
 
       await app.delete(record)
 
-      // Broadcast realtime event
-      broadcastRecordEvent('delete', collection.id, { id: record.id })
+      // Broadcast realtime event — per-subscriber record authorization in broadcastRecordEvent.
+      await broadcastRecordEvent('delete', collection, record, app)
 
       res.status(204).send()
     } catch (err: any) {

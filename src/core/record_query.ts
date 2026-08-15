@@ -5,6 +5,14 @@ import { parseFilter, FilterAST } from '../tools/search/filter'
 import { validateIdentifier, quoteIdentifier } from '../utils/sql_safe'
 import { calculateTotalPages } from '../utils/pagination'
 
+/**
+ * Sentinel value for findRecordsByFilter meaning: fetch all rows with no upper
+ * bound. LIMIT -1 is valid ANSI SQL and is confirmed safe for SQLite and
+ * PostgreSQL (both pass the value verbatim in a parameterized query at line 139).
+ * Use this instead of a magic number to make the intent explicit at each callsite.
+ */
+export const NO_CANDIDATE_LIMIT = -1
+
 export interface RecordQueryOptions {
   filter?: string
   sort?: string

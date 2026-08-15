@@ -1,11 +1,12 @@
 import { Router, Request, Response } from 'express'
 import { BaseApp } from '../core/base'
 import { createApiError } from '../utils/api_errors'
-import { Broker, Client, Message } from '../tools/subscriptions/broker'
+import { Broker, Client, RealtimeAuthContext } from '../tools/subscriptions/broker'
 import { WebSocket } from 'ws'
 import { canAccessRecord } from './record_helpers'
 import { RecordModel as PBRecord } from '../core/record'
-import { RecordFieldResolver, RequestInfo } from '../core/record_field_resolver'
+import { Collection } from '../core/collection'
+import { RequestInfo } from '../core/record_field_resolver'
 import { quoteIdentifier } from '../utils/sql_safe'
 
 const broker = new Broker()
@@ -22,9 +23,18 @@ export function registerRealtimeRoutes(app: BaseApp, router: Router): void {
       res.setHeader('Connection', 'keep-alive')
       res.flushHeaders()
 
+      // Resolve auth context from Express middleware if available.
+      // If middleware has not populated req.authContext the client is anonymous.
+      // Never assume authenticated; never discard an existing auth context.
+      const sseAuthContext: RealtimeAuthContext = {
+        record: (req as any).authContext?.record ?? null,
+        isAdmin: (req as any).authContext?.isAdmin ?? false,
+      }
+
       const client: Client = {
         id: clientId,
         channels: new Set(),
+        authContext: sseAuthContext,
         send: (message: string) => {
           res.write(`data: ${message}\n\n`)
         },
@@ -41,7 +51,7 @@ export function registerRealtimeRoutes(app: BaseApp, router: Router): void {
         sseClients.delete(clientId)
       })
 
-      client.send(JSON.stringify({ type: 'connected', clientId, protocolVersion: '1.0' }))
+      client.send(JSON.stringify({ type: 'connected', clientId, protocolVersion: '1.0', authenticated: !!(sseAuthContext.record || sseAuthContext.isAdmin) }))
     } else {
       res.json({
         code: 200,
@@ -136,23 +146,15 @@ async function canSubscribeToChannel(
 
   const collection = resolveCollectionFromChannel(app, channel)
   if (collection) {
-    try {
-      if (collection.viewRule === null) return false
-      if (collection.viewRule === '') return true
-
-      if (!authRecord) return false
-      const requestInfo: RequestInfo = {
-        auth: authRecord, isAdmin: false, method: 'GET',
-        headers: {}, query: {}, body: {}, data: {}, context: 'view',
-      }
-      const resolver = new RecordFieldResolver({
-        app, record: authRecord, collection, requestInfo,
-      })
-      const { evaluateRule } = require('../core/record_field_resolver')
-      return evaluateRule(collection.viewRule, resolver)
-    } catch {
-      return false
-    }
+    // Locked collection: never subscribable.
+    if (collection.viewRule === null) return false
+    // Public collection: always subscribable.
+    if (collection.viewRule === '') return true
+    // Expression rule: allow subscription if the client is authenticated.
+    // Per-record authorization is enforced at broadcast time in broadcastRecordEvent.
+    // Evaluating the expression here against the auth user object (not a record)
+    // would produce incorrect results and block legitimate owners.
+    return authRecord !== null
   }
 
   return !!(authRecord || isAdmin)
@@ -164,6 +166,8 @@ export function setupWebSocketRealtime(wss: any, app?: BaseApp): void {
     const client: Client = {
       id: clientId,
       channels: new Set(),
+      // Placeholder — overwritten after JWT resolution below.
+      authContext: { record: null, isAdmin: false },
       send: (message: string) => {
         if (ws.readyState === WebSocket.OPEN) {
           ws.send(message)
@@ -209,6 +213,8 @@ export function setupWebSocketRealtime(wss: any, app?: BaseApp): void {
       }
     }
 
+    // Store resolved auth context on client; overrides the placeholder set above.
+    client.authContext = { record: authRecord, isAdmin }
     broker.addClient(client)
 
     ws.send(JSON.stringify({ type: 'connected', clientId, protocolVersion: '1.0', authenticated: !!(authRecord || isAdmin) }))
@@ -269,7 +275,7 @@ export function setupWebSocketRealtime(wss: any, app?: BaseApp): void {
 }
 
 export function broadcastRealtimeEvent(channel: string, data: any, excludeClientId?: string): void {
-  const message: Message = {
+  const message = {
     type: 'event',
     channel,
     data,
@@ -277,19 +283,69 @@ export function broadcastRealtimeEvent(channel: string, data: any, excludeClient
   broker.send(channel, message)
 }
 
-export function broadcastRecordEvent(
+/**
+ * Broadcasts a record mutation event to all subscribers who are authorized
+ * to view the specific record that changed.
+ *
+ * Two-stage authorization model:
+ *   Stage 1 (subscription): collection-level gate — locked=deny, public=allow,
+ *                           expression=allow-if-authenticated.
+ *   Stage 2 (here): per-record viewRule evaluated against the actual mutated
+ *                   record and each subscriber's stored auth context.
+ *
+ * This prevents both full-field leakage and existence-metadata leakage to
+ * unauthorized subscribers, while ensuring owners receive their own events.
+ */
+export async function broadcastRecordEvent(
   action: 'create' | 'update' | 'delete',
-  collectionId: string,
-  data: { id: string },
-  excludeClientId?: string
-): void {
-  const channel = `collections.${collectionId}.records`
-  broadcastRealtimeEvent(channel, {
-    action,
-    collectionId,
-    data: { id: data.id },
-    timestamp: new Date().toISOString(),
-  }, excludeClientId)
+  collection: Collection,
+  record: PBRecord,
+  app: BaseApp,
+): Promise<void> {
+  const channel = `collections.${collection.id}.records`
+  const subscribers = broker.getChannelSubscribers(channel)
+
+  for (const clientId of subscribers) {
+    const client = broker.getClient(clientId)
+    if (!client) continue
+
+    const requestInfo: RequestInfo = {
+      auth: client.authContext.record,
+      isAdmin: client.authContext.isAdmin,
+      method: 'GET',
+      headers: {}, query: {}, body: {}, data: {},
+      context: 'view',
+    }
+
+    // Per-record authorization: only send event if the subscriber can view this record.
+    // canAccessRecord: rule==='' → true (public), rule===null → false (locked),
+    // expression → evaluated against the actual record + subscriber auth.
+    const authorized = await canAccessRecord(
+      app,
+      record,
+      collection,
+      collection.viewRule,
+      requestInfo,
+    )
+
+    if (!authorized) continue
+
+    const payload = JSON.stringify({
+      type: 'event',
+      channel,
+      data: {
+        action,
+        collectionId: collection.id,
+        data: { id: record.id },
+        timestamp: new Date().toISOString(),
+      },
+    })
+    try {
+      client.send(payload)
+    } catch {
+      broker.removeClient(clientId)
+    }
+  }
 }
 
 export function getBrokerStats(): { clients: number; channels: number } {
