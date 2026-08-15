@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { api } from '../api/client'
+import { adminApi, type LogItem } from '../lib/admin-api'
 import { ChevronLeft, ChevronRight, FileText } from 'lucide-react'
 import { PageHeader } from '@/components/navigation/PageHeader'
 import { Card, CardContent } from '@/components/ui/card'
@@ -9,7 +9,7 @@ import { Button } from '@/components/ui/button'
 import { Spinner } from '@/components/ui/spinner'
 
 export default function Logs() {
-  const [logs, setLogs] = useState<any[]>([])
+  const [logs, setLogs] = useState<LogItem[]>([])
   const [page, setPage] = useState(1)
   const [perPage] = useState(50)
   const [totalItems, setTotalItems] = useState(0)
@@ -20,7 +20,7 @@ export default function Logs() {
   async function loadLogs() {
     setLoading(true)
     try {
-      const data = await api.get(`/api/logs?page=${page}&perPage=${perPage}`)
+      const data = await adminApi.logs.getList(page, perPage)
       setLogs(data.items || []); setTotalItems(data.totalItems || 0)
     } catch (err: any) { console.error('Failed to load logs', err) }
     finally { setLoading(false) }

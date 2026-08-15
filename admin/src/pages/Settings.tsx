@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { api } from '../api/client'
+import { adminApi, type AdminSettings } from '../lib/admin-api'
 import { Save, Zap } from 'lucide-react'
 import { PageHeader } from '@/components/navigation/PageHeader'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -12,7 +12,7 @@ import { Spinner } from '@/components/ui/spinner'
 import { toast } from 'sonner'
 
 export default function Settings() {
-  const [settings, setSettings] = useState<any>(null)
+  const [settings, setSettings] = useState<AdminSettings>({})
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [testing, setTesting] = useState(false)
@@ -30,15 +30,17 @@ export default function Settings() {
   useEffect(() => { loadSettings() }, [])
 
   async function loadSettings() {
-    try { setSettings(await api.get('/api/settings')) }
-    catch (err: any) { console.error('Failed to load settings', err) }
+    try {
+      const data = await adminApi.settings.get()
+      setSettings(data || {})
+    } catch (err: any) { console.error('Failed to load settings', err) }
     finally { setLoading(false) }
   }
 
   async function saveSettings(e: React.FormEvent) {
     e.preventDefault(); setSaving(true)
     try {
-      await api.patch('/api/settings', settings)
+      await adminApi.settings.update(settings)
       toast.success('Settings saved successfully!')
     } catch (err: any) {
       toast.error(err.message || 'Failed to save settings')
@@ -50,7 +52,7 @@ export default function Settings() {
   async function testAIConnection() {
     setTesting(true)
     try {
-      const result = await api.post('/api/ai/test', {})
+      const result = await adminApi.ai.test()
       toast.success(`AI Connection Successful: ${result.reply || 'OK'}`)
     } catch (err: any) {
       toast.error(`AI Connection Failed: ${err.message}`)

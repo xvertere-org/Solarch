@@ -50,4 +50,4 @@ jobs:
       uses: github/codeql-action/analyze@v3
       with:
         category: "/language:${{matrix.language}}"
-        upload: false  # Change to 'true' once Advanced Security is enabled
+        upload: true

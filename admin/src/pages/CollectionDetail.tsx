@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { api } from '../api/client'
+import { solarch } from '../lib/solarch'
 import { Plus, Trash2, ArrowLeft, Save } from 'lucide-react'
 import { PageHeader } from '@/components/navigation/PageHeader'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -26,15 +26,17 @@ export default function CollectionDetail() {
   useEffect(() => { loadCollection() }, [id])
 
   async function loadCollection() {
-    try { setCollection(await api.get(`/api/collections/${id}`)) }
+    if (!id) return
+    try { setCollection(await solarch.collections.getOne(id)) }
     catch (err: any) { console.error('Failed to load collection', err) }
     finally { setLoading(false) }
   }
 
   async function saveCollection(e: React.FormEvent) {
     e.preventDefault(); setSaving(true)
+    if (!id) return
     try {
-      await api.patch(`/api/collections/${id}`, collection)
+      await solarch.collections.update(id, collection)
       toast.success('Collection schema saved successfully')
     } catch (err: any) {
       toast.error(err.message || 'Failed to save collection')

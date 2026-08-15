@@ -36,12 +36,8 @@ describe('CORE-CLIENT-8: Client ↔ Server Integration Suite', () => {
     port = typeof addr === 'object' && addr ? addr.port : 8090
 
     client = new SolarchClient(`http://127.0.0.1:${port}`)
-    const authRes = await client.http.post<{ token: string; admin: any }>('/api/admins/auth-with-password', {
-      body: { identity: 'admin@solarch.local', password: 'password123456' },
-    })
-    client.authStore.save(authRes.token, authRes.admin)
+    await client.admins.authWithPassword('admin@solarch.local', 'password123456')
   })
-
 
   afterAll(async () => {
     if (server) {
@@ -53,7 +49,7 @@ describe('CORE-CLIENT-8: Client ↔ Server Integration Suite', () => {
     fs.rmSync(tempDir, { recursive: true, force: true })
   })
 
-  it('1. Collections & Schema Integration: creates, reads, and lists collections', async () => {
+  it('1. Collections Schema Management: creates, fetches, and lists collections', async () => {
     const col = await client.collections.create({
       name: 'integration_articles',
       type: 'base',
@@ -63,10 +59,10 @@ describe('CORE-CLIENT-8: Client ↔ Server Integration Suite', () => {
       updateRule: '',
       deleteRule: '',
       fields: [
-
-        { name: 'title', type: 'text', required: true },
-        { name: 'content', type: 'text' },
+        { id: 'fld_title', name: 'title', type: 'text', required: true },
+        { id: 'fld_content', name: 'content', type: 'text', required: false },
       ],
+      indexes: [],
     })
 
     expect(col.id).toBeDefined()
@@ -79,12 +75,12 @@ describe('CORE-CLIENT-8: Client ↔ Server Integration Suite', () => {
     expect(list.items.some((c) => c.name === 'integration_articles')).toBe(true)
   })
 
-  it('2. Capabilities Integration: resolves sqlite provider capabilities', async () => {
-    const caps = await client.capabilities.get()
-    expect(caps.protocolVersion).toBe('1.0')
-    expect(caps.database.provider).toBe('sqlite')
-    expect(await client.capabilities.supportsTransactions()).toBe(true)
-    expect(await client.capabilities.supportsBackups()).toBe(true)
+  it('2. Capabilities Integration: verifies truthful server health and status', async () => {
+    const health = await client.capabilities.getHealth()
+    expect(health.code).toBe(200)
+    expect(health.message).toBe('Healthy')
+    expect(health.data?.dbConnected).toBe(true)
+    expect(await client.capabilities.isHealthy()).toBe(true)
   })
 
   it('3. Record CRUD Integration: creates, queries, updates, and deletes records', async () => {

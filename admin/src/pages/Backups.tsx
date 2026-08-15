@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { api } from '../api/client'
+import { adminApi, type BackupItem } from '../lib/admin-api'
 import { Trash2, RefreshCw, Archive } from 'lucide-react'
 import { PageHeader } from '@/components/navigation/PageHeader'
 import { Card, CardContent } from '@/components/ui/card'
@@ -10,7 +10,7 @@ import { Spinner } from '@/components/ui/spinner'
 import { toast } from 'sonner'
 
 export default function Backups() {
-  const [backups, setBackups] = useState<any[]>([])
+  const [backups, setBackups] = useState<BackupItem[]>([])
   const [loading, setLoading] = useState(true)
   const [creating, setCreating] = useState(false)
   const [deleteTargetKey, setDeleteTargetKey] = useState<string | null>(null)
@@ -20,7 +20,7 @@ export default function Backups() {
 
   async function loadBackups() {
     try {
-      const data = await api.get('/api/backups')
+      const data = await adminApi.backups.getList()
       setBackups(Array.isArray(data) ? data : [])
     } catch (err: any) { console.error('Failed to load backups', err) }
     finally { setLoading(false) }
@@ -30,7 +30,7 @@ export default function Backups() {
     setCreating(true)
     try {
       const name = `backup_${Date.now()}.zip`
-      await api.post('/api/backups', { name })
+      await adminApi.backups.create(name)
       toast.success('Backup archive created successfully')
       loadBackups()
     } catch (err: any) { toast.error(err.message || 'Failed to create backup') }
@@ -41,7 +41,7 @@ export default function Backups() {
     if (!deleteTargetKey) return
     setDeleting(true)
     try {
-      await api.delete(`/api/backups/${encodeURIComponent(deleteTargetKey)}`)
+      await adminApi.backups.delete(deleteTargetKey)
       toast.success('Backup archive deleted')
       setDeleteTargetKey(null)
       loadBackups()

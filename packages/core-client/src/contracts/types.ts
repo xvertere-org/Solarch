@@ -86,25 +86,18 @@ export interface ApiErrorResponse {
   }
 }
 
-export interface ServerCapabilities {
-  protocolVersion: string
-  database: {
-    provider: string
-    transactions: boolean
-    vectorSearch: boolean
-    backups: boolean
+export interface ServerHealthInfo {
+  status?: string
+  code?: number
+  message?: string
+  timestamp?: string
+  data?: {
+    dbConnected?: boolean
+    [key: string]: any
   }
-  realtime: {
-    websocket: boolean
-    sse: boolean
-  }
-  features: {
-    oauth2: boolean
-    otp: boolean
-    files: boolean
-    mfa: boolean
-  }
+  [key: string]: any
 }
+
 
 export interface RecordAuthResponse<T extends RecordModel = RecordModel> {
   token: string

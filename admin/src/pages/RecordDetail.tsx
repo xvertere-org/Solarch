@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { api } from '../api/client'
+import { solarch } from '../lib/solarch'
+import type { CollectionModel, RecordModel } from '@solarch/core-client'
 import { ArrowLeft, Save } from 'lucide-react'
 import { PageHeader } from '@/components/navigation/PageHeader'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -15,18 +16,19 @@ import { toast } from 'sonner'
 export default function RecordDetail() {
   const { collectionId, recordId } = useParams()
   const navigate = useNavigate()
-  const [collection, setCollection] = useState<any>(null)
-  const [record, setRecord] = useState<any>(null)
+  const [collection, setCollection] = useState<CollectionModel | null>(null)
+  const [record, setRecord] = useState<RecordModel | null>(null)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
 
   useEffect(() => { loadData() }, [collectionId, recordId])
 
   async function loadData() {
+    if (!collectionId || !recordId) return
     try {
       const [col, rec] = await Promise.all([
-        api.get(`/api/collections/${collectionId}`),
-        api.get(`/api/collections/${collectionId}/records/${recordId}`),
+        solarch.collections.getOne(collectionId),
+        solarch.collection(collectionId).getOne(recordId),
       ])
       setCollection(col); setRecord(rec)
     } catch (err: any) { console.error('Failed to load record', err) }
@@ -35,8 +37,9 @@ export default function RecordDetail() {
 
   async function saveRecord(e: React.FormEvent) {
     e.preventDefault(); setSaving(true)
+    if (!collectionId || !recordId || !record) return
     try {
-      await api.patch(`/api/collections/${collectionId}/records/${recordId}`, record)
+      await solarch.collection(collectionId).update(recordId, record)
       toast.success('Record updated successfully')
     } catch (err: any) {
       toast.error(err.message || 'Failed to update record')

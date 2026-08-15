@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react'
-import { api } from '../api/client'
+import { adminApi } from '../lib/admin-api'
 import { Send, Bot, User, Sparkles, Plus, Trash2, X } from 'lucide-react'
 import { PageHeader } from '@/components/navigation/PageHeader'
 import { Card, CardContent } from '@/components/ui/card'
@@ -99,7 +99,7 @@ export default function AIAssistant() {
     setLoading(true)
 
     try {
-      const data = await api.post("/api/ai/chat", { message: userMessage })
+      const data = await adminApi.ai.chat(userMessage)
       if (currentChat) {
         updateCurrentChat(chat => ({
           ...chat,

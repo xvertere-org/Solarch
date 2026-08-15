@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { api } from '../api/client'
+import { solarch } from '../lib/solarch'
 import { Database, HardDrive, Users, Zap, Settings as SettingsIcon, ArrowRight } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { PageHeader } from '@/components/navigation/PageHeader'
@@ -17,12 +17,12 @@ export default function Dashboard() {
   useEffect(() => {
     async function load() {
       try {
-        const collections = await api.get('/api/collections')
+        const collections = await solarch.collections.getList()
         let totalRecords = 0
         let totalUsers = 0
         for (const c of collections.items || []) {
           try {
-            const recs = await api.get(`/api/collections/${c.id}/records?page=1&perPage=1&skipTotal=false`)
+            const recs = await solarch.collection(c.id).getList(1, 1, { skipTotal: false })
             totalRecords += recs.totalItems || 0
             if (c.type === 'auth') totalUsers += recs.totalItems || 0
           } catch { /* ignore */ }

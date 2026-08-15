@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useParams, Link } from 'react-router-dom'
-import { api } from '../api/client'
+import { solarch } from '../lib/solarch'
+import type { CollectionModel, RecordModel } from '@solarch/core-client'
 import { Plus, Search, ChevronLeft, ChevronRight, ArrowLeft, Trash2, Edit } from 'lucide-react'
 import { PageHeader } from '@/components/navigation/PageHeader'
 import { Card, CardContent } from '@/components/ui/card'
@@ -15,8 +16,8 @@ import { toast } from 'sonner'
 
 export default function Records() {
   const { collectionId } = useParams()
-  const [collection, setCollection] = useState<any>(null)
-  const [records, setRecords] = useState<any[]>([])
+  const [collection, setCollection] = useState<CollectionModel | null>(null)
+  const [records, setRecords] = useState<RecordModel[]>([])
   const [page, setPage] = useState(1)
   const [perPage] = useState(20)
   const [totalItems, setTotalItems] = useState(0)
@@ -31,16 +32,18 @@ export default function Records() {
   useEffect(() => { loadRecords() }, [collectionId, page, filter])
 
   async function loadCollection() {
-    try { setCollection(await api.get(`/api/collections/${collectionId}`)) }
+    if (!collectionId) return
+    try { setCollection(await solarch.collections.getOne(collectionId)) }
     catch (err: any) { console.error('Failed to load collection', err) }
   }
 
   async function loadRecords() {
+    if (!collectionId) return
     setLoading(true)
     try {
-      let url = `/api/collections/${collectionId}/records?page=${page}&perPage=${perPage}`
-      if (filter) url += `&filter=${encodeURIComponent(filter)}`
-      const data = await api.get(url)
+      const data = await solarch.collection(collectionId).getList(page, perPage, {
+        filter: filter ? filter : undefined,
+      })
       setRecords(data.items || []); setTotalItems(data.totalItems || 0)
     } catch (err: any) { console.error('Failed to load records', err) }
     finally { setLoading(false) }
@@ -48,8 +51,9 @@ export default function Records() {
 
   async function createRecord(e: React.FormEvent) {
     e.preventDefault()
+    if (!collectionId) return
     try {
-      await api.post(`/api/collections/${collectionId}/records`, newRecord)
+      await solarch.collection(collectionId).create(newRecord)
       toast.success('Record created successfully')
       setShowModal(false); setNewRecord({})
       setPage(1); loadRecords()
@@ -57,10 +61,10 @@ export default function Records() {
   }
 
   async function confirmDeleteRecord() {
-    if (!deleteTargetId) return
+    if (!deleteTargetId || !collectionId) return
     setDeleting(true)
     try {
-      await api.delete(`/api/collections/${collectionId}/records/${deleteTargetId}`)
+      await solarch.collection(collectionId).delete(deleteTargetId)
       toast.success('Record deleted')
       setDeleteTargetId(null)
       loadRecords()
