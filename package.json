@@ -20,7 +20,8 @@
     "LICENSE"
   ],
   "workspaces": [
-    "packages/*"
+    "packages/*",
+    "admin"
   ],
   "scripts": {
     "postinstall": "node scripts/postinstall.js",

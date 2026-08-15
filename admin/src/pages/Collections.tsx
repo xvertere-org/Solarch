@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { api } from '../api/client'
+import { solarch } from '../lib/solarch'
+import type { CollectionModel } from '@solarch/core-client'
 import { Plus, Eye, Edit, Trash2, Layers } from 'lucide-react'
 import { PageHeader } from '@/components/navigation/PageHeader'
 import { Card, CardContent } from '@/components/ui/card'
@@ -15,22 +16,20 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Spinner } from '@/components/ui/spinner'
 import { toast } from 'sonner'
 
-interface Collection { id: string; name: string; type: string; system: boolean; listRule: string | null }
-
 export default function Collections() {
-  const [collections, setCollections] = useState<Collection[]>([])
+  const [collections, setCollections] = useState<CollectionModel[]>([])
   const [loading, setLoading] = useState(true)
   const [showModal, setShowModal] = useState(false)
   const [newName, setNewName] = useState('')
-  const [newType, setNewType] = useState('base')
+  const [newType, setNewType] = useState<'base' | 'auth' | 'view'>('base')
   const [deleting, setDeleting] = useState<string | null>(null)
-  const [deleteTarget, setDeleteTarget] = useState<Collection | null>(null)
+  const [deleteTarget, setDeleteTarget] = useState<CollectionModel | null>(null)
 
   useEffect(() => { loadCollections() }, [])
 
   async function loadCollections() {
     try {
-      const data = await api.get('/api/collections')
+      const data = await solarch.collections.getList()
       setCollections(data.items || [])
     } catch (err: any) { console.error('Failed to load collections', err) }
     finally { setLoading(false) }
@@ -40,7 +39,7 @@ export default function Collections() {
     e.preventDefault()
     if (!newName.trim()) return
     try {
-      await api.post('/api/collections', { name: newName.trim(), type: newType, fields: [], indexes: [] })
+      await solarch.collections.create({ name: newName.trim(), type: newType, fields: [], indexes: [] })
       toast.success(`Collection "${newName.trim()}" created`)
       setShowModal(false); setNewName(''); loadCollections()
     } catch (err: any) { toast.error(err.message || 'Failed to create collection') }
@@ -51,7 +50,7 @@ export default function Collections() {
     const id = deleteTarget.id
     setDeleting(id)
     try {
-      await api.delete(`/api/collections/${id}`)
+      await solarch.collections.delete(id)
       toast.success(`Collection "${deleteTarget.name}" deleted`)
       setDeleteTarget(null)
       loadCollections()

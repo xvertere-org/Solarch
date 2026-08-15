@@ -1,68 +1,51 @@
 /**
  * @solarch/core-client - CapabilityService
+ * Strictly consumes actual server health and status information without speculative feature inference.
  */
 
-import type { HealthResponse, ServerCapabilities } from '../contracts/types.js'
+import type { ServerHealthInfo } from '../contracts/types.js'
 import type { HttpClient } from '../http/HttpClient.js'
 
 export class CapabilityService {
-  private cachedCapabilities: ServerCapabilities | null = null
+  private cachedHealth: ServerHealthInfo | null = null
 
   constructor(readonly client: HttpClient) {}
 
-  async get(): Promise<ServerCapabilities> {
-    if (this.cachedCapabilities) {
-      return this.cachedCapabilities
+  /**
+   * Queries the server /api/health endpoint and returns the actual server health and status payload.
+   */
+  async getHealth(): Promise<ServerHealthInfo> {
+    if (this.cachedHealth) {
+      return this.cachedHealth
     }
+    const health = await this.client.get<ServerHealthInfo>('/api/health')
+    this.cachedHealth = health
+    return health
+  }
 
-    const health = await this.client.get<HealthResponse>('/api/health')
-    const provider = (health?.database || 'sqlite').toLowerCase()
-
-    const capabilities: ServerCapabilities = {
-      protocolVersion: '1.0',
-      database: {
-        provider,
-        transactions: provider !== 'mongodb' && provider !== 'neon',
-        vectorSearch: provider === 'sqlite' || provider === 'postgres' || provider === 'mongodb',
-        backups: provider === 'sqlite',
-      },
-      realtime: {
-        websocket: true,
-        sse: true,
-      },
-      features: {
-        oauth2: true,
-        otp: true,
-        files: true,
-        mfa: true,
-      },
+  /**
+   * Evaluates if the backend server reports a healthy operational status.
+   */
+  async isHealthy(): Promise<boolean> {
+    try {
+      const health = await this.getHealth()
+      if (health.status === 'ok') return true
+      if (health.code === 200) return true
+      if (health.message && health.message.toLowerCase() === 'healthy') return true
+      return false
+    } catch {
+      return false
     }
-
-    this.cachedCapabilities = capabilities
-    return capabilities
   }
 
-  async getDatabaseProvider(): Promise<string> {
-    const caps = await this.get()
-    return caps.database.provider
-  }
-
-  async supportsTransactions(): Promise<boolean> {
-    const caps = await this.get()
-    return caps.database.transactions
-  }
-
-  async supportsVectorSearch(): Promise<boolean> {
-    const caps = await this.get()
-    return caps.database.vectorSearch
-  }
-
-  async supportsBackups(): Promise<boolean> {
-    const caps = await this.get()
-    return caps.database.backups
+  /**
+   * Alias for getHealth() to maintain clean canonical surface.
+   */
+  async get(): Promise<ServerHealthInfo> {
+    return this.getHealth()
   }
 
   clearCache(): void {
-    this.cachedCapabilities = null
+    this.cachedHealth = null
   }
 }

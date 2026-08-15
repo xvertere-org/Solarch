@@ -1,18 +1,14 @@
 import { useState, useEffect } from 'react'
-import { api } from '../api/client'
+import { solarch } from '../lib/solarch'
+import { adminApi } from '../lib/admin-api'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Button } from '@/components/ui/button'
 import { Spinner } from '@/components/ui/spinner'
-
 import { SolarchLogo } from '@/components/SolarchLogo'
 
-interface LoginProps {
-  onLogin: (data: { token: string; admin: any }) => void
-}
-
-export default function Login({ onLogin }: LoginProps) {
+export default function Login() {
   const [email, setEmail] = useState('admin@example.com')
   const [password, setPassword] = useState('Password123!')
   const [passwordConfirm, setPasswordConfirm] = useState('Password123!')
@@ -25,7 +21,7 @@ export default function Login({ onLogin }: LoginProps) {
 
   const checkInstaller = async () => {
     try {
-      const res = await api.get('/api/installer/check')
+      const res = await adminApi.installer.check()
       setIsInstaller(!res.installed)
     } catch { setIsInstaller(true) }
     finally { setChecking(false) }
@@ -35,10 +31,12 @@ export default function Login({ onLogin }: LoginProps) {
     e.preventDefault()
     setError(''); setLoading(true)
     try {
-      const data = await api.post('/api/admins/auth-with-password', { identity: email, password })
-      onLogin(data)
-    } catch (err: any) { setError(err.message || 'Login failed') }
-    finally { setLoading(false) }
+      await solarch.admins.authWithPassword(email, password)
+    } catch (err: any) {
+      setError(err.message || 'Login failed')
+    } finally {
+      setLoading(false)
+    }
   }
 
   const handleInstall = async (e: React.FormEvent) => {
@@ -48,11 +46,13 @@ export default function Login({ onLogin }: LoginProps) {
     if (password.length < 6) { setError('Password must be at least 6 characters'); return }
     setLoading(true)
     try {
-      await api.post('/api/installer', { email, password, passwordConfirm })
-      const data = await api.post('/api/admins/auth-with-password', { identity: email, password })
-      onLogin(data)
-    } catch (err: any) { setError(err.message || 'Installation failed') }
-    finally { setLoading(false) }
+      await adminApi.installer.install({ email, password, passwordConfirm })
+      await solarch.admins.authWithPassword(email, password)
+    } catch (err: any) {
+      setError(err.message || 'Installation failed')
+    } finally {
+      setLoading(false)
+    }
   }
 
   if (checking) {

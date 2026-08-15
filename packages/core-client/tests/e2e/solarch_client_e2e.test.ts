@@ -63,13 +63,12 @@ describe('CORE-CLIENT-8: Live SolarchClient End-to-End Suite', () => {
     fs.rmSync(tempDir, { recursive: true, force: true })
   })
 
-  it('1. Capabilities Service: queries health and resolves server database capabilities', async () => {
-    const caps = await client.capabilities.get()
-    expect(caps.protocolVersion).toBe('1.0')
-    expect(caps.database.provider).toBe('sqlite')
-    expect(await client.capabilities.supportsTransactions()).toBe(true)
-    expect(await client.capabilities.supportsBackups()).toBe(true)
+  it('1. Capabilities Service: queries health facts directly from server', async () => {
+    const health = await client.capabilities.getHealth()
+    expect(health.status).toBe('ok')
+    expect(await client.capabilities.isHealthy()).toBe(true)
   })
+
 
   it('2. Record CRUD: executes complete lifecycle against live collection', async () => {
     const postCol = new Collection({

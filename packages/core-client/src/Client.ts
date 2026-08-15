@@ -12,6 +12,7 @@ import {
 import { RealtimeService } from './realtime/RealtimeService.js'
 import { CapabilityService } from './services/CapabilityService.js'
 import { CollectionService } from './services/CollectionService.js'
+import { AdminService } from './services/AdminService.js'
 import { FileService } from './services/FileService.js'
 import { RecordService } from './services/RecordService.js'
 import type { AuthStore } from './stores/AuthStore.js'
@@ -63,6 +64,7 @@ export interface SolarchClientOptions {
 export class SolarchClient {
   readonly http: HttpClient
   readonly authStore: AuthStore
+  readonly admins: AdminService
   readonly collections: CollectionService
   readonly files: FileService
   readonly realtime: RealtimeService
@@ -96,6 +98,7 @@ export class SolarchClient {
       afterSend: options.afterSend,
     })
 
+    this.admins = new AdminService(this.http)
     this.collections = new CollectionService(this.http)
     this.files = new FileService(this.http)
     this.capabilities = new CapabilityService(this.http)
