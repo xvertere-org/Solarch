@@ -5,3 +5,10 @@
 9f0bdb6a40136c2e04aaccd368ff75c319e0944f:torque/.next/cache/.previewinfo:generic-api-key:1
 9f0bdb6a40136c2e04aaccd368ff75c319e0944f:torque/.next/prerender-manifest.json:generic-api-key:58
 9f0bdb6a40136c2e04aaccd368ff75c319e0944f:torque/.next/prerender-manifest.json:generic-api-key:59
+6befee3be5c2186e33fb1f227ee44a8cc758821a:packages/core-client/tests/stores/auth_store.test.ts:generic-api-key:11
+057e5522f0fb34227502ff553fd930e80b596442:src/core/__tests__/config_resolution.test.ts:generic-api-key:184
+06f3bbe29bb73fe1f9512b7d9b559fc43438fb57:docs-verified/authentication.md:generic-api-key:25
+06f3bbe29bb73fe1f9512b7d9b559fc43438fb57:docs-verified/authentication.md:generic-api-key:63
+06f3bbe29bb73fe1f9512b7d9b559fc43438fb57:docs-verified/authentication.md:generic-api-key:122
+06f3bbe29bb73fe1f9512b7d9b559fc43438fb57:docs-verified/authentication.md:generic-api-key:211
+06f3bbe29bb73fe1f9512b7d9b559fc43438fb57:docs-verified/authentication.md:generic-api-key:369
