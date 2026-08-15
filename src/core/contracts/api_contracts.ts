@@ -80,10 +80,10 @@ export interface RealtimeMessage<T = any> {
   code?: number
 }
 
-export interface RealtimeEventPayload<T = Record<string, any>> {
+export interface RealtimeEventPayload {
   action: 'create' | 'update' | 'delete'
   collectionId: string
-  record: T
+  data: { id: string }
   timestamp: string
 }
 

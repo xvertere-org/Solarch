@@ -1,4 +1,5 @@
 import { Router, Request, Response } from 'express'
+import { createApiError } from '../utils/api_errors'
 import { BaseApp } from '../core/base'
 import { requireSuperuserAuth } from './middlewares_auth'
 import { SettingsEncryption } from '../core/settings_encrypt'
@@ -32,7 +33,7 @@ export function registerSettingsRoutes(app: BaseApp, router: Router): void {
       res.json(settings)
     } catch (err: any) {
       app.logger().error(err.message || err)
-      res.status(500).json({ code: 500, message: 'Internal server error' })
+      res.status(500).json(createApiError(500, 'INTERNAL_ERROR', 'Internal server error'))
     }
   })
 
@@ -51,7 +52,7 @@ export function registerSettingsRoutes(app: BaseApp, router: Router): void {
       res.json(app.settings())
     } catch (err: any) {
       app.logger().error(err.message || err)
-      res.status(500).json({ code: 500, message: 'Internal server error' })
+      res.status(500).json(createApiError(500, 'INTERNAL_ERROR', 'Internal server error'))
     }
   })
 
@@ -61,7 +62,7 @@ export function registerSettingsRoutes(app: BaseApp, router: Router): void {
       const settings = app.settings()
 
       if (!settings.smtp.host) {
-        return res.status(400).json({ code: 400, message: 'SMTP not configured.' })
+        return res.status(400).json(createApiError(400, 'VALIDATION_FAILED', 'SMTP not configured.'))
       }
 
       const mailer = Mailer.fromSettings(settings)
@@ -74,7 +75,7 @@ export function registerSettingsRoutes(app: BaseApp, router: Router): void {
       res.json({ success: true, message: `Test email sent to ${to}.` })
     } catch (err: any) {
       app.logger().error(err.message || err)
-      res.status(500).json({ code: 500, message: 'Internal server error' })
+      res.status(500).json(createApiError(500, 'INTERNAL_ERROR', 'Internal server error'))
     }
   })
 
@@ -82,7 +83,7 @@ export function registerSettingsRoutes(app: BaseApp, router: Router): void {
     try {
       const settings = app.settings()
       if (!settings.s3.enabled) {
-        return res.status(400).json({ code: 400, message: 'S3 not enabled.' })
+        return res.status(400).json(createApiError(400, 'VALIDATION_FAILED', 'S3 not enabled.'))
       }
       const fsys = app.getFilesystem()
       const testKey = `_solarch_test_${Date.now()}`
@@ -90,12 +91,12 @@ export function registerSettingsRoutes(app: BaseApp, router: Router): void {
       const exists = await fsys.fileExists(testKey)
       await fsys.deleteFile(testKey)
       if (!exists) {
-        return res.status(500).json({ code: 500, message: 'S3 write/read test failed.' })
+        return res.status(500).json(createApiError(500, 'INTERNAL_ERROR', 'S3 write/read test failed.'))
       }
       res.json({ success: true, message: 'S3 connection successful.' })
     } catch (err: any) {
       app.logger().error(err.message || err)
-      res.status(500).json({ code: 500, message: 'S3 connection failed.' })
+      res.status(500).json(createApiError(500, 'INTERNAL_ERROR', 'S3 connection failed.'))
     }
   })
 

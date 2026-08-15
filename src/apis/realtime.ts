@@ -1,5 +1,6 @@
 import { Router, Request, Response } from 'express'
 import { BaseApp } from '../core/base'
+import { createApiError } from '../utils/api_errors'
 import { Broker, Client, Message } from '../tools/subscriptions/broker'
 import { WebSocket } from 'ws'
 import { canAccessRecord } from './record_helpers'
@@ -55,7 +56,7 @@ export function registerRealtimeRoutes(app: BaseApp, router: Router): void {
     try {
       const { clientId, subscriptions } = req.body
       if (!clientId || !Array.isArray(subscriptions)) {
-        return res.status(400).json({ code: 400, message: 'Invalid request. clientId and subscriptions array required.' })
+        return res.status(400).json(createApiError(400, 'VALIDATION_FAILED', 'Invalid request. clientId and subscriptions array required.'))
       }
 
       const authRecord = req.authContext?.record ?? null
@@ -69,12 +70,20 @@ export function registerRealtimeRoutes(app: BaseApp, router: Router): void {
           const allowed = await canSubscribeToChannel(app, sub.channel, authRecord, isAdmin)
           if (allowed) {
             broker.subscribe(clientId, sub.channel)
+            const canonical = getCanonicalChannel(app, sub.channel)
+            if (canonical && canonical !== sub.channel) {
+              broker.subscribe(clientId, canonical)
+            }
             subscribedChannels.push(sub.channel)
           } else {
             errors.push({ channel: sub.channel, message: `Not authorized to subscribe to channel: ${sub.channel}` })
           }
         } else if (sub.action === 'unsubscribe') {
           broker.unsubscribe(clientId, sub.channel)
+          const canonical = getCanonicalChannel(app, sub.channel)
+          if (canonical && canonical !== sub.channel) {
+            broker.unsubscribe(clientId, canonical)
+          }
         }
       }
 
@@ -95,11 +104,26 @@ export function registerRealtimeRoutes(app: BaseApp, router: Router): void {
       })
     } catch (err: any) {
       app.logger().error(err.message || err)
-      res.status(500).json({ code: 500, message: 'Internal server error' })
+      res.status(500).json(createApiError(500, 'INTERNAL_ERROR', 'Internal server error'))
     }
   })
 }
 
+export function resolveCollectionFromChannel(app: BaseApp, channel: string) {
+  let target = channel
+  if (target.startsWith('collections.') && target.endsWith('.records')) {
+    target = target.slice('collections.'.length, -('.records'.length))
+  }
+  return app.findCachedCollectionByNameOrId(target)
+}
+
+export function getCanonicalChannel(app: BaseApp, channel: string): string | null {
+  const collection = resolveCollectionFromChannel(app, channel)
+  if (collection) {
+    return `collections.${collection.id}.records`
+  }
+  return null
+}
 
 async function canSubscribeToChannel(
   app: BaseApp,
@@ -110,11 +134,9 @@ async function canSubscribeToChannel(
 
   if (isAdmin) return true
 
-  if (channel.startsWith('collections.') && channel.endsWith('.records')) {
-    const collectionId = channel.replace('collections.', '').replace('.records', '')
+  const collection = resolveCollectionFromChannel(app, channel)
+  if (collection) {
     try {
-      const collection = app.findCachedCollectionByNameOrId(collectionId)
-      if (!collection) return false
       if (collection.viewRule === null) return false
       if (collection.viewRule === '') return true
 
@@ -206,6 +228,12 @@ export function setupWebSocketRealtime(wss: any, app?: BaseApp): void {
                 continue
               }
               broker.subscribe(clientId, channel)
+              if (app) {
+                const canonical = getCanonicalChannel(app, channel)
+                if (canonical && canonical !== channel) {
+                  broker.subscribe(clientId, canonical)
+                }
+              }
             }
             ws.send(JSON.stringify({
               type: 'subscribed',
@@ -216,6 +244,12 @@ export function setupWebSocketRealtime(wss: any, app?: BaseApp): void {
         } else if (msg.type === 'unsubscribe' && Array.isArray(msg.channels)) {
           for (const channel of msg.channels) {
             broker.unsubscribe(clientId, channel)
+            if (app) {
+              const canonical = getCanonicalChannel(app, channel)
+              if (canonical && canonical !== channel) {
+                broker.unsubscribe(clientId, canonical)
+              }
+            }
           }
           ws.send(JSON.stringify({
             type: 'unsubscribed',
@@ -246,14 +280,14 @@ export function broadcastRealtimeEvent(channel: string, data: any, excludeClient
 export function broadcastRecordEvent(
   action: 'create' | 'update' | 'delete',
   collectionId: string,
-  record: any,
+  data: { id: string },
   excludeClientId?: string
 ): void {
   const channel = `collections.${collectionId}.records`
   broadcastRealtimeEvent(channel, {
     action,
-    record,
     collectionId,
+    data: { id: data.id },
     timestamp: new Date().toISOString(),
   }, excludeClientId)
 }

@@ -7,8 +7,9 @@ import { ResolvedDatabaseConfig } from './config_types'
 export const DEFAULT_QUERY_TIMEOUT = 30
 
 export interface DBConfig {
-  provider?: 'sqlite' | 'postgres'
+  provider?: 'sqlite' | 'postgres' | 'mongodb'
   dataDir?: string
+  database?: string
   queryTimeout?: number
   connectionString?: string
   dbDriver?: 'postgres' | 'neon'
@@ -17,6 +18,7 @@ export interface DBConfig {
   mode?: 'tcp' | 'http' | 'websocket'
   pool?: {
     max?: number
+    min?: number
     idleTimeoutMs?: number
     connectionTimeoutMs?: number
   }
@@ -27,21 +29,31 @@ export class DB {
 
   constructor(config: DBConfig | ResolvedDatabaseConfig, fallbackDataDir = './pb_data') {
     const provider = config.provider ?? 'sqlite'
-    const driverConfig: DatabaseDriverConfig =
-      provider === 'postgres'
-        ? {
-            provider: 'postgres',
-            connectionString: config.connectionString ?? '',
-            driver: (config as any).driver ?? (config as any).dbDriver,
-            mode: (config as any).mode ?? (config as any).dbMode,
-            queryTimeout: config.queryTimeout ?? DEFAULT_QUERY_TIMEOUT,
-            pool: config.pool,
-          }
-        : {
-            provider: 'sqlite',
-            dataDir: (config as any).dataDir ?? fallbackDataDir,
-            queryTimeout: config.queryTimeout ?? DEFAULT_QUERY_TIMEOUT,
-          }
+    let driverConfig: DatabaseDriverConfig
+    if (provider === 'postgres') {
+      driverConfig = {
+        provider: 'postgres',
+        connectionString: config.connectionString ?? '',
+        driver: (config as any).driver ?? (config as any).dbDriver,
+        mode: (config as any).mode ?? (config as any).dbMode,
+        queryTimeout: config.queryTimeout ?? DEFAULT_QUERY_TIMEOUT,
+        pool: config.pool,
+      }
+    } else if (provider === 'mongodb') {
+      driverConfig = {
+        provider: 'mongodb',
+        connectionString: config.connectionString ?? '',
+        database: (config as any).database,
+        queryTimeout: config.queryTimeout ?? DEFAULT_QUERY_TIMEOUT,
+        pool: config.pool,
+      }
+    } else {
+      driverConfig = {
+        provider: 'sqlite',
+        dataDir: (config as any).dataDir ?? fallbackDataDir,
+        queryTimeout: config.queryTimeout ?? DEFAULT_QUERY_TIMEOUT,
+      }
+    }
     this.driver = createDatabaseDriver(driverConfig)
   }
 

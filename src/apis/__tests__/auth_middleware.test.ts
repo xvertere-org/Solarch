@@ -160,6 +160,18 @@ describe('Auth Middlewares', () => {
     expect(body.message).toBe('Only guests can access this endpoint.')
   })
 
+  it('loadAuthToken: token with { isAdmin: true } but without type=admin is NOT granted admin access', async () => {
+    const forgedToken = ctx.app.generateJWT({ id: 'fake_admin', isAdmin: true }, ctx.app.getJwtSecret(), '1h')
+    const { status, body } = await fetchJson(`${ctx.url}/test-load`, { headers: { authorization: `Bearer ${forgedToken}` } })
+    expect(status).toBe(200)
+    expect(body.ctx.isAdmin).toBe(false)
+    expect(body.ctx.record).toBeNull()
+
+    const adminCheck = await fetchJson(`${ctx.url}/test-require-admin`, { headers: { authorization: `Bearer ${forgedToken}` } })
+    expect(adminCheck.status).toBe(403)
+    expect(adminCheck.body.status).toBe('FORBIDDEN')
+  })
+
   // requireSameCollectionContextAuth tests
   it('requireSameCollectionContextAuth: matches collection -> 200', async () => {
     const { status } = await fetchJson(`${ctx.url}/test-require-collection/users`, { headers: { authorization: `Bearer ${userToken}` } })
@@ -169,6 +181,7 @@ describe('Auth Middlewares', () => {
   it('requireSameCollectionContextAuth: mismatches collection -> 403', async () => {
     const { status, body } = await fetchJson(`${ctx.url}/test-require-collection-invalid/admins`, { headers: { authorization: `Bearer ${userToken}` } })
     expect(status).toBe(403)
+    expect(body.status).toBe('FORBIDDEN')
     expect(body.message).toBe('Invalid collection context.')
   })
 })

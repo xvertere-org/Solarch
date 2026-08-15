@@ -2,6 +2,7 @@ import { Request, Response, NextFunction } from 'express'
 import { BaseApp } from '../core/base'
 import { RecordModel as PBRecord } from '../core/record'
 import { findAuthRecordByToken } from '../core/record_query'
+import { createApiError } from '../utils/api_errors'
 
 export interface AuthContext {
   record: PBRecord | null
@@ -84,11 +85,6 @@ export function loadAuthToken(app: BaseApp) {
       return next()
     }
 
-    if (payload.isAdmin) {
-      setAuthContext(req, null, true, token)
-      return next()
-    }
-
     if (payload.type === 'auth') {
       const record = await authenticateRecord(app, token)
 
@@ -116,7 +112,7 @@ export function loadAuthToken(app: BaseApp) {
 export function requireAuth(app: BaseApp) {
   return async (req: Request, res: Response, next: NextFunction) => {
     if (!req.authContext?.record && !req.authContext?.isAdmin) {
-      return res.status(401).json({ code: 401, message: 'Authentication required.' })
+      return res.status(401).json(createApiError(401, 'UNAUTHORIZED', 'Authentication required.'))
     }
     next()
   }
@@ -125,7 +121,7 @@ export function requireAuth(app: BaseApp) {
 export function requireSuperuserAuth(app: BaseApp) {
   return async (req: Request, res: Response, next: NextFunction) => {
     if (!req.authContext?.isAdmin) {
-      return res.status(403).json({ code: 403, message: 'Superuser authentication required.' })
+      return res.status(403).json(createApiError(403, 'FORBIDDEN', 'Superuser authentication required.'))
     }
     next()
   }
@@ -135,7 +131,7 @@ export function requireSameCollectionContextAuth(collectionIdOrName: string) {
   return async (req: Request, res: Response, next: NextFunction) => {
     const ctx = req.authContext
     if (ctx?.record && ctx.record.collectionName !== collectionIdOrName && ctx.record.collectionId !== collectionIdOrName) {
-      return res.status(403).json({ code: 403, message: 'Invalid collection context.' })
+      return res.status(403).json(createApiError(403, 'FORBIDDEN', 'Invalid collection context.'))
     }
     next()
   }
@@ -144,7 +140,7 @@ export function requireSameCollectionContextAuth(collectionIdOrName: string) {
 export function requireGuestOnly() {
   return async (req: Request, res: Response, next: NextFunction) => {
     if (req.authContext?.record || req.authContext?.isAdmin) {
-      return res.status(400).json({ code: 400, message: 'Only guests can access this endpoint.' })
+      return res.status(400).json(createApiError(400, 'VALIDATION_FAILED', 'Only guests can access this endpoint.'))
     }
     next()
   }

@@ -27,14 +27,14 @@ export interface CollectionData {
   updated?: string
   name: string
   type: CollectionType
-  system: boolean
-  listRule: string | null
-  viewRule: string | null
-  createRule: string | null
-  updateRule: string | null
-  deleteRule: string | null
-  fields: Record<string, any>[]
-  indexes: string[]
+  system?: boolean
+  listRule?: string | null
+  viewRule?: string | null
+  createRule?: string | null
+  updateRule?: string | null
+  deleteRule?: string | null
+  fields?: Record<string, any>[]
+  indexes?: string[]
   authOptions?: Partial<CollectionAuthOptions>
   viewOptions?: Partial<CollectionViewOptions>
 }

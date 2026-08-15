@@ -1,4 +1,5 @@
 import { Router, Request, Response } from 'express'
+import { createApiError } from '../utils/api_errors'
 import { BaseApp } from '../core/base'
 import { RecordModel as PBRecord } from '../core/record'
 import { canAccessRecord } from './record_helpers'
@@ -95,17 +96,17 @@ export function registerFileRoutes(app: BaseApp, router: Router): void {
     try {
       const { collection: collectionIdOrName, recordId, filename } = req.body
       if (!collectionIdOrName || !recordId || !filename) {
-        return res.status(400).json({ code: 400, message: 'Missing collection, recordId, or filename.' })
+        return res.status(400).json(createApiError(400, 'VALIDATION_FAILED', 'Missing collection, recordId, or filename.'))
       }
 
       const collection = await app.findCollectionByNameOrId(collectionIdOrName)
       if (!collection) {
-        return res.status(404).json({ code: 404, message: 'Collection not found.' })
+        return res.status(404).json(createApiError(404, 'NOT_FOUND', 'Collection not found.'))
       }
 
       const row = await app.db().queryOne(`SELECT * FROM ${quoteIdentifier(`_r_${collection.id}`)} WHERE id = ?`, [recordId])
       if (!row) {
-        return res.status(404).json({ code: 404, message: 'Record not found.' })
+        return res.status(404).json(createApiError(404, 'NOT_FOUND', 'Record not found.'))
       }
 
       const record = new PBRecord(collection.id, collection.name, row)
@@ -122,12 +123,12 @@ export function registerFileRoutes(app: BaseApp, router: Router): void {
       }
 
       if (collection.viewRule === null) {
-        return res.status(403).json({ code: 403, message: 'File access denied.' })
+        return res.status(403).json(createApiError(403, 'FORBIDDEN', 'File access denied.'))
       }
       if (collection.viewRule !== '') {
         const accessible = await canAccessRecord(app, record, collection, collection.viewRule, requestInfo)
         if (!accessible) {
-          return res.status(403).json({ code: 403, message: 'File access denied.' })
+          return res.status(403).json(createApiError(403, 'FORBIDDEN', 'File access denied.'))
         }
       }
 
@@ -135,7 +136,7 @@ export function registerFileRoutes(app: BaseApp, router: Router): void {
       res.json({ token })
     } catch (err: any) {
       app.logger().error(err.message || err)
-      res.status(500).json({ code: 500, message: 'Internal server error' })
+      res.status(500).json(createApiError(500, 'INTERNAL_ERROR', 'Internal server error'))
     }
   })
 
@@ -144,17 +145,17 @@ export function registerFileRoutes(app: BaseApp, router: Router): void {
       const { collectionIdOrName, recordId } = req.params
       const collection = await app.findCollectionByNameOrId(collectionIdOrName)
       if (!collection) {
-        return res.status(404).json({ code: 404, message: 'Collection not found.' })
+        return res.status(404).json(createApiError(404, 'NOT_FOUND', 'Collection not found.'))
       }
 
       const row = await app.db().queryOne<any>(`SELECT * FROM ${quoteIdentifier(`_r_${collection.id}`)} WHERE id = ?`, [recordId])
       if (!row) {
-        return res.status(404).json({ code: 404, message: 'Record not found.' })
+        return res.status(404).json(createApiError(404, 'NOT_FOUND', 'Record not found.'))
       }
 
       const files = req.files as Express.Multer.File[]
       if (!files || files.length === 0) {
-        return res.status(400).json({ code: 400, message: 'No files uploaded.' })
+        return res.status(400).json(createApiError(400, 'VALIDATION_FAILED', 'No files uploaded.'))
       }
 
       const fsys = app.getFilesystem()
@@ -178,7 +179,7 @@ export function registerFileRoutes(app: BaseApp, router: Router): void {
         const detectedMime = detectMimeType(fileContent)
         if (!ALLOWED_FILE_TYPES.includes(detectedMime) && detectedMime !== 'application/octet-stream') {
           await fsPromises.unlink(file.path)
-          return res.status(400).json({ code: 400, message: `File content type not allowed: ${detectedMime}` })
+          return res.status(400).json(createApiError(400, 'VALIDATION_FAILED', `File content type not allowed: ${detectedMime}`))
         }
         await fsys.putFile(storageKey, fileContent)
         await fsPromises.unlink(file.path)
@@ -192,7 +193,7 @@ export function registerFileRoutes(app: BaseApp, router: Router): void {
       const fieldName = req.query.field as string || 'files'
       const fieldDef = collection.fields.find(f => f.name === fieldName)
       if (!fieldDef || fieldDef.type !== 'file') {
-        return res.status(400).json({ code: 400, message: `Invalid field: "${fieldName}" is not a file field.` })
+        return res.status(400).json(createApiError(400, 'VALIDATION_FAILED', `Invalid field: "${fieldName}" is not a file field.`))
       }
       const record = new PBRecord(collection.id, collection.name, row)
       const existingFiles = record.get(fieldName) || []
@@ -206,7 +207,7 @@ export function registerFileRoutes(app: BaseApp, router: Router): void {
       })
     } catch (err: any) {
       app.logger().error(err.message || err)
-      res.status(500).json({ code: 500, message: 'Internal server error' })
+      res.status(500).json(createApiError(500, 'INTERNAL_ERROR', 'Internal server error'))
     }
   })
 
@@ -219,12 +220,12 @@ export function registerFileRoutes(app: BaseApp, router: Router): void {
 
       const collection = await app.findCollectionByNameOrId(collectionIdOrName)
       if (!collection) {
-        return res.status(404).json({ code: 404, message: 'Collection not found.' })
+        return res.status(404).json(createApiError(404, 'NOT_FOUND', 'Collection not found.'))
       }
 
       const row = await app.db().queryOne<any>(`SELECT * FROM ${quoteIdentifier(`_r_${collection.id}`)} WHERE id = ?`, [recordId])
       if (!row) {
-        return res.status(404).json({ code: 404, message: 'Record not found.' })
+        return res.status(404).json(createApiError(404, 'NOT_FOUND', 'Record not found.'))
       }
 
       const record = new PBRecord(collection.id, collection.name, row)
@@ -232,7 +233,7 @@ export function registerFileRoutes(app: BaseApp, router: Router): void {
       if (fileToken) {
         const tokenPayload = verifyFileToken(app, fileToken)
         if (!tokenPayload || tokenPayload.collectionId !== collection.id || tokenPayload.recordId !== recordId || tokenPayload.filename !== filename) {
-          return res.status(403).json({ code: 403, message: 'Invalid or expired file token.' })
+          return res.status(403).json(createApiError(403, 'FORBIDDEN', 'Invalid or expired file token.'))
         }
       } else {
         const requestInfo: RequestInfo = {
@@ -247,12 +248,12 @@ export function registerFileRoutes(app: BaseApp, router: Router): void {
         }
 
         if (collection.viewRule === null) {
-          return res.status(404).json({ code: 404, message: 'File not found.' })
+          return res.status(404).json(createApiError(404, 'NOT_FOUND', 'File not found.'))
         }
         if (collection.viewRule !== '') {
           const accessible = await canAccessRecord(app, record, collection, collection.viewRule, requestInfo)
           if (!accessible) {
-            return res.status(404).json({ code: 404, message: 'File not found.' })
+            return res.status(404).json(createApiError(404, 'NOT_FOUND', 'File not found.'))
           }
         }
       }
@@ -267,7 +268,7 @@ export function registerFileRoutes(app: BaseApp, router: Router): void {
 
         const exists = await fsys.fileExists(storageKey)
         if (!exists) {
-          return res.status(404).json({ code: 404, message: 'File not found.' })
+          return res.status(404).json(createApiError(404, 'NOT_FOUND', 'File not found.'))
         }
 
         if (download) {
@@ -295,7 +296,7 @@ export function registerFileRoutes(app: BaseApp, router: Router): void {
           exists = false
         }
         if (!exists) {
-          return res.status(404).json({ code: 404, message: 'File not found.' })
+          return res.status(404).json(createApiError(404, 'NOT_FOUND', 'File not found.'))
         }
 
         if (download) {
@@ -306,7 +307,7 @@ export function registerFileRoutes(app: BaseApp, router: Router): void {
       }
     } catch (err: any) {
       app.logger().error(err.message || err)
-      res.status(500).json({ code: 500, message: 'Internal server error' })
+      res.status(500).json(createApiError(500, 'INTERNAL_ERROR', 'Internal server error'))
     }
   })
 
@@ -316,12 +317,12 @@ export function registerFileRoutes(app: BaseApp, router: Router): void {
       const { collectionIdOrName, recordId, filename } = req.params
       const collection = await app.findCollectionByNameOrId(collectionIdOrName)
       if (!collection) {
-        return res.status(404).json({ code: 404, message: 'Collection not found.' })
+        return res.status(404).json(createApiError(404, 'NOT_FOUND', 'Collection not found.'))
       }
 
       const row = await app.db().queryOne<any>(`SELECT * FROM ${quoteIdentifier(`_r_${collection.id}`)} WHERE id = ?`, [recordId])
       if (!row) {
-        return res.status(404).json({ code: 404, message: 'Record not found.' })
+        return res.status(404).json(createApiError(404, 'NOT_FOUND', 'Record not found.'))
       }
 
       const fsys = app.getFilesystem()
@@ -359,7 +360,7 @@ export function registerFileRoutes(app: BaseApp, router: Router): void {
       res.status(204).send()
     } catch (err: any) {
       app.logger().error(err.message || err)
-      res.status(500).json({ code: 500, message: 'Internal server error' })
+      res.status(500).json(createApiError(500, 'INTERNAL_ERROR', 'Internal server error'))
     }
   })
 }

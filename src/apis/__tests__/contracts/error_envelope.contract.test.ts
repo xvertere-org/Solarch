@@ -22,6 +22,7 @@ describe('Canonical Error Contract (CORE-2)', () => {
       dbProvider: 'sqlite',
     })
     await app.bootstrap()
+    await app.migrate()
     server = await serve(app, 0)
   })
 
@@ -88,5 +89,50 @@ describe('Canonical Error Contract (CORE-2)', () => {
     const res = await request(server).get('/api/health')
     expect(res.status).toBe(200)
     expect(res.headers['x-solarch-protocol']).toBe('1.0')
+  })
+
+  it('returns canonical 400 VALIDATION_FAILED on invalid admin auth payload', async () => {
+    const res = await request(server)
+      .post('/api/admins/auth-with-password')
+      .send({})
+    expect(res.status).toBe(400)
+    expect(res.body).toHaveProperty('code', 400)
+    expect(res.body).toHaveProperty('status', 'VALIDATION_FAILED')
+    expect(res.body).toHaveProperty('message')
+  })
+
+  it('returns canonical 400 UNAUTHORIZED on invalid admin credentials', async () => {
+    const res = await request(server)
+      .post('/api/admins/auth-with-password')
+      .send({ identity: 'nonexistent@admin.com', password: 'wrongpassword123' })
+    expect(res.status).toBe(400)
+    expect(res.body).toHaveProperty('code', 400)
+    expect(res.body).toHaveProperty('status', 'UNAUTHORIZED')
+    expect(res.body).toHaveProperty('message')
+  })
+
+  it('returns canonical 400 VALIDATION_FAILED on invalid collection import structure', async () => {
+    await app.db().execute(`
+      CREATE TABLE IF NOT EXISTS _superusers (
+        id TEXT PRIMARY KEY,
+        email TEXT UNIQUE NOT NULL,
+        passwordHash TEXT NOT NULL,
+        created TEXT NOT NULL,
+        updated TEXT NOT NULL
+      )
+    `)
+    const adminId = 'admin_envelope_test'
+    await app.db().execute(
+      `INSERT INTO _superusers (id, email, passwordHash, created, updated) VALUES (?, ?, ?, ?, ?)`,
+      [adminId, 'admin_envelope@example.com', 'hash', new Date().toISOString(), new Date().toISOString()]
+    )
+    const adminToken = app.generateJWT({ id: adminId, type: 'admin' }, app.getJwtSecret(), '1h')
+    const res = await request(server)
+      .post('/api/collections/import')
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({ collections: 'not_an_array' })
+    expect(res.status).toBe(400)
+    expect(res.body).toHaveProperty('code', 400)
+    expect(res.body).toHaveProperty('status', 'VALIDATION_FAILED')
   })
 })

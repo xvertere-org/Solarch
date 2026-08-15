@@ -24,6 +24,18 @@ export const POSTGRES_CAPABILITIES: DatabaseCapabilities = {
   explainOpcodes: false,
 }
 
+export const MONGODB_CAPABILITIES: DatabaseCapabilities = {
+  transactions: true,
+  joins: true,
+  indexes: true,
+  views: true,
+  foreignKeys: false,
+  jsonOperations: true,
+  migrations: true,
+  vectorFunctions: false,
+  explainOpcodes: false,
+}
+
 export const UNSUPPORTED_CAPABILITIES: DatabaseCapabilities = {
   transactions: false,
   joins: false,

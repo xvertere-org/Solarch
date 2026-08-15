@@ -1,3 +1,4 @@
+import { createApiError } from '../utils/api_errors'
 import { Router, Request, Response } from 'express'
 import { BaseApp } from '../core/base'
 import { requireSuperuserAuth } from './middlewares_auth'
@@ -22,27 +23,27 @@ export function registerBatchRoutes(app: BaseApp, router: Router): void {
     try {
       const { requests } = req.body
       if (!Array.isArray(requests)) {
-        return res.status(400).json({ code: 400, message: 'Invalid batch request.' })
+        return res.status(400).json(createApiError(400, 'VALIDATION_FAILED', 'Invalid batch request.'))
       }
 
       const settings = app.settings()
       if (!settings.batch.enabled) {
-        return res.status(403).json({ code: 403, message: 'Batch API is disabled.' })
+        return res.status(403).json(createApiError(403, 'FORBIDDEN', 'Batch API is disabled.'))
       }
 
       if (requests.length > settings.batch.maxBatchSize) {
-        return res.status(400).json({ code: 400, message: `Too many requests. Maximum is ${settings.batch.maxBatchSize}.` })
+        return res.status(400).json(createApiError(400, 'VALIDATION_FAILED', `Too many requests. Maximum is ${settings.batch.maxBatchSize}.`))
       }
 
       const MAX_BATCH_SIZE_CAP = 50
       if (requests.length > MAX_BATCH_SIZE_CAP) {
-        return res.status(400).json({ code: 400, message: `Batch size exceeds hard limit of ${MAX_BATCH_SIZE_CAP}.` })
+        return res.status(400).json(createApiError(400, 'VALIDATION_FAILED', `Batch size exceeds hard limit of ${MAX_BATCH_SIZE_CAP}.`))
       }
 
       const MAX_SUB_REQUEST_BODY_SIZE = 1024 * 1024
       for (let i = 0; i < requests.length; i++) {
         if (requests[i].body && JSON.stringify(requests[i].body).length > MAX_SUB_REQUEST_BODY_SIZE) {
-          return res.status(400).json({ code: 400, message: `Sub-request ${i} body exceeds maximum size of 1MB.` })
+          return res.status(400).json(createApiError(400, 'VALIDATION_FAILED', `Sub-request ${i} body exceeds maximum size of 1MB.`))
         }
       }
 
@@ -58,7 +59,7 @@ export function registerBatchRoutes(app: BaseApp, router: Router): void {
       res.json(results)
     } catch (err: any) {
       app.logger().error(err.message || err)
-      res.status(500).json({ code: 500, message: 'Internal server error' })
+      res.status(500).json(createApiError(500, 'INTERNAL_ERROR', 'Internal server error'))
     }
   })
 }
@@ -141,7 +142,7 @@ async function routeBatchRequest(app: BaseApp, req: any, res: any, path: string)
 
     const collection = await app.findCollectionByNameOrId(collectionIdOrName)
     if (!collection) {
-      res.status(404).json({ code: 404, message: 'Collection not found.' })
+      res.status(404).json(createApiError(404, 'NOT_FOUND', 'Collection not found.'))
       return true
     }
 
@@ -165,18 +166,18 @@ async function routeBatchRequest(app: BaseApp, req: any, res: any, path: string)
         if (recordId) {
           const record = await findRecordById(app, collectionIdOrName, recordId)
           if (!record) {
-            res.status(404).json({ code: 404, message: 'Record not found.' })
+            res.status(404).json(createApiError(404, 'NOT_FOUND', 'Record not found.'))
             return true
           }
           requestInfo.context = 'view'
           if (collection.viewRule === null) {
-            res.status(404).json({ code: 404, message: 'Record not found.' })
+            res.status(404).json(createApiError(404, 'NOT_FOUND', 'Record not found.'))
             return true
           }
           if (collection.viewRule !== '') {
             const accessible = await canAccessRecord(app, record, collection, collection.viewRule, requestInfo)
             if (!accessible) {
-              res.status(404).json({ code: 404, message: 'Record not found.' })
+              res.status(404).json(createApiError(404, 'NOT_FOUND', 'Record not found.'))
               return true
             }
           }
@@ -221,21 +222,21 @@ async function routeBatchRequest(app: BaseApp, req: any, res: any, path: string)
       case 'POST': {
         requestInfo.context = 'create'
         if (collection.createRule === null) {
-          res.status(403).json({ code: 403, message: 'Access denied.' })
+          res.status(403).json(createApiError(403, 'FORBIDDEN', 'Access denied.'))
           return true
         }
         if (collection.createRule !== '') {
           const dummyRecord = new RecordModel(collection.id, collection.name, req.body)
           const accessible = await canAccessRecord(app, dummyRecord, collection, collection.createRule, requestInfo)
           if (!accessible) {
-            res.status(403).json({ code: 403, message: 'Access denied.' })
+            res.status(403).json(createApiError(403, 'FORBIDDEN', 'Access denied.'))
             return true
           }
         }
         const { validateAndCreateRecord } = await import('../core/record_upsert.js')
         const { record, errors } = await validateAndCreateRecord(app, collection, req.body)
         if (errors.length > 0) {
-          res.status(400).json({ code: 400, message: 'Validation failed.', data: errors })
+          res.status(400).json(createApiError(400, 'VALIDATION_FAILED', 'Validation failed.', errors))
           return true
         }
         await app.save(record)
@@ -246,30 +247,30 @@ async function routeBatchRequest(app: BaseApp, req: any, res: any, path: string)
 
       case 'PATCH': {
         if (!recordId) {
-          res.status(400).json({ code: 400, message: 'Record ID required.' })
+          res.status(400).json(createApiError(400, 'VALIDATION_FAILED', 'Record ID required.'))
           return true
         }
         const record = await findRecordById(app, collectionIdOrName, recordId)
         if (!record) {
-          res.status(404).json({ code: 404, message: 'Record not found.' })
+          res.status(404).json(createApiError(404, 'NOT_FOUND', 'Record not found.'))
           return true
         }
         requestInfo.context = 'update'
         if (collection.updateRule === null) {
-          res.status(403).json({ code: 403, message: 'Access denied.' })
+          res.status(403).json(createApiError(403, 'FORBIDDEN', 'Access denied.'))
           return true
         }
         if (collection.updateRule !== '') {
           const accessible = await canAccessRecord(app, record, collection, collection.updateRule, requestInfo)
           if (!accessible) {
-            res.status(403).json({ code: 403, message: 'Access denied.' })
+            res.status(403).json(createApiError(403, 'FORBIDDEN', 'Access denied.'))
             return true
           }
         }
         const { validateAndUpdateRecord } = await import('../core/record_upsert.js')
         const { record: updatedRecord, errors } = await validateAndUpdateRecord(app, collection, record, req.body)
         if (errors.length > 0) {
-          res.status(400).json({ code: 400, message: 'Validation failed.', data: errors })
+          res.status(400).json(createApiError(400, 'VALIDATION_FAILED', 'Validation failed.', errors))
           return true
         }
         await app.save(updatedRecord)
@@ -280,23 +281,23 @@ async function routeBatchRequest(app: BaseApp, req: any, res: any, path: string)
 
       case 'DELETE': {
         if (!recordId) {
-          res.status(400).json({ code: 400, message: 'Record ID required.' })
+          res.status(400).json(createApiError(400, 'VALIDATION_FAILED', 'Record ID required.'))
           return true
         }
         const record = await findRecordById(app, collectionIdOrName, recordId)
         if (!record) {
-          res.status(404).json({ code: 404, message: 'Record not found.' })
+          res.status(404).json(createApiError(404, 'NOT_FOUND', 'Record not found.'))
           return true
         }
         requestInfo.context = 'delete'
         if (collection.deleteRule === null) {
-          res.status(403).json({ code: 403, message: 'Access denied.' })
+          res.status(403).json(createApiError(403, 'FORBIDDEN', 'Access denied.'))
           return true
         }
         if (collection.deleteRule !== '') {
           const accessible = await canAccessRecord(app, record, collection, collection.deleteRule, requestInfo)
           if (!accessible) {
-            res.status(403).json({ code: 403, message: 'Access denied.' })
+            res.status(403).json(createApiError(403, 'FORBIDDEN', 'Access denied.'))
             return true
           }
         }

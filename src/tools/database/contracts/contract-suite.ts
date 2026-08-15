@@ -66,8 +66,12 @@ export function runDatabaseContractSuite(
           { type: 'expression', field: 'qty', operator: '>=', value: 5 },
           'SELECT * FROM items',
         )
-        expect(query.text).toMatch(/WHERE .+>= \?$/)
-        expect(query.params).toEqual([5])
+        if (driver.getDialect() === 'mongodb') {
+          expect(JSON.parse(query.text)).toEqual({ qty: { $gte: 5 } })
+        } else {
+          expect(query.text).toMatch(/WHERE .+>= \?$/)
+          expect(query.params).toEqual([5])
+        }
         const rows = await driver.query(query.text, query.params)
         expect(rows).toEqual([])
       })

@@ -1,4 +1,5 @@
 import { Router, Request, Response } from 'express'
+import { createApiError } from '../utils/api_errors'
 import { BaseApp } from '../core/base'
 import { requireSuperuserAuth } from './middlewares_auth'
 import { AIService } from '../ai/service'
@@ -15,14 +16,14 @@ export function registerAIRoutes(app: BaseApp, router: Router): void {
     try {
       const { description, dryRun } = req.body
       if (!description) {
-        return res.status(400).json({ code: 400, message: 'Description is required.' })
+        return res.status(400).json(createApiError(400, 'VALIDATION_FAILED', 'Description is required.'))
       }
 
       const schema = await aiService.generateCollection(description, { dryRun: !!dryRun })
       res.json({ schema, applied: !dryRun })
     } catch (err: any) {
       app.logger().error(err.message || err)
-      res.status(500).json({ code: 500, message: 'Internal server error' })
+      res.status(500).json(createApiError(500, 'INTERNAL_ERROR', 'Internal server error'))
     }
   })
 
@@ -30,14 +31,14 @@ export function registerAIRoutes(app: BaseApp, router: Router): void {
     try {
       const { action, description } = req.body
       if (!action || !description) {
-        return res.status(400).json({ code: 400, message: 'Action and description are required.' })
+        return res.status(400).json(createApiError(400, 'VALIDATION_FAILED', 'Action and description are required.'))
       }
 
       const rule = await aiService.generateRule(action, description)
       res.json({ rule })
     } catch (err: any) {
       app.logger().error(err.message || err)
-      res.status(500).json({ code: 500, message: 'Internal server error' })
+      res.status(500).json(createApiError(500, 'INTERNAL_ERROR', 'Internal server error'))
     }
   })
 
@@ -45,7 +46,7 @@ export function registerAIRoutes(app: BaseApp, router: Router): void {
     try {
       const { collectionName, count = 5, constraints } = req.body
       if (!collectionName) {
-        return res.status(400).json({ code: 400, message: 'collectionName is required.' })
+        return res.status(400).json(createApiError(400, 'VALIDATION_FAILED', 'collectionName is required.'))
       }
 
       const records = await aiService.seedRecords(collectionName, count, constraints)
@@ -55,7 +56,7 @@ export function registerAIRoutes(app: BaseApp, router: Router): void {
       })
     } catch (err: any) {
       app.logger().error(err.message || err)
-      res.status(500).json({ code: 500, message: 'Internal server error' })
+      res.status(500).json(createApiError(500, 'INTERNAL_ERROR', 'Internal server error'))
     }
   })
   aiRouter.post('/test', async (req: Request, res: Response) => {

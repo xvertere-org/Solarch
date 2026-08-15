@@ -1,71 +1,40 @@
 # Realtime
 
-## Channel Authorization
+## Protocol & Channel Authorization
 
-**Verified working** — subscription requests are checked against collection access rules.
+**Verified working** — subscription requests are checked against collection access rules and events emit minimal mutation metadata.
 
 ---
 
 ### How It Works
 
-When a client subscribes to a realtime channel (via WebSocket or SSE), the server validates whether the client has permission to receive events from that channel.
+1. Clients connect via WebSocket (`/api/realtime`) or SSE (`/api/realtime` with `Accept: text/event-stream`).
+2. Clients subscribe to channels: either by collection name (e.g. `posts`) or canonical identifier (`collections.<collectionId>.records`).
+3. The server validates subscription authorization against the collection's `viewRule`.
+4. When mutations occur, the server broadcasts minimal mutation events `{ action, collectionId, data: { id }, timestamp }`.
+5. Clients query the REST API with their auth token to retrieve full, authorized record contents.
 
-### Channel Format
+---
 
-Channels follow the pattern: `<collectionId>` or `<collectionName>`
+### Channel Authorization Logic
 
-### Authorization Logic
-
-1. The client's auth token is validated (from WS query param `token` or header).
+1. The client's auth token is validated from query param `token` or `Authorization` header.
 2. The collection's `viewRule` is evaluated against the authenticated user.
 3. If `viewRule` is:
    - `""` (empty) → subscription allowed for everyone
-   - `null` → subscription denied (except admins)
-   - A rule expression → evaluated using `RecordFieldResolver`
-4. Admin users **always bypass** rule checks.
+   - `null` → subscription denied (except superusers)
+   - Rule expression → evaluated via `RecordFieldResolver` with request auth context
+4. Superusers always bypass rule checks.
 
-### WebSocket Subscription
+---
 
-```javascript
-const ws = new WebSocket('ws://localhost:8090/ws?token=<auth_token>')
+### WebSocket Protocol Summary
 
-// Subscribe to a collection channel
-ws.send(JSON.stringify({
-  type: 'subscribe',
-  channel: 'posts'
-}))
-
-// Receive events
-ws.onmessage = (event) => {
-  const data = JSON.parse(event.data)
-  // data.type: 'create' | 'update' | 'delete'
-  // data.channel: 'posts'
-  // data.data: { id: '...', ... }
-}
-
-// Unsubscribe
-ws.send(JSON.stringify({
-  type: 'unsubscribe',
-  channel: 'posts'
-}))
-
-// Ping/pong keepalive
-ws.send(JSON.stringify({ type: 'ping' }))
-```
-
-### Rejected Subscriptions
-
-If the client doesn't have permission, the server responds with:
-
-```json
-{
-  "type": "error",
-  "channel": "posts",
-  "data": {
-    "code": 403,
-    "message": "Access denied."
-  }
-}
-```
-
-**Test evidence:** `new_issue.test.ts` → "SEC-008: WebSocket realtime channel subscription authentication" — verifies that unauthorized subscriptions are properly rejected.
+- **Connection handshake:** `{ type: 'connected', clientId, protocolVersion: '1.0', authenticated: boolean }`
+- **Subscribe:** `{ type: 'subscribe', channels: string[] }`
+- **Subscribed confirmation:** `{ type: 'subscribed', clientId, channels: string[] }`
+- **Unsubscribe:** `{ type: 'unsubscribe', channels: string[] }`
+- **Unsubscribed confirmation:** `{ type: 'unsubscribed', clientId, channels: string[] }`
+- **Ping / Pong:** `{ type: 'ping' }` → `{ type: 'pong', timestamp: number }`
+- **Event message:** `{ type: 'event', channel, data: { action, collectionId, data: { id }, timestamp } }`
+- **Error message:** `{ type: 'error', message: string }`

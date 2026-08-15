@@ -55,8 +55,8 @@ describe('factory contract', () => {
     expect(d.provider).toBe('sqlite')
     expect(() => createDatabaseDriver({ provider: 'postgres', dataDir: tmpDir } as any)).toThrow(DatabaseError)
     expect(() => createDatabaseDriver({ provider: 'postgres', connectionString: '' })).toThrow(/connectionString/)
-    expect(() => createDatabaseDriver({ provider: 'mongodb' as any, dataDir: tmpDir })).toThrow(
-      /Unsupported database provider "mongodb"/,
+    expect(() => createDatabaseDriver({ provider: 'cassandra' as any, dataDir: tmpDir })).toThrow(
+      /Unsupported database provider "cassandra"/,
     )
   })
 })

@@ -1,4 +1,5 @@
 import { Router, Request, Response } from 'express'
+import { createApiError } from '../utils/api_errors'
 import { BaseApp } from '../core/base'
 import { requireSuperuserAuth } from './middlewares_auth'
 
@@ -18,7 +19,7 @@ export function registerCronRoutes(app: BaseApp, router: Router): void {
       res.json(jobs)
     } catch (err: any) {
       app.logger().error(err.message || err)
-      res.status(500).json({ code: 500, message: 'Internal server error' })
+      res.status(500).json(createApiError(500, 'INTERNAL_ERROR', 'Internal server error'))
     }
   })
 
@@ -26,13 +27,13 @@ export function registerCronRoutes(app: BaseApp, router: Router): void {
     try {
       const job = cronJobs.get(req.params.id)
       if (!job) {
-        return res.status(404).json({ code: 404, message: 'Cron job not found.' })
+        return res.status(404).json(createApiError(404, 'NOT_FOUND', 'Cron job not found.'))
       }
       await job.handler()
       res.json({ code: 200, message: 'Cron job executed.' })
     } catch (err: any) {
       app.logger().error(err.message || err)
-      res.status(500).json({ code: 500, message: 'Internal server error' })
+      res.status(500).json(createApiError(500, 'INTERNAL_ERROR', 'Internal server error'))
     }
   })
 }

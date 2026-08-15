@@ -6,7 +6,7 @@ import { enrichRecord, enrichRecords, canAccessRecord, checkCollectionAccess } f
 import { RequestInfo } from '../core/record_field_resolver'
 import { validateAndCreateRecord, validateAndUpdateRecord } from '../core/record_upsert'
 import { broadcastRecordEvent } from './realtime'
-import { parsePagination } from '../utils/pagination'
+import { parsePagination, calculateTotalPages } from '../utils/pagination'
 import { createApiError, normalizeDatabaseError } from '../utils/api_errors'
 
 export function registerRecordCRUDRoutes(app: BaseApp, router: Router): void {
@@ -21,7 +21,6 @@ export function registerRecordCRUDRoutes(app: BaseApp, router: Router): void {
       }
 
       const requestInfo = buildRequestInfo(req)
-
       requestInfo.context = 'list'
 
       // FIXED[N-1]: Enforce pagination bounds via shared helper
@@ -32,39 +31,60 @@ export function registerRecordCRUDRoutes(app: BaseApp, router: Router): void {
       const fields = req.query.fields ? (req.query.fields as string).split(',') : undefined
       const skipTotal = req.query.skipTotal === '1' || req.query.skipTotal === 'true'
 
-      const result = await findAllRecords(app, collectionIdOrName, {
-        filter,
-        sort,
-        page,
-        perPage,
-        skipTotal,
-      })
+      // Case 1: Locked collection for non-admin
+      if (!requestInfo.isAdmin && collection.listRule === null) {
+        return res.json({
+          page,
+          perPage,
+          totalItems: 0,
+          totalPages: 1,
+          items: [],
+        })
+      }
 
-      let items = result.items
+      let pageItems: PBRecord[]
+      let totalItems: number
+      let totalPages: number
 
-      if (collection.listRule === null) {
-        items = []
-      } else if (collection.listRule !== '') {
+      // Case 2: Unrestricted list (Admin or public listRule: "")
+      if (requestInfo.isAdmin || collection.listRule === '') {
+        const result = await findAllRecords(app, collectionIdOrName, {
+          filter,
+          sort,
+          page,
+          perPage,
+          skipTotal,
+        })
+        pageItems = result.items
+        totalItems = result.totalItems
+        totalPages = result.totalPages
+      } else {
+        // Case 3: Rule-filtered listing for non-admin
+        // Fetch candidates matching user filter & sort
+        const candidates = await findRecordsByFilter(app, collectionIdOrName, filter || '', sort || '', 10000, 0)
         const accessible: PBRecord[] = []
-        for (const item of items) {
+        for (const item of candidates) {
           if (await canAccessRecord(app, item, collection, collection.listRule, requestInfo)) {
             accessible.push(item)
           }
         }
-        items = accessible
+        totalItems = accessible.length
+        totalPages = calculateTotalPages(totalItems, perPage)
+        const offset = (page - 1) * perPage
+        pageItems = accessible.slice(offset, offset + perPage)
       }
 
-      const enriched = await enrichRecords(app, collection, items, {
+      const enriched = await enrichRecords(app, collection, pageItems, {
         expands: expand,
         fields,
         requestInfo,
       })
 
       res.json({
-        page: result.page,
-        perPage: result.perPage,
-        totalItems: result.totalItems,
-        totalPages: result.totalPages,
+        page,
+        perPage,
+        totalItems,
+        totalPages,
         items: enriched.map(r => r.toJSON()),
       })
     } catch (err: any) {
@@ -199,8 +219,8 @@ export function registerRecordCRUDRoutes(app: BaseApp, router: Router): void {
 
       const enriched = await enrichRecord(app, collection, record, { requestInfo })
 
-      // Broadcast realtime event
-      broadcastRecordEvent('create', collection.id, enriched.toJSON())
+      // Broadcast realtime event (minimal metadata)
+      broadcastRecordEvent('create', collection.id, { id: record.id })
 
       const response = enriched.toJSON()
       if (collection.isAuth() && !collection.authOptions?.onlyVerified) {
@@ -257,8 +277,8 @@ export function registerRecordCRUDRoutes(app: BaseApp, router: Router): void {
 
       const enriched = await enrichRecord(app, collection, record, { requestInfo })
 
-      // Broadcast realtime event
-      broadcastRecordEvent('update', collection.id, enriched.toJSON())
+      // Broadcast realtime event (minimal metadata)
+      broadcastRecordEvent('update', collection.id, { id: record.id })
 
       res.json(enriched.toJSON())
     } catch (err: any) {

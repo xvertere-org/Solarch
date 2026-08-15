@@ -5,6 +5,7 @@ import { Mailer } from '../tools/mailer/mailer'
 import { EmailTemplateEngine, sendPasswordResetEmail } from '../tools/mailer/templates'
 import rateLimit from 'express-rate-limit'
 import { recordFailedAttempt, isLockedOut, clearAttempts } from '../utils/lockout'
+import { createApiError } from '../utils/api_errors'
 
 const adminAuthRateLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
@@ -19,11 +20,7 @@ const adminAuthRateLimiter = rateLimit({
   },
   message: { code: 429, message: 'Too many authentication attempts, please try again later.' },
   handler: (req: Request, res: Response) => {
-    res.status(429).json({
-      code: 429,
-      message: 'Too many authentication attempts, please try again later.',
-      data: { retryAfter: 900 },
-    })
+    res.status(429).json(createApiError(429, 'RATE_LIMITED', 'Too many authentication attempts, please try again later.', { retryAfter: 900 }))
   },
 })
 
@@ -37,10 +34,7 @@ const adminResetRateLimiter = rateLimit({
   },
   message: { code: 429, message: 'Too many password reset requests, please try again later.' },
   handler: (req: Request, res: Response) => {
-    res.status(429).json({
-      code: 429,
-      message: 'Too many password reset requests, please try again later.',
-    })
+    res.status(429).json(createApiError(429, 'RATE_LIMITED', 'Too many password reset requests, please try again later.'))
   },
 })
 
@@ -49,30 +43,30 @@ export function registerAdminAuthRoutes(app: BaseApp, router: Router): void {
     try {
       const { identity, password } = req.body
       if (!identity || !password) {
-        return res.status(400).json({ code: 400, message: 'Missing identity or password.' })
+        return res.status(400).json(createApiError(400, 'VALIDATION_FAILED', 'Missing identity or password.'))
       }
 
       if (isLockedOut(`admin:${identity.toLowerCase()}`)) {
-        return res.status(429).json({ code: 429, message: 'Account temporarily locked. Try again later.' })
+        return res.status(429).json(createApiError(429, 'RATE_LIMITED', 'Account temporarily locked. Try again later.'))
       }
 
       const tableExists = await app.db().hasTable('_superusers')
       if (!tableExists) {
         recordFailedAttempt(`admin:${identity.toLowerCase()}`)
-        return res.status(400).json({ code: 400, message: 'Invalid credentials.' })
+        return res.status(400).json(createApiError(400, 'UNAUTHORIZED', 'Invalid credentials.'))
       }
 
       const row = await app.db().queryOne<any>(`SELECT * FROM _superusers WHERE email = ?`, [identity])
 
       if (!row) {
         recordFailedAttempt(`admin:${identity.toLowerCase()}`)
-        return res.status(400).json({ code: 400, message: 'Invalid credentials.' })
+        return res.status(400).json(createApiError(400, 'UNAUTHORIZED', 'Invalid credentials.'))
       }
 
       const valid = await verifyPassword(password, row.passwordHash)
       if (!valid) {
         recordFailedAttempt(`admin:${identity.toLowerCase()}`)
-        return res.status(400).json({ code: 400, message: 'Invalid credentials.' })
+        return res.status(400).json(createApiError(400, 'UNAUTHORIZED', 'Invalid credentials.'))
       }
 
       clearAttempts(`admin:${identity.toLowerCase()}`)
@@ -86,7 +80,7 @@ export function registerAdminAuthRoutes(app: BaseApp, router: Router): void {
       res.json({ token, admin: { id: row.id, email: row.email } })
     } catch (err: any) {
       app.logger().error(err.message || err)
-      res.status(500).json({ code: 500, message: 'Internal server error' })
+      res.status(500).json(createApiError(500, 'INTERNAL_ERROR', 'Internal server error'))
     }
   })
 
@@ -94,26 +88,26 @@ export function registerAdminAuthRoutes(app: BaseApp, router: Router): void {
     try {
       const authHeader = req.headers.authorization
       if (!authHeader || !authHeader.startsWith('Bearer ')) {
-        return res.status(401).json({ code: 401, message: 'Missing token.' })
+        return res.status(401).json(createApiError(401, 'UNAUTHORIZED', 'Missing token.'))
       }
 
       const token = authHeader.slice(7)
 
       if (await app.isTokenRevoked(token, 'admin_refresh')) {
-        return res.status(401).json({ code: 401, message: 'Token has been revoked.' })
+        return res.status(401).json(createApiError(401, 'UNAUTHORIZED', 'Token has been revoked.'))
       }
 
       const secret = app.getJwtSecret()
       const payload = app.parseJWT(token, secret)
       if (!payload || payload.type !== 'admin') {
-        return res.status(401).json({ code: 401, message: 'Invalid or expired token.' })
+        return res.status(401).json(createApiError(401, 'UNAUTHORIZED', 'Invalid or expired token.'))
       }
 
       await app.revokeToken(token, 'admin_refresh', payload.id, 5)
 
       const row = await app.db().queryOne<any>(`SELECT * FROM _superusers WHERE id = ?`, [payload.id])
       if (!row) {
-        return res.status(401).json({ code: 401, message: 'Admin not found.' })
+        return res.status(401).json(createApiError(401, 'UNAUTHORIZED', 'Admin not found.'))
       }
 
       const newToken = app.generateJWT(
@@ -125,7 +119,7 @@ export function registerAdminAuthRoutes(app: BaseApp, router: Router): void {
       res.json({ token: newToken, admin: { id: row.id, email: row.email } })
     } catch (err: any) {
       app.logger().error(err.message || err)
-      res.status(500).json({ code: 500, message: 'Internal server error' })
+      res.status(500).json(createApiError(500, 'INTERNAL_ERROR', 'Internal server error'))
     }
   })
 
@@ -133,7 +127,7 @@ export function registerAdminAuthRoutes(app: BaseApp, router: Router): void {
     try {
       const { email } = req.body
       if (!email) {
-        return res.status(400).json({ code: 400, message: 'Missing email.' })
+        return res.status(400).json(createApiError(400, 'VALIDATION_FAILED', 'Missing email.'))
       }
 
       const tableExists = await app.db().hasTable('_superusers')
@@ -165,7 +159,7 @@ export function registerAdminAuthRoutes(app: BaseApp, router: Router): void {
       res.json({ code: 200, message: 'Password reset email sent.' })
     } catch (err: any) {
       app.logger().error(err.message || err)
-      res.status(500).json({ code: 500, message: 'Internal server error' })
+      res.status(500).json(createApiError(500, 'INTERNAL_ERROR', 'Internal server error'))
     }
   })
 
@@ -173,29 +167,29 @@ export function registerAdminAuthRoutes(app: BaseApp, router: Router): void {
     try {
       const { token, password, passwordConfirm } = req.body
       if (!token || !password) {
-        return res.status(400).json({ code: 400, message: 'Missing token or password.' })
+        return res.status(400).json(createApiError(400, 'VALIDATION_FAILED', 'Missing token or password.'))
       }
       if (password !== passwordConfirm) {
-        return res.status(400).json({ code: 400, message: 'Passwords do not match.' })
+        return res.status(400).json(createApiError(400, 'VALIDATION_FAILED', 'Passwords do not match.'))
       }
       if (!password || password.length < 10) {
-        return res.status(400).json({ code: 400, message: 'Password must be at least 10 characters.' })
+        return res.status(400).json(createApiError(400, 'VALIDATION_FAILED', 'Password must be at least 10 characters.'))
       }
 
       const validToken = await app.isPasswordResetTokenValid(token, 'admin')
       if (!validToken) {
-        return res.status(400).json({ code: 400, message: 'Invalid or expired token.' })
+        return res.status(400).json(createApiError(400, 'VALIDATION_FAILED', 'Invalid or expired token.'))
       }
 
       const tokenData = await app.getPasswordResetTokenData(token, 'admin')
       const revoked = await app.revokePasswordResetToken(token, 'admin')
       if (!revoked || !tokenData) {
-        return res.status(400).json({ code: 400, message: 'Token has already been used.' })
+        return res.status(400).json(createApiError(400, 'VALIDATION_FAILED', 'Token has already been used.'))
       }
 
       const row = await app.db().queryOne<any>(`SELECT * FROM _superusers WHERE id = ?`, [tokenData.userId])
       if (!row) {
-        return res.status(400).json({ code: 400, message: 'Invalid token.' })
+        return res.status(400).json(createApiError(400, 'VALIDATION_FAILED', 'Invalid token.'))
       }
 
       const passwordHash = await hashPasswordAsync(password)
@@ -204,7 +198,7 @@ export function registerAdminAuthRoutes(app: BaseApp, router: Router): void {
       res.json({ code: 200, message: 'Password reset successfully.' })
     } catch (err: any) {
       app.logger().error(err.message || err)
-      res.status(500).json({ code: 500, message: 'Internal server error' })
+      res.status(500).json(createApiError(500, 'INTERNAL_ERROR', 'Internal server error'))
     }
   })
 }

@@ -87,6 +87,7 @@ function tokenize(filter: string): string[] {
 
 function parseExpression(tokens: string[], pos: number): { ast: FilterAST; nextPos: number } {
   const expressions: FilterAST[] = []
+  let groupOp: 'AND' | 'OR' = 'AND'
   let currentPos = pos
 
   while (currentPos < tokens.length) {
@@ -105,11 +106,13 @@ function parseExpression(tokens: string[], pos: number): { ast: FilterAST; nextP
     }
 
     if (token.toUpperCase() === '&&' || token.toUpperCase() === 'AND') {
+      groupOp = 'AND'
       currentPos++
       continue
     }
 
     if (token.toUpperCase() === '||' || token.toUpperCase() === 'OR') {
+      groupOp = 'OR'
       currentPos++
       continue
     }
@@ -158,7 +161,7 @@ function parseExpression(tokens: string[], pos: number): { ast: FilterAST; nextP
   }
 
   return {
-    ast: { type: 'group', op: 'AND', expressions },
+    ast: { type: 'group', op: groupOp, expressions },
     nextPos: currentPos,
   }
 }

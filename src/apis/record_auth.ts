@@ -70,16 +70,16 @@ export function registerAuthRoutes(app: BaseApp, router: Router): void {
     try {
       const { identity, password, collectionIdOrName } = req.body
       if (!identity || !password) {
-        return res.status(400).json({ code: 400, message: 'Missing identity or password.' })
+        return res.status(400).json(createApiError(400, 'VALIDATION_FAILED', 'Missing identity or password.'))
       }
 
       const collection = await app.findCollectionByNameOrId(collectionIdOrName ?? 'users')
       if (!collection || !collection.isAuth()) {
-        return res.status(400).json({ code: 400, message: 'Invalid collection.' })
+        return res.status(400).json(createApiError(400, 'VALIDATION_FAILED', 'Invalid collection.'))
       }
       const lockoutKey = `record:${collection.id}:${identity.toLowerCase()}`
       if (isLockedOut(lockoutKey)) {
-        return res.status(429).json({ code: 429, message: 'Account temporarily locked. Try again later.' })
+        return res.status(429).json(createApiError(429, 'RATE_LIMITED', 'Account temporarily locked. Try again later.'))
       }
 
       const columns = await app.db().tableColumns(`_r_${collection.id}`)
@@ -101,18 +101,18 @@ export function registerAuthRoutes(app: BaseApp, router: Router): void {
 
       if (!row) {
         recordFailedAttempt(lockoutKey)
-        return res.status(400).json({ code: 400, message: 'Invalid login credentials.' })
+        return res.status(400).json(createApiError(400, 'UNAUTHORIZED', 'Invalid login credentials.'))
       }
 
       const passwordHash = row.passwordHash
       const valid = await verifyPassword(password, passwordHash)
       if (!valid) {
         recordFailedAttempt(lockoutKey)
-        return res.status(400).json({ code: 400, message: 'Invalid login credentials.' })
+        return res.status(400).json(createApiError(400, 'UNAUTHORIZED', 'Invalid login credentials.'))
       }
       clearAttempts(lockoutKey)
       if (collection.authOptions?.onlyVerified && !row.verified) {
-        return res.status(403).json({ code: 403, message: 'Email not verified.' })
+        return res.status(403).json(createApiError(403, 'FORBIDDEN', 'Email not verified.'))
       }
 
       const mfaCheck = await app.db().queryOne<any>(`SELECT id, method FROM _mfas WHERE recordRef = ? AND collectionId = ?`, [row.id, collection.id])
@@ -139,7 +139,7 @@ export function registerAuthRoutes(app: BaseApp, router: Router): void {
       res.json({ token, record: record.toJSON() })
     } catch (err: any) {
       app.logger().error(err.message || err)
-      res.status(500).json({ code: 500, message: 'Internal server error' })
+      res.status(500).json(createApiError(500, 'INTERNAL_ERROR', 'Internal server error'))
     }
   })
 
@@ -149,16 +149,16 @@ export function registerAuthRoutes(app: BaseApp, router: Router): void {
       const collectionIdOrName = req.params.collectionIdOrName ?? 'users'
 
       if (!provider || !code) {
-        return res.status(400).json({ code: 400, message: 'Missing provider or code.' })
+        return res.status(400).json(createApiError(400, 'VALIDATION_FAILED', 'Missing provider or code.'))
       }
 
       const collection = await app.findCollectionByNameOrId(collectionIdOrName)
       if (!collection || !collection.isAuth()) {
-        return res.status(400).json({ code: 400, message: 'Invalid collection.' })
+        return res.status(400).json(createApiError(400, 'VALIDATION_FAILED', 'Invalid collection.'))
       }
 
       if (!collection.authOptions?.allowOAuth2Auth) {
-        return res.status(403).json({ code: 403, message: 'OAuth2 is not enabled for this collection.' })
+        return res.status(403).json(createApiError(403, 'FORBIDDEN', 'OAuth2 is not enabled for this collection.'))
       }
 
       if (redirectURL) {
@@ -177,10 +177,10 @@ export function registerAuthRoutes(app: BaseApp, router: Router): void {
             })
           }
           if (!isAllowed) {
-            return res.status(400).json({ code: 400, message: 'Invalid redirect URL.' })
+            return res.status(400).json(createApiError(400, 'VALIDATION_FAILED', 'Invalid redirect URL.'))
           }
         } catch {
-          return res.status(400).json({ code: 400, message: 'Invalid redirect URL.' })
+          return res.status(400).json(createApiError(400, 'VALIDATION_FAILED', 'Invalid redirect URL.'))
         }
       }
 
@@ -190,7 +190,7 @@ export function registerAuthRoutes(app: BaseApp, router: Router): void {
           [state, collection.id, new Date().toISOString()]
         )
         if (!stateRow) {
-          return res.status(403).json({ code: 403, message: 'Invalid or expired OAuth2 state.' })
+          return res.status(403).json(createApiError(403, 'FORBIDDEN', 'Invalid or expired OAuth2 state.'))
         }
         await app.db().execute(`DELETE FROM _oauth2States WHERE state = ?`, [state])
       }
@@ -205,7 +205,7 @@ export function registerAuthRoutes(app: BaseApp, router: Router): void {
       if (existingAuth) {
         const row = await app.db().queryOne<any>(`SELECT * FROM ${quoteIdentifier(`_r_${collection.id}`)} WHERE id = ?`, [existingAuth.recordRef])
         if (!row) {
-          return res.status(400).json({ code: 400, message: 'Associated record not found.' })
+          return res.status(400).json(createApiError(400, 'VALIDATION_FAILED', 'Associated record not found.'))
         }
         record = new PBRecord(collection.id, collection.name, row)
       } else {
@@ -238,7 +238,7 @@ export function registerAuthRoutes(app: BaseApp, router: Router): void {
             await linkExternalAuth(app, record, provider, oauthUser.id)
           }
         } else {
-          return res.status(400).json({ code: 400, message: 'OAuth2 provider did not return email.' })
+          return res.status(400).json(createApiError(400, 'VALIDATION_FAILED', 'OAuth2 provider did not return email.'))
         }
       }
 
@@ -253,7 +253,7 @@ export function registerAuthRoutes(app: BaseApp, router: Router): void {
       res.json({ token, record: record.toJSON(), meta: { isNew: !existingAuth } })
     } catch (err: any) {
       app.logger().error(err.message || err)
-      res.status(500).json({ code: 500, message: 'Internal server error' })
+      res.status(500).json(createApiError(500, 'INTERNAL_ERROR', 'Internal server error'))
     }
   })
 
@@ -261,33 +261,33 @@ export function registerAuthRoutes(app: BaseApp, router: Router): void {
     try {
       const { otpId, password, collectionIdOrName } = req.body
       if (!otpId || !password) {
-        return res.status(400).json({ code: 400, message: 'Missing otpId or password.' })
+        return res.status(400).json(createApiError(400, 'VALIDATION_FAILED', 'Missing otpId or password.'))
       }
 
       const collection = await app.findCollectionByNameOrId(collectionIdOrName ?? 'users')
       if (!collection || !collection.isAuth()) {
-        return res.status(400).json({ code: 400, message: 'Invalid collection.' })
+        return res.status(400).json(createApiError(400, 'VALIDATION_FAILED', 'Invalid collection.'))
       }
 
       const otpRow = await app.db().queryOne<any>(`SELECT * FROM _otps WHERE id = ? AND collectionId = ?`, [otpId, collection.id])
       if (!otpRow) {
-        return res.status(400).json({ code: 400, message: 'Invalid or expired OTP.' })
+        return res.status(400).json(createApiError(400, 'VALIDATION_FAILED', 'Invalid or expired OTP.'))
       }
 
       const otp = new OTP(otpRow)
       if (otp.isExpired()) {
         await app.db().execute(`DELETE FROM _otps WHERE id = ?`, [otpId])
-        return res.status(400).json({ code: 400, message: 'OTP has expired.' })
+        return res.status(400).json(createApiError(400, 'VALIDATION_FAILED', 'OTP has expired.'))
       }
       const incomingHash = createHash('sha256').update(password).digest()
       const storedHash = Buffer.from(otp.password, 'hex')
       if (storedHash.length !== incomingHash.length || !timingSafeEqual(storedHash, incomingHash)) {
-        return res.status(400).json({ code: 400, message: 'Invalid OTP password.' })
+        return res.status(400).json(createApiError(400, 'VALIDATION_FAILED', 'Invalid OTP password.'))
       }
 
       const recordRow = await app.db().queryOne<any>(`SELECT * FROM ${quoteIdentifier(`_r_${collection.id}`)} WHERE id = ?`, [otp.recordRef])
       if (!recordRow) {
-        return res.status(400).json({ code: 400, message: 'Associated record not found.' })
+        return res.status(400).json(createApiError(400, 'VALIDATION_FAILED', 'Associated record not found.'))
       }
 
       const record = new PBRecord(collection.id, collection.name, recordRow)
@@ -305,7 +305,7 @@ export function registerAuthRoutes(app: BaseApp, router: Router): void {
       res.json({ token, record: record.toJSON() })
     } catch (err: any) {
       app.logger().error(err.message || err)
-      res.status(500).json({ code: 500, message: 'Internal server error' })
+      res.status(500).json(createApiError(500, 'INTERNAL_ERROR', 'Internal server error'))
     }
   })
 
@@ -313,12 +313,12 @@ export function registerAuthRoutes(app: BaseApp, router: Router): void {
     try {
       const { email, collectionIdOrName } = req.body
       if (!email) {
-        return res.status(400).json({ code: 400, message: 'Missing email.' })
+        return res.status(400).json(createApiError(400, 'VALIDATION_FAILED', 'Missing email.'))
       }
 
       const collection = await app.findCollectionByNameOrId(collectionIdOrName ?? 'users')
       if (!collection || !collection.isAuth()) {
-        return res.status(400).json({ code: 400, message: 'Invalid collection.' })
+        return res.status(400).json(createApiError(400, 'VALIDATION_FAILED', 'Invalid collection.'))
       }
 
       const row = await app.db().queryOne<any>(`SELECT * FROM ${quoteIdentifier(`_r_${collection.id}`)} WHERE email = ?`, [email])
@@ -355,7 +355,7 @@ export function registerAuthRoutes(app: BaseApp, router: Router): void {
       res.json({ otpId })
     } catch (err: any) {
       app.logger().error(err.message || err)
-      res.status(500).json({ code: 500, message: 'Internal server error' })
+      res.status(500).json(createApiError(500, 'INTERNAL_ERROR', 'Internal server error'))
     }
   })
 
@@ -364,18 +364,18 @@ export function registerAuthRoutes(app: BaseApp, router: Router): void {
     try {
       const { token } = req.body
       if (!token) {
-        return res.status(400).json({ code: 400, message: 'Token is required.' })
+        return res.status(400).json(createApiError(400, 'VALIDATION_FAILED', 'Token is required.'))
       }
 
       const isRevoked = await app.isTokenRevoked(token, 'refresh')
       if (isRevoked) {
-        return res.status(401).json({ code: 401, message: 'Token has been revoked.' })
+        return res.status(401).json(createApiError(401, 'UNAUTHORIZED', 'Token has been revoked.'))
       }
 
       const secret = app.getJwtSecret()
       const payload = app.parseJWT(token, secret)
       if (!payload || payload.type !== 'auth') {
-        return res.status(401).json({ code: 401, message: 'Invalid token.' })
+        return res.status(401).json(createApiError(401, 'UNAUTHORIZED', 'Invalid token.'))
       }
 
       await app.revokeToken(token, 'refresh', payload.id, 5)
@@ -389,7 +389,7 @@ export function registerAuthRoutes(app: BaseApp, router: Router): void {
       res.json({ token: newToken })
     } catch (err: any) {
       app.logger().error(err.message || err)
-      res.status(500).json({ code: 500, message: 'Internal server error' })
+      res.status(500).json(createApiError(500, 'INTERNAL_ERROR', 'Internal server error'))
     }
   })
 
@@ -397,23 +397,23 @@ export function registerAuthRoutes(app: BaseApp, router: Router): void {
     try {
       const authHeader = req.headers.authorization
       if (!authHeader) {
-        return res.status(401).json({ code: 401, message: 'Authentication required.' })
+        return res.status(401).json(createApiError(401, 'UNAUTHORIZED', 'Authentication required.'))
       }
 
       const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : authHeader
       const payload = app.parseJWT(token, app.getJwtSecret())
       if (!payload || payload.type !== 'auth') {
-        return res.status(401).json({ code: 401, message: 'Invalid token.' })
+        return res.status(401).json(createApiError(401, 'UNAUTHORIZED', 'Invalid token.'))
       }
 
       const collection = await app.findCollectionByNameOrId(req.params.collectionIdOrName)
       if (!collection || !collection.isAuth()) {
-        return res.status(400).json({ code: 400, message: 'Invalid collection.' })
+        return res.status(400).json(createApiError(400, 'VALIDATION_FAILED', 'Invalid collection.'))
       }
 
       const recordRow = await app.db().queryOne<any>(`SELECT * FROM ${quoteIdentifier(`_r_${collection.id}`)} WHERE id = ?`, [payload.id])
       if (!recordRow) {
-        return res.status(404).json({ code: 404, message: 'Record not found.' })
+        return res.status(404).json(createApiError(404, 'NOT_FOUND', 'Record not found.'))
       }
 
       const secret = generateRandomString(32)
@@ -434,7 +434,7 @@ export function registerAuthRoutes(app: BaseApp, router: Router): void {
       })
     } catch (err: any) {
       app.logger().error(err.message || err)
-      res.status(500).json({ code: 500, message: 'Internal server error' })
+      res.status(500).json(createApiError(500, 'INTERNAL_ERROR', 'Internal server error'))
     }
   })
 
@@ -443,34 +443,34 @@ export function registerAuthRoutes(app: BaseApp, router: Router): void {
       const { code } = req.body
       const authHeader = req.headers.authorization
       if (!authHeader) {
-        return res.status(401).json({ code: 401, message: 'Authentication required.' })
+        return res.status(401).json(createApiError(401, 'UNAUTHORIZED', 'Authentication required.'))
       }
 
       const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : authHeader
       const payload = app.parseJWT(token, app.getJwtSecret())
       if (!payload || !['auth', 'mfa'].includes(payload.type)) {
-        return res.status(401).json({ code: 401, message: 'Invalid token.' })
+        return res.status(401).json(createApiError(401, 'UNAUTHORIZED', 'Invalid token.'))
       }
 
       const collection = await app.findCollectionByNameOrId(req.params.collectionIdOrName)
       if (!collection || !collection.isAuth()) {
-        return res.status(400).json({ code: 400, message: 'Invalid collection.' })
+        return res.status(400).json(createApiError(400, 'VALIDATION_FAILED', 'Invalid collection.'))
       }
 
       const mfaRow = await app.db().queryOne<any>(`SELECT * FROM _mfas WHERE recordRef = ? AND collectionId = ? AND method = 'totp'`, [payload.id, collection.id])
       if (!mfaRow) {
-        return res.status(400).json({ code: 400, message: 'MFA not set up.' })
+        return res.status(400).json(createApiError(400, 'VALIDATION_FAILED', 'MFA not set up.'))
       }
 
       const expectedCode = generateTOTPCode(mfaRow.secret || mfaRow.id)
       if (code !== expectedCode) {
-        return res.status(400).json({ code: 400, message: 'Invalid MFA code.' })
+        return res.status(400).json(createApiError(400, 'VALIDATION_FAILED', 'Invalid MFA code.'))
       }
 
       if (payload.type === 'mfa') {
         const recordRow = await app.db().queryOne<any>(`SELECT * FROM ${quoteIdentifier(`_r_${collection.id}`)} WHERE id = ?`, [payload.id])
         if (!recordRow) {
-          return res.status(404).json({ code: 404, message: 'Record not found.' })
+          return res.status(404).json(createApiError(404, 'NOT_FOUND', 'Record not found.'))
         }
         const record = new PBRecord(collection.id, collection.name, recordRow)
         record.hide('passwordHash')
@@ -488,7 +488,7 @@ export function registerAuthRoutes(app: BaseApp, router: Router): void {
       res.json({ verified: true })
     } catch (err: any) {
       app.logger().error(err.message || err)
-      res.status(500).json({ code: 500, message: 'Internal server error' })
+      res.status(500).json(createApiError(500, 'INTERNAL_ERROR', 'Internal server error'))
     }
   })
 
@@ -512,7 +512,7 @@ export function registerAuthRoutes(app: BaseApp, router: Router): void {
       res.json({ authMethods, mfa: { enabled: true }, otp: { enabled: true } })
     } catch (err: any) {
       app.logger().error(err.message || err)
-      res.status(500).json({ code: 500, message: 'Internal server error' })
+      res.status(500).json(createApiError(500, 'INTERNAL_ERROR', 'Internal server error'))
     }
   })
 
@@ -521,18 +521,18 @@ export function registerAuthRoutes(app: BaseApp, router: Router): void {
       const collectionIdOrName = req.params.collectionIdOrName
       const collection = await app.findCollectionByNameOrId(collectionIdOrName)
       if (!collection || !collection.isAuth()) {
-        return res.status(400).json({ code: 400, message: 'Invalid collection.' })
+        return res.status(400).json(createApiError(400, 'VALIDATION_FAILED', 'Invalid collection.'))
       }
 
       const authHeader = req.headers.authorization
       if (!authHeader) {
-        return res.status(401).json({ code: 401, message: 'Authentication required.' })
+        return res.status(401).json(createApiError(401, 'UNAUTHORIZED', 'Authentication required.'))
       }
 
       const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : authHeader
       const payload = app.parseJWT(token, app.getJwtSecret())
       if (!payload || payload.type !== 'auth') {
-        return res.status(401).json({ code: 401, message: 'Invalid token.' })
+        return res.status(401).json(createApiError(401, 'UNAUTHORIZED', 'Invalid token.'))
       }
 
       const rows = await app.db().query(
@@ -551,7 +551,7 @@ export function registerAuthRoutes(app: BaseApp, router: Router): void {
       })))
     } catch (err: any) {
       app.logger().error(err.message || err)
-      res.status(500).json({ code: 500, message: 'Internal server error' })
+      res.status(500).json(createApiError(500, 'INTERNAL_ERROR', 'Internal server error'))
     }
   })
 

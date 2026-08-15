@@ -1,4 +1,5 @@
 import { Router, Request, Response } from 'express'
+import { createApiError } from '../utils/api_errors'
 import { BaseApp } from '../core/base'
 
 export function registerHealthRoutes(app: BaseApp, router: Router): void {
@@ -6,7 +7,7 @@ export function registerHealthRoutes(app: BaseApp, router: Router): void {
     const isAdmin = req.authContext?.isAdmin ?? false
     const ok = await app.db().ping()
     if (!ok) {
-      return res.status(503).json({ code: 503, message: 'Database unavailable', timestamp: new Date().toISOString() })
+      return res.status(503).json(createApiError(503, 'INTERNAL_ERROR', 'Database unavailable'))
     }
     if (isAdmin) {
       res.json({

@@ -94,12 +94,26 @@ export async function expandRecord(
     const targetCollection = await app.findCollectionByNameOrId(fieldDef.collectionId || fieldDef.collectionName)
     if (!targetCollection) continue
 
-    const ids = Array.isArray(field) ? field : [field]
+    let ids: string[] = []
+    if (Array.isArray(field)) {
+      ids = field
+    } else if (typeof field === 'string' && field.trim().startsWith('[')) {
+      try {
+        const parsed = JSON.parse(field)
+        ids = Array.isArray(parsed) ? parsed : [field]
+      } catch {
+        ids = [field]
+      }
+    } else {
+      ids = [field]
+    }
+
     const records = await Promise.all(
       ids.map(id => findRecordById(app, targetCollection.id, id))
     )
 
     const filtered = records.filter(r => r !== null)
+    if (filtered.length === 0) continue
 
     if (parts.length > 1) {
       const nestedExpands = [parts.slice(1).join('.')]
@@ -113,7 +127,7 @@ export async function expandRecord(
       })
     }
 
-    expandData[fieldName] = filtered.length === 1 ? filtered[0] : filtered
+    expandData[fieldName] = (fieldDef.multiple || Array.isArray(field)) ? filtered : (filtered.length === 1 ? filtered[0] : filtered)
   }
 
   return expandData

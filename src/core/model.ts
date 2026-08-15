@@ -16,7 +16,7 @@ export abstract class BaseModel {
     this.id = data?.id ?? generateId()
     this.created = data?.created ? new Date(data.created) : new Date()
     this.updated = data?.updated ? new Date(data.updated) : new Date()
-    this._isNew = !data?.id
+    this._isNew = !data?.id || (!data?.created && !data?.updated)
   }
 
   isNew(): boolean {

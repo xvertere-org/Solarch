@@ -1,4 +1,5 @@
 import { Router, Request, Response } from 'express'
+import { createApiError } from '../utils/api_errors'
 import { BaseApp } from '../core/base'
 import { hashPassword } from '../tools/security/crypto'
 import { randomBytes } from 'crypto'
@@ -14,7 +15,7 @@ export function registerInstallerRoutes(app: BaseApp, router: Router): void {
       res.json({ installed: (row?.count ?? 0) > 0 })
     } catch (err: any) {
       app.logger().error(err.message || err)
-      res.status(500).json({ code: 500, message: 'Internal server error' })
+      res.status(500).json(createApiError(500, 'INTERNAL_ERROR', 'Internal server error'))
     }
   })
 
@@ -23,11 +24,11 @@ export function registerInstallerRoutes(app: BaseApp, router: Router): void {
       const { email, password, passwordConfirm } = req.body
 
       if (!email || !password) {
-        return res.status(400).json({ code: 400, message: 'Email and password are required.' })
+        return res.status(400).json(createApiError(400, 'VALIDATION_FAILED', 'Email and password are required.'))
       }
 
       if (password !== passwordConfirm) {
-        return res.status(400).json({ code: 400, message: 'Passwords do not match.' })
+        return res.status(400).json(createApiError(400, 'VALIDATION_FAILED', 'Passwords do not match.'))
       }
 
       await app.db().execute(`
@@ -62,7 +63,7 @@ export function registerInstallerRoutes(app: BaseApp, router: Router): void {
       res.json({ code: 200, message: 'Installer completed.' })
     } catch (err: any) {
       app.logger().error(err.message || err)
-      res.status(500).json({ code: 500, message: 'Internal server error' })
+      res.status(500).json(createApiError(500, 'INTERNAL_ERROR', 'Internal server error'))
     }
   })
 }

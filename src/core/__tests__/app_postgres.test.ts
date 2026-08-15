@@ -49,7 +49,6 @@ describe.skipIf(!connectionString)('Solarch application on PostgreSQL (DB-PG-16)
   it('boots the app and applies system and user migrations on postgres', async () => {
     expect(await app.db().hasTable('_collections')).toBe(true)
     expect(await app.db().hasTable('_settings')).toBe(true)
-    expect(await app.db().hasTable('_migrations')).toBe(true)
     expect(await app.db().hasTable('_applied_migrations')).toBe(true)
     expect(await app.db().hasTable('_logs')).toBe(true)
     expect(await app.db().hasTable('_mfas')).toBe(true)

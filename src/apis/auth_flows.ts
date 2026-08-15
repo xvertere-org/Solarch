@@ -1,4 +1,5 @@
 import { Router, Request, Response } from 'express'
+import { createApiError } from '../utils/api_errors'
 import { BaseApp } from '../core/base'
 import { RecordModel as PBRecord } from '../core/record'
 import { generateRandomString } from '../tools/security/crypto'
@@ -38,7 +39,7 @@ export function registerPasswordResetRoutes(app: BaseApp, router: Router): void 
 
       const collection = await app.findCollectionByNameOrId(collectionIdOrName)
       if (!collection || !collection.isAuth()) {
-        return res.status(400).json({ code: 400, message: 'Invalid collection.' })
+        return res.status(400).json(createApiError(400, 'VALIDATION_FAILED', 'Invalid collection.'))
       }
 
       const row = await app.db().queryOne<any>(`SELECT * FROM _r_${collection.id} WHERE email = ?`, [email])
@@ -70,7 +71,7 @@ export function registerPasswordResetRoutes(app: BaseApp, router: Router): void 
       res.json({ code: 200, message: 'Password reset email sent.' })
     } catch (err: any) {
       app.logger().error(err.message || err)
-      res.status(500).json({ code: 500, message: 'Internal server error' })
+      res.status(500).json(createApiError(500, 'INTERNAL_ERROR', 'Internal server error'))
     }
   })
 
@@ -81,34 +82,34 @@ export function registerPasswordResetRoutes(app: BaseApp, router: Router): void 
       const collectionIdOrName = req.params.collectionIdOrName
 
       if (password !== passwordConfirm) {
-        return res.status(400).json({ code: 400, message: 'Passwords do not match.' })
+        return res.status(400).json(createApiError(400, 'VALIDATION_FAILED', 'Passwords do not match.'))
       }
 
       const collection = await app.findCollectionByNameOrId(collectionIdOrName)
       if (!collection || !collection.isAuth()) {
-        return res.status(400).json({ code: 400, message: 'Invalid collection.' })
+        return res.status(400).json(createApiError(400, 'VALIDATION_FAILED', 'Invalid collection.'))
       }
 
       const minLength = collection.authOptions?.minPasswordLength ?? 8
       if (!password || password.length < minLength) {
-        return res.status(400).json({ code: 400, message: `Password must be at least ${minLength} characters.` })
+        return res.status(400).json(createApiError(400, 'VALIDATION_FAILED', `Password must be at least ${minLength} characters.`))
       }
 
       const tokenType = `collection_${collection.id}`
       const validToken = await app.isPasswordResetTokenValid(token, tokenType)
       if (!validToken) {
-        return res.status(400).json({ code: 400, message: 'Invalid or expired token.' })
+        return res.status(400).json(createApiError(400, 'VALIDATION_FAILED', 'Invalid or expired token.'))
       }
 
       const tokenData = await app.getPasswordResetTokenData(token, tokenType)
       const revoked = await app.revokePasswordResetToken(token, tokenType)
       if (!revoked || !tokenData) {
-        return res.status(400).json({ code: 400, message: 'Token has already been used.' })
+        return res.status(400).json(createApiError(400, 'VALIDATION_FAILED', 'Token has already been used.'))
       }
 
       const row = await app.db().queryOne<any>(`SELECT * FROM _r_${collection.id} WHERE id = ?`, [tokenData.userId])
       if (!row) {
-        return res.status(400).json({ code: 400, message: 'Invalid token.' })
+        return res.status(400).json(createApiError(400, 'VALIDATION_FAILED', 'Invalid token.'))
       }
 
       const passwordHash = await app.hashPassword(password)
@@ -117,7 +118,7 @@ export function registerPasswordResetRoutes(app: BaseApp, router: Router): void 
       res.json({ code: 200, message: 'Password reset successfully.' })
     } catch (err: any) {
       app.logger().error(err.message || err)
-      res.status(500).json({ code: 500, message: 'Internal server error' })
+      res.status(500).json(createApiError(500, 'INTERNAL_ERROR', 'Internal server error'))
     }
   })
 
@@ -133,7 +134,7 @@ export function registerVerificationRoutes(app: BaseApp, router: Router): void {
 
       const collection = await app.findCollectionByNameOrId(collectionIdOrName)
       if (!collection || !collection.isAuth()) {
-        return res.status(400).json({ code: 400, message: 'Invalid collection.' })
+        return res.status(400).json(createApiError(400, 'VALIDATION_FAILED', 'Invalid collection.'))
       }
 
       const row = await app.db().queryOne<any>(`SELECT * FROM _r_${collection.id} WHERE email = ?`, [email])
@@ -168,7 +169,7 @@ export function registerVerificationRoutes(app: BaseApp, router: Router): void {
       res.json({ code: 200, message: 'Verification email sent.' })
     } catch (err: any) {
       app.logger().error(err.message || err)
-      res.status(500).json({ code: 500, message: 'Internal server error' })
+      res.status(500).json(createApiError(500, 'INTERNAL_ERROR', 'Internal server error'))
     }
   })
 
@@ -179,17 +180,17 @@ export function registerVerificationRoutes(app: BaseApp, router: Router): void {
 
       const collection = await app.findCollectionByNameOrId(collectionIdOrName)
       if (!collection || !collection.isAuth()) {
-        return res.status(400).json({ code: 400, message: 'Invalid collection.' })
+        return res.status(400).json(createApiError(400, 'VALIDATION_FAILED', 'Invalid collection.'))
       }
 
       const payload = app.parseJWT(token, app.getJwtSecret())
       if (!payload || payload.type !== 'verifyEmail') {
-        return res.status(400).json({ code: 400, message: 'Invalid or expired token.' })
+        return res.status(400).json(createApiError(400, 'VALIDATION_FAILED', 'Invalid or expired token.'))
       }
 
       const row = await app.db().queryOne<any>(`SELECT * FROM _r_${collection.id} WHERE id = ?`, [payload.id])
       if (!row) {
-        return res.status(400).json({ code: 400, message: 'Invalid token.' })
+        return res.status(400).json(createApiError(400, 'VALIDATION_FAILED', 'Invalid token.'))
       }
 
       await app.db().execute(`UPDATE _r_${collection.id} SET verified = 1 WHERE id = ?`, [payload.id])
@@ -197,7 +198,7 @@ export function registerVerificationRoutes(app: BaseApp, router: Router): void {
       res.json({ code: 200, message: 'Email verified successfully.' })
     } catch (err: any) {
       app.logger().error(err.message || err)
-      res.status(500).json({ code: 500, message: 'Internal server error' })
+      res.status(500).json(createApiError(500, 'INTERNAL_ERROR', 'Internal server error'))
     }
   })
 
@@ -214,23 +215,23 @@ export function registerEmailChangeRoutes(app: BaseApp, router: Router): void {
 
       const collection = await app.findCollectionByNameOrId(collectionIdOrName)
       if (!collection || !collection.isAuth()) {
-        return res.status(400).json({ code: 400, message: 'Invalid collection.' })
+        return res.status(400).json(createApiError(400, 'VALIDATION_FAILED', 'Invalid collection.'))
       }
 
       const authHeader = req.headers.authorization
       if (!authHeader) {
-        return res.status(401).json({ code: 401, message: 'Authentication required.' })
+        return res.status(401).json(createApiError(401, 'UNAUTHORIZED', 'Authentication required.'))
       }
 
       const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : authHeader
       const payload = app.parseJWT(token, app.getJwtSecret())
       if (!payload || payload.type !== 'auth') {
-        return res.status(401).json({ code: 401, message: 'Invalid token.' })
+        return res.status(401).json(createApiError(401, 'UNAUTHORIZED', 'Invalid token.'))
       }
 
       const row = await app.db().queryOne<any>(`SELECT * FROM _r_${collection.id} WHERE id = ?`, [payload.id])
       if (!row) {
-        return res.status(400).json({ code: 400, message: 'Invalid user.' })
+        return res.status(400).json(createApiError(400, 'VALIDATION_FAILED', 'Invalid user.'))
       }
 
       const record = new PBRecord(collection.id, collection.name, row)
@@ -254,7 +255,7 @@ export function registerEmailChangeRoutes(app: BaseApp, router: Router): void {
       res.json({ code: 200, message: 'Email change confirmation sent.' })
     } catch (err: any) {
       app.logger().error(err.message || err)
-      res.status(500).json({ code: 500, message: 'Internal server error' })
+      res.status(500).json(createApiError(500, 'INTERNAL_ERROR', 'Internal server error'))
     }
   })
 
@@ -265,41 +266,41 @@ export function registerEmailChangeRoutes(app: BaseApp, router: Router): void {
 
       const collection = await app.findCollectionByNameOrId(collectionIdOrName)
       if (!collection || !collection.isAuth()) {
-        return res.status(400).json({ code: 400, message: 'Invalid collection.' })
+        return res.status(400).json(createApiError(400, 'VALIDATION_FAILED', 'Invalid collection.'))
       }
 
       const tokenType = `emailChange:${collection.id}`
       const validToken = await app.isPasswordResetTokenValid(token, tokenType)
       if (!validToken) {
-        return res.status(400).json({ code: 400, message: 'Invalid or expired token.' })
+        return res.status(400).json(createApiError(400, 'VALIDATION_FAILED', 'Invalid or expired token.'))
       }
 
       const tokenData = await app.getPasswordResetTokenData(token, tokenType)
       if (!tokenData || !tokenData.data) {
-        return res.status(400).json({ code: 400, message: 'Invalid token.' })
+        return res.status(400).json(createApiError(400, 'VALIDATION_FAILED', 'Invalid token.'))
       }
 
       const revoked = await app.revokePasswordResetToken(token, tokenType)
       if (!revoked) {
-        return res.status(400).json({ code: 400, message: 'Token has already been used.' })
+        return res.status(400).json(createApiError(400, 'VALIDATION_FAILED', 'Token has already been used.'))
       }
 
       const row = await app.db().queryOne<any>(`SELECT * FROM _r_${collection.id} WHERE id = ?`, [tokenData.userId])
       if (!row) {
-        return res.status(400).json({ code: 400, message: 'Invalid token.' })
+        return res.status(400).json(createApiError(400, 'VALIDATION_FAILED', 'Invalid token.'))
       }
 
       const newEmail = tokenData.data
       const existingEmail = await app.db().queryOne<any>(`SELECT id FROM _r_${collection.id} WHERE email = ? AND id != ?`, [newEmail, tokenData.userId])
       if (existingEmail) {
-        return res.status(400).json({ code: 400, message: 'Email is already in use.' })
+        return res.status(400).json(createApiError(400, 'VALIDATION_FAILED', 'Email is already in use.'))
       }
       await app.db().execute(`UPDATE _r_${collection.id} SET email = ? WHERE id = ?`, [newEmail, tokenData.userId])
 
       res.json({ code: 200, message: 'Email changed successfully.' })
     } catch (err: any) {
       app.logger().error(err.message || err)
-      res.status(500).json({ code: 500, message: 'Internal server error' })
+      res.status(500).json(createApiError(500, 'INTERNAL_ERROR', 'Internal server error'))
     }
   })
 
@@ -312,7 +313,7 @@ export function registerImpersonateRoutes(app: BaseApp, router: Router): void {
   authRouter.post('/impersonate/:recordId', async (req: Request, res: Response) => {
     try {
       if (!req.authContext?.isAdmin) {
-        return res.status(403).json({ code: 403, message: 'Only superusers can impersonate.' })
+        return res.status(403).json(createApiError(403, 'FORBIDDEN', 'Only superusers can impersonate.'))
       }
 
       const recordId = req.params.recordId
@@ -320,12 +321,12 @@ export function registerImpersonateRoutes(app: BaseApp, router: Router): void {
 
       const collection = await app.findCollectionByNameOrId(collectionIdOrName)
       if (!collection || !collection.isAuth()) {
-        return res.status(400).json({ code: 400, message: 'Invalid collection.' })
+        return res.status(400).json(createApiError(400, 'VALIDATION_FAILED', 'Invalid collection.'))
       }
 
       const row = await app.db().queryOne<any>(`SELECT * FROM _r_${collection.id} WHERE id = ?`, [recordId])
       if (!row) {
-        return res.status(404).json({ code: 404, message: 'Record not found.' })
+        return res.status(404).json(createApiError(404, 'NOT_FOUND', 'Record not found.'))
       }
 
       const record = new PBRecord(collection.id, collection.name, row)
@@ -341,7 +342,7 @@ export function registerImpersonateRoutes(app: BaseApp, router: Router): void {
       res.json({ token, record: record.toJSON() })
     } catch (err: any) {
       app.logger().error(err.message || err)
-      res.status(500).json({ code: 500, message: 'Internal server error' })
+      res.status(500).json(createApiError(500, 'INTERNAL_ERROR', 'Internal server error'))
     }
   })
 

@@ -173,6 +173,9 @@ export class RecordUpsertForm {
     }
 
     if (this.record) {
+      recordData.id = this.record.id
+      recordData.created = this.record.created ? this.record.created.toISOString() : undefined
+      recordData.updated = this.record.updated ? this.record.updated.toISOString() : undefined
       for (const key of this.record.keys()) {
         recordData[key] = this.record.get(key)
       }

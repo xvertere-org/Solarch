@@ -13,7 +13,7 @@ import { SettingsEncryption } from './settings_encrypt'
 import path from 'path'
 import { validateIdentifier, quoteIdentifier } from '../utils/sql_safe'
 
-import { ResolvedAppConfig, SolarchConfigInput } from './config_types'
+import { ResolvedAppConfig, ResolvedDatabaseConfig, SolarchConfigInput, DatabaseProviderType } from './config_types'
 import { resolveAppConfig } from './config_loader'
 import { DatabaseError, DatabaseErrorCode } from '../tools/database/errors'
 
@@ -26,15 +26,23 @@ export interface BaseAppConfig {
   dataMaxIdleConns?: number
   auxMaxOpenConns?: number
   auxMaxIdleConns?: number
-  dbProvider?: 'sqlite' | 'postgres'
-  provider?: 'sqlite' | 'postgres'
+  dbProvider?: DatabaseProviderType
+  provider?: DatabaseProviderType
   connectionString?: string
+  database?: string
   dbUrl?: string
   databaseUrl?: string
   dbDriver?: 'postgres' | 'neon'
   driver?: 'postgres' | 'neon'
   dbMode?: 'tcp' | 'http' | 'websocket'
   mode?: 'tcp' | 'http' | 'websocket'
+  db?: Partial<ResolvedDatabaseConfig>
+  pool?: {
+    max?: number
+    min?: number
+    idleTimeoutMs?: number
+    connectionTimeoutMs?: number
+  }
 }
 
 export class BaseApp {
@@ -49,7 +57,7 @@ export class BaseApp {
   readonly dataDir: string
   readonly encryptionEnv: string
   readonly queryTimeout: number
-  readonly dbProvider: 'sqlite' | 'postgres'
+  readonly dbProvider: DatabaseProviderType
   readonly connectionString?: string
   readonly dbDriver?: 'postgres' | 'neon'
   readonly dbMode?: 'tcp' | 'http' | 'websocket'
@@ -104,11 +112,7 @@ export class BaseApp {
   readonly onCollectionAfterDeleteError = new TaggedHook<CollectionEvent>()
 
   constructor(config: BaseAppConfig | ResolvedAppConfig | SolarchConfigInput = {}) {
-    if ('db' in config && config.db && typeof config.db === 'object') {
-      this.resolvedConfig = config as ResolvedAppConfig
-    } else {
-      this.resolvedConfig = resolveAppConfig(config as SolarchConfigInput)
-    }
+    this.resolvedConfig = resolveAppConfig(config as SolarchConfigInput)
 
     this.isDev = this.resolvedConfig.isDev
     this.dataDir = this.resolvedConfig.dataDir
@@ -327,7 +331,9 @@ export class BaseApp {
           }
           validateIdentifier(key, `record field "${key}"`)
           columns.push(quoteIdentifier(key))
-          if (typeof value === 'boolean') {
+          if (value === null || value === undefined) {
+            values.push(null)
+          } else if (typeof value === 'boolean') {
             values.push(value ? 1 : 0)
           } else if (typeof value === 'object') {
             values.push(JSON.stringify(value))
@@ -377,7 +383,9 @@ export class BaseApp {
           }
           validateIdentifier(key, `record field "${key}"`)
           setClauses.push(`${quoteIdentifier(key)} = ?`)
-          if (typeof value === 'boolean') {
+          if (value === null || value === undefined) {
+            values.push(null)
+          } else if (typeof value === 'boolean') {
             values.push(value ? 1 : 0)
           } else if (typeof value === 'object') {
             values.push(JSON.stringify(value))
@@ -483,12 +491,6 @@ export class BaseApp {
       )
     `)
 
-    await this._db.execute(`
-      CREATE TABLE IF NOT EXISTS _migrations (
-        id TEXT PRIMARY KEY,
-        applied TEXT NOT NULL
-      )
-    `)
 
     await this._db.execute(`
       CREATE TABLE IF NOT EXISTS _logs (

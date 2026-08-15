@@ -1,0 +1,42 @@
+{
+  "name": "@solarch/core-client",
+  "version": "0.1.0",
+  "description": "Universal, platform-neutral TypeScript client SDK for Solarch",
+  "homepage": "https://solarch.in/",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/xvertere-org/Solarch.git",
+    "directory": "packages/core-client"
+  },
+  "license": "Apache-2.0",
+  "type": "module",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit",
+    "prepublishOnly": "npm run build"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.0",
+    "tsup": "^8.4.0",
+    "typescript": "^5.3.3",
+    "vitest": "^4.1.5"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}

@@ -1,4 +1,5 @@
 import { Router, Request, Response } from 'express'
+import { createApiError } from '../utils/api_errors'
 import { BaseApp } from '../core/base'
 import { requireSuperuserAuth } from './middlewares_auth'
 import { parsePagination } from '../utils/pagination'
@@ -34,7 +35,7 @@ export function registerLogRoutes(app: BaseApp, router: Router): void {
       })
     } catch (err: any) {
       app.logger().error(err.message || err)
-      res.status(500).json({ code: 500, message: 'Internal server error' })
+      res.status(500).json(createApiError(500, 'INTERNAL_ERROR', 'Internal server error'))
     }
   })
 
@@ -49,7 +50,7 @@ export function registerLogRoutes(app: BaseApp, router: Router): void {
       res.json(rows)
     } catch (err: any) {
       app.logger().error(err.message || err)
-      res.status(500).json({ code: 500, message: 'Internal server error' })
+      res.status(500).json(createApiError(500, 'INTERNAL_ERROR', 'Internal server error'))
     }
   })
 }

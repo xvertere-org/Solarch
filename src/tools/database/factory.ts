@@ -1,13 +1,15 @@
-import { DatabaseDriver, DatabaseProviderType, PostgresConnectionConfig } from './types'
+import { DatabaseDriver, DatabaseProviderType, PostgresConnectionConfig, MongoConnectionConfig } from './types'
 import { SqliteDriver } from './sqlite/driver'
 import { PostgresDriver } from './postgres/driver'
+import { MongoDBDriver } from './mongodb/driver'
 import { DatabaseError, DatabaseErrorCode } from './errors'
 
 export type DatabaseDriverConfig =
   | { provider: 'sqlite'; dataDir: string; queryTimeout?: number }
   | PostgresConnectionConfig
+  | MongoConnectionConfig
 
-const SUPPORTED_PROVIDERS: DatabaseProviderType[] = ['sqlite', 'postgres']
+const SUPPORTED_PROVIDERS: DatabaseProviderType[] = ['sqlite', 'postgres', 'mongodb']
 
 export function createDatabaseDriver(config: DatabaseDriverConfig): DatabaseDriver {
   if (!SUPPORTED_PROVIDERS.includes(config.provider)) {
@@ -22,6 +24,15 @@ export function createDatabaseDriver(config: DatabaseDriverConfig): DatabaseDriv
       return new SqliteDriver(config.dataDir, config.queryTimeout ?? 30)
     case 'postgres':
       return new PostgresDriver(config)
+    case 'mongodb':
+      if (!config.connectionString || !config.connectionString.trim()) {
+        throw new DatabaseError(
+          DatabaseErrorCode.DATABASE_UNAVAILABLE,
+          'connectionString is required for mongodb provider.',
+          { retryable: false },
+        )
+      }
+      return new MongoDBDriver(config)
     default:
       throw new DatabaseError(
         DatabaseErrorCode.DATABASE_UNAVAILABLE,

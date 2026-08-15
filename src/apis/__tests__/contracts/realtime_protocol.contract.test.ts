@@ -83,4 +83,100 @@ describe('Realtime Protocol Contract (CORE-8 / CORE-10)', () => {
 
     ws.close()
   })
+
+  it('subscribes by collection name and receives minimal mutation event on record creation', async () => {
+    // 1. Create collection with public view rule
+    const { Collection } = await import('../../../core/collection')
+    const testCol = new Collection({
+      name: 'rt_test_posts',
+      type: 'base',
+      listRule: '',
+      viewRule: '',
+      createRule: '',
+      fields: [
+        { name: 'title', type: 'text' },
+        { name: 'sensitiveData', type: 'text' },
+      ],
+    })
+    await app.save(testCol)
+
+    const ws = new WebSocket(`ws://127.0.0.1:${port}/api/realtime`)
+
+    const messages: any[] = []
+    const messageWaiters: ((msg: any) => void)[] = []
+
+    ws.on('message', (data) => {
+      const msg = JSON.parse(data.toString())
+      if (messageWaiters.length > 0) {
+        const waiter = messageWaiters.shift()!
+        waiter(msg)
+      } else {
+        messages.push(msg)
+      }
+    })
+
+    await new Promise<void>((resolve, reject) => {
+      ws.on('open', () => resolve())
+      ws.on('error', reject)
+    })
+
+    function waitForMessage(predicate: (msg: any) => boolean): Promise<any> {
+      return new Promise((resolve) => {
+        const idx = messages.findIndex(predicate)
+        if (idx >= 0) {
+          const [found] = messages.splice(idx, 1)
+          return resolve(found)
+        }
+        const handler = (msg: any) => {
+          if (predicate(msg)) {
+            resolve(msg)
+          } else {
+            messageWaiters.push(handler)
+          }
+        }
+        messageWaiters.push(handler)
+      })
+    }
+
+    // Wait for connected message
+    const connectedMsg = await waitForMessage(m => m.type === 'connected')
+    expect(connectedMsg.type).toBe('connected')
+
+    // Subscribe by collection name
+    ws.send(JSON.stringify({
+      type: 'subscribe',
+      channels: ['rt_test_posts'],
+    }))
+
+    const subConfirm = await waitForMessage(m => m.type === 'subscribed')
+    expect(subConfirm.type).toBe('subscribed')
+
+    // Create record via REST API
+    const res = await fetch(`http://127.0.0.1:${port}/api/collections/rt_test_posts/records`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        title: 'Realtime Test Title',
+        sensitiveData: 'top_secret_info',
+      }),
+    })
+    const createdRecord = await res.json()
+    expect(res.status).toBe(201)
+
+    // Wait for realtime event
+    const eventMsg = await waitForMessage(m => m.type === 'event')
+    expect(eventMsg.type).toBe('event')
+    expect(eventMsg.channel).toBe(`collections.${testCol.id}.records`)
+    expect(eventMsg.data.action).toBe('create')
+    expect(eventMsg.data.collectionId).toBe(testCol.id)
+    expect(eventMsg.data.data).toEqual({ id: createdRecord.id })
+    expect(eventMsg.data.timestamp).toBeDefined()
+
+    // CRITICAL: Ensure full record fields are NOT leaked in realtime event
+    expect(eventMsg.data.record).toBeUndefined()
+    expect(eventMsg.data.title).toBeUndefined()
+    expect(eventMsg.data.sensitiveData).toBeUndefined()
+
+    ws.close()
+  })
 })

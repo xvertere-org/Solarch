@@ -4,16 +4,18 @@
  * and the input formats from CLI, environment, config file, and code.
  */
 
-export type DatabaseProviderType = 'sqlite' | 'postgres'
+export type DatabaseProviderType = 'sqlite' | 'postgres' | 'mongodb'
 
 export interface ResolvedDatabaseConfig {
   provider: DatabaseProviderType
   connectionString?: string
+  database?: string
   driver?: 'postgres' | 'neon'
   mode?: 'tcp' | 'http' | 'websocket'
   queryTimeout: number
   pool?: {
     max?: number
+    min?: number
     idleTimeoutMs?: number
     connectionTimeoutMs?: number
   }
@@ -49,14 +51,17 @@ export interface SolarchConfigInput {
   dbProvider?: DatabaseProviderType
   provider?: DatabaseProviderType
   connectionString?: string
+  database?: string
   dbUrl?: string
   databaseUrl?: string
   dbDriver?: 'postgres' | 'neon'
   driver?: 'postgres' | 'neon'
   dbMode?: 'tcp' | 'http' | 'websocket'
   mode?: 'tcp' | 'http' | 'websocket'
+  db?: Partial<ResolvedDatabaseConfig>
   pool?: {
     max?: number
+    min?: number
     idleTimeoutMs?: number
     connectionTimeoutMs?: number
   }

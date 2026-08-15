@@ -36,6 +36,10 @@ export function formatDatabaseDestination(config: ResolvedDatabaseConfig, dataDi
   if (config.provider === 'sqlite') {
     return `sqlite (dataDir: ${dataDir})`
   }
+  if (config.provider === 'mongodb') {
+    const masked = maskConnectionString(config.connectionString)
+    return `mongodb (target: ${masked || 'none'})`
+  }
   const driver = config.driver ?? 'postgres'
   const mode = config.mode ?? (driver === 'postgres' ? 'tcp' : 'http')
   const masked = maskConnectionString(config.connectionString)

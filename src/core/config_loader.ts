@@ -70,36 +70,47 @@ export function resolveAppConfig(
 
   // 1. Connection string resolution
   const connectionString =
-    (input.connectionString || input.dbUrl || input.databaseUrl) ??
+    (input.db?.connectionString || input.connectionString || input.dbUrl || input.databaseUrl) ??
     env.DATABASE_URL ??
     fileConfig?.database?.url ??
     undefined
 
+  // 1b. Database name resolution (especially for MongoDB / multi-tenant)
+  const database =
+    (input.db?.database || input.database) ??
+    env.DATABASE_NAME ??
+    env.DB_NAME ??
+    undefined
+
   // 2. Explicit provider resolution
   const explicitProvider =
-    (input.dbProvider || input.provider) ??
+    (input.db?.provider || input.dbProvider || input.provider) ??
     (env.DB_PROVIDER || env.DATABASE_PROVIDER as DatabaseProviderType) ??
     fileConfig?.database?.type ??
     undefined
 
   let provider: DatabaseProviderType
   if (explicitProvider) {
-    if (explicitProvider !== 'sqlite' && explicitProvider !== 'postgres') {
+    if (explicitProvider !== 'sqlite' && explicitProvider !== 'postgres' && explicitProvider !== 'mongodb') {
       throw new DatabaseError(
         DatabaseErrorCode.DATABASE_UNAVAILABLE,
-        `Unsupported database provider "${explicitProvider}". Supported: sqlite, postgres.`,
+        `Unsupported database provider "${explicitProvider}". Supported: sqlite, postgres, mongodb.`,
         { retryable: false },
       )
     }
     provider = explicitProvider
   } else if (connectionString && connectionString.trim()) {
     // Invariant: DATABASE_URL is an implicit provider-selection signal only when no higher provider is configured
-    provider = 'postgres'
+    if (connectionString.startsWith('mongodb://') || connectionString.startsWith('mongodb+srv://')) {
+      provider = 'mongodb'
+    } else {
+      provider = 'postgres'
+    }
   } else {
     provider = 'sqlite'
   }
 
-  // 3. PostgreSQL connection string requirement validation
+  // 3. PostgreSQL / MongoDB connection string requirement validation
   if (provider === 'postgres') {
     if (!connectionString || !connectionString.trim()) {
       throw new DatabaseError(
@@ -108,11 +119,19 @@ export function resolveAppConfig(
         { retryable: false },
       )
     }
+  } else if (provider === 'mongodb') {
+    if (!connectionString || !connectionString.trim()) {
+      throw new DatabaseError(
+        DatabaseErrorCode.DATABASE_UNAVAILABLE,
+        'MongoDB requires a non-empty connectionString. Set DATABASE_URL or provide --db-url.',
+        { retryable: false },
+      )
+    }
   }
 
   // 4. Driver resolution & validation
   const explicitDriver =
-    (input.dbDriver || input.driver) ??
+    (input.db?.driver || input.dbDriver || input.driver) ??
     (env.DB_DRIVER as 'postgres' | 'neon') ??
     fileConfig?.database?.driver ??
     undefined
@@ -194,7 +213,7 @@ export function resolveAppConfig(
   const hideStartBanner = input.hideStartBanner ?? false
 
   // 11. Pool configuration
-  const pool = input.pool ?? fileConfig?.database?.pool ?? {
+  const pool = input.db?.pool ?? input.pool ?? fileConfig?.database?.pool ?? {
     max: 10,
     idleTimeoutMs: 30000,
     connectionTimeoutMs: 5000,
@@ -202,7 +221,8 @@ export function resolveAppConfig(
 
   const db: ResolvedDatabaseConfig = {
     provider,
-    connectionString: provider === 'postgres' ? connectionString : undefined,
+    connectionString: (provider === 'postgres' || provider === 'mongodb') ? connectionString : undefined,
+    database,
     driver,
     mode,
     queryTimeout,

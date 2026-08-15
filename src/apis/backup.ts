@@ -1,4 +1,5 @@
 import { Router, Request, Response } from 'express'
+import { createApiError } from '../utils/api_errors'
 import multer from 'multer'
 import { BaseApp } from '../core/base'
 import { requireSuperuserAuth } from './middlewares_auth'
@@ -63,7 +64,7 @@ export function registerBackupRoutes(app: BaseApp, router: Router): void {
       res.json(files)
     } catch (err: any) {
       app.logger().error(err.message || err)
-      res.status(500).json({ code: 500, message: 'Internal server error' })
+      res.status(500).json(createApiError(500, 'INTERNAL_ERROR', 'Internal server error'))
     }
   })
 
@@ -84,7 +85,7 @@ export function registerBackupRoutes(app: BaseApp, router: Router): void {
       const backupPath = path.join(backupDir, backupName)
 
       if (await pathExists(backupPath)) {
-        return res.status(409).json({ code: 409, message: `Backup "${backupName}" already exists` })
+        return res.status(409).json(createApiError(409, 'CONFLICT', `Backup "${backupName}" already exists`))
       }
 
       await createStreamingBackup(app, backupPath)
@@ -105,10 +106,10 @@ export function registerBackupRoutes(app: BaseApp, router: Router): void {
       })
     } catch (err: any) {
       if (err instanceof BackupAlreadyRunningError) {
-        return res.status(429).json({ code: 429, message: err.message })
+        return res.status(429).json(createApiError(429, 'RATE_LIMITED', err.message))
       }
       app.logger().error(err.message || err)
-      res.status(500).json({ code: 500, message: 'Internal server error' })
+      res.status(500).json(createApiError(500, 'INTERNAL_ERROR', 'Internal server error'))
     }
   })
 
@@ -123,14 +124,11 @@ export function registerBackupRoutes(app: BaseApp, router: Router): void {
         if (req.file && await pathExists(req.file.path)) {
           await fsPromises.unlink(req.file.path)
         }
-        return res.status(400).json({
-          code: 400,
-          message: 'Database backup via /api/backups is not supported for this database provider. Use provider-native backup tools (e.g. pg_dump).',
-        })
+        return res.status(400).json(createApiError(400, 'VALIDATION_FAILED', 'Database backup via /api/backups is not supported for this database provider. Use provider-native backup tools (e.g. pg_dump).'))
       }
 
       if (!req.file) {
-        return res.status(400).json({ code: 400, message: 'No file provided' })
+        return res.status(400).json(createApiError(400, 'VALIDATION_FAILED', 'No file provided'))
       }
 
       const originalName = req.file.originalname || `uploaded_${Date.now()}.zip`
@@ -139,7 +137,7 @@ export function registerBackupRoutes(app: BaseApp, router: Router): void {
 
       if (await pathExists(targetPath)) {
         await fsPromises.unlink(req.file.path)
-        return res.status(409).json({ code: 409, message: `Backup "${sanitized}" already exists` })
+        return res.status(409).json(createApiError(409, 'CONFLICT', `Backup "${sanitized}" already exists`))
       }
 
       await fsPromises.rename(req.file.path, targetPath)
@@ -158,24 +156,21 @@ export function registerBackupRoutes(app: BaseApp, router: Router): void {
         await fsPromises.unlink(req.file.path)
       }
       app.logger().error(err.message || err)
-      res.status(500).json({ code: 500, message: 'Internal server error' })
+      res.status(500).json(createApiError(500, 'INTERNAL_ERROR', 'Internal server error'))
     }
   })
 
   router.post('/api/backups/:key/restore', requireSuperuserAuth(app), async (req: Request, res: Response) => {
     try {
       if (!isBackupSupported(app)) {
-        return res.status(400).json({
-          code: 400,
-          message: 'Database restore via /api/backups is not supported for this database provider. Use provider-native backup tools (e.g. pg_restore).',
-        })
+        return res.status(400).json(createApiError(400, 'VALIDATION_FAILED', 'Database restore via /api/backups is not supported for this database provider. Use provider-native backup tools (e.g. pg_restore).'))
       }
 
       const backupKey = path.basename(req.params.key).replace(/\.\./g, '')
       const backupPath = path.join(backupDir, backupKey)
 
       if (!await pathExists(backupPath)) {
-        return res.status(404).json({ code: 404, message: `Backup "${backupKey}" not found` })
+        return res.status(404).json(createApiError(404, 'NOT_FOUND', `Backup "${backupKey}" not found`))
       }
 
       await restoreStreamingBackup(app, backupPath)
@@ -189,10 +184,10 @@ export function registerBackupRoutes(app: BaseApp, router: Router): void {
       res.json({ code: 200, message: `Backup "${backupKey}" restored successfully` })
     } catch (err: any) {
       if (err instanceof BackupAlreadyRunningError) {
-        return res.status(429).json({ code: 429, message: err.message })
+        return res.status(429).json(createApiError(429, 'RATE_LIMITED', err.message))
       }
       app.logger().error(err.message || err)
-      res.status(500).json({ code: 500, message: 'Internal server error' })
+      res.status(500).json(createApiError(500, 'INTERNAL_ERROR', 'Internal server error'))
     }
   })
 
@@ -201,14 +196,14 @@ export function registerBackupRoutes(app: BaseApp, router: Router): void {
       const backupKey = path.basename(req.params.key).replace(/\.\./g, '')
       const backupPath = path.join(backupDir, backupKey)
       if (!await pathExists(backupPath)) {
-        return res.status(404).json({ code: 404, message: `Backup "${backupKey}" not found` })
+        return res.status(404).json(createApiError(404, 'NOT_FOUND', `Backup "${backupKey}" not found`))
       }
 
       await fsPromises.unlink(backupPath)
       res.status(204).send()
     } catch (err: any) {
       app.logger().error(err.message || err)
-      res.status(500).json({ code: 500, message: 'Internal server error' })
+      res.status(500).json(createApiError(500, 'INTERNAL_ERROR', 'Internal server error'))
     }
   })
 }

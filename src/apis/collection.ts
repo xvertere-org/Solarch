@@ -1,4 +1,5 @@
 import { Router, Request, Response } from 'express'
+import { createApiError } from '../utils/api_errors'
 import { BaseApp } from '../core/base'
 import { Collection } from '../core/collection'
 import { syncRecordTableSchema, createRecordTable } from '../core/schema_sync'
@@ -37,7 +38,7 @@ export function registerCollectionRoutes(app: BaseApp, router: Router): void {
       })
     } catch (err: any) {
       app.logger().error(err.message || err)
-      res.status(500).json({ code: 500, message: 'Internal server error' })
+      res.status(500).json(createApiError(500, 'INTERNAL_ERROR', 'Internal server error'))
     }
   })
 
@@ -45,12 +46,12 @@ export function registerCollectionRoutes(app: BaseApp, router: Router): void {
     try {
       const collection = await app.findCollectionByNameOrId(req.params.idOrName)
       if (!collection) {
-        return res.status(404).json({ code: 404, message: 'Collection not found.' })
+        return res.status(404).json(createApiError(404, 'NOT_FOUND', 'Collection not found.'))
       }
       res.json(collection.toJSON())
     } catch (err: any) {
       app.logger().error(err.message || err)
-      res.status(500).json({ code: 500, message: 'Internal server error' })
+      res.status(500).json(createApiError(500, 'INTERNAL_ERROR', 'Internal server error'))
     }
   })
 
@@ -65,7 +66,7 @@ export function registerCollectionRoutes(app: BaseApp, router: Router): void {
       res.status(201).json(collection.toJSON())
     } catch (err: any) {
       app.logger().error(err.message || err)
-      res.status(500).json({ code: 500, message: 'Internal server error' })
+      res.status(500).json(createApiError(500, 'INTERNAL_ERROR', 'Internal server error'))
     }
   })
 
@@ -73,7 +74,7 @@ export function registerCollectionRoutes(app: BaseApp, router: Router): void {
     try {
       const collection = await app.findCollectionByNameOrId(req.params.idOrName)
       if (!collection) {
-        return res.status(404).json({ code: 404, message: 'Collection not found.' })
+        return res.status(404).json(createApiError(404, 'NOT_FOUND', 'Collection not found.'))
       }
 
       const picked = pickCollectionFields(req.body)
@@ -91,7 +92,7 @@ export function registerCollectionRoutes(app: BaseApp, router: Router): void {
       res.json(collection.toJSON())
     } catch (err: any) {
       app.logger().error(err.message || err)
-      res.status(500).json({ code: 500, message: 'Internal server error' })
+      res.status(500).json(createApiError(500, 'INTERNAL_ERROR', 'Internal server error'))
     }
   })
 
@@ -99,13 +100,13 @@ export function registerCollectionRoutes(app: BaseApp, router: Router): void {
     try {
       const collection = await app.findCollectionByNameOrId(req.params.idOrName)
       if (!collection) {
-        return res.status(404).json({ code: 404, message: 'Collection not found.' })
+        return res.status(404).json(createApiError(404, 'NOT_FOUND', 'Collection not found.'))
       }
       await app.delete(collection)
       res.status(204).send()
     } catch (err: any) {
       app.logger().error(err.message || err)
-      res.status(500).json({ code: 500, message: 'Internal server error' })
+      res.status(500).json(createApiError(500, 'INTERNAL_ERROR', 'Internal server error'))
     }
   })
 
@@ -113,30 +114,30 @@ export function registerCollectionRoutes(app: BaseApp, router: Router): void {
     try {
       const { collections } = req.body
       if (!Array.isArray(collections)) {
-        return res.status(400).json({ code: 400, message: 'Invalid request: collections must be an array.' })
+        return res.status(400).json(createApiError(400, 'VALIDATION_FAILED', 'Invalid request: collections must be an array.'))
       }
       const imported: string[] = []
 
       for (const colData of collections) {
         // FIXED[L-5]: Validate that each collection object has required fields
         if (typeof colData !== 'object' || !colData || !colData.name || typeof colData.name !== 'string') {
-          return res.status(400).json({ code: 400, message: 'Each collection must have a valid "name" field.' })
+          return res.status(400).json(createApiError(400, 'VALIDATION_FAILED', 'Each collection must have a valid "name" field.'))
         }
         if (colData.type && !['base', 'auth', 'view'].includes(colData.type)) {
-          return res.status(400).json({ code: 400, message: `Invalid collection type: "${colData.type}". Must be base, auth, or view.` })
+          return res.status(400).json(createApiError(400, 'VALIDATION_FAILED', `Invalid collection type: "${colData.type}". Must be base, auth, or view.`))
         }
         if (!Array.isArray(colData.fields)) {
-          return res.status(400).json({ code: 400, message: `Collection "${colData.name}" must have a "fields" array.` })
+          return res.status(400).json(createApiError(400, 'VALIDATION_FAILED', `Collection "${colData.name}" must have a "fields" array.`))
         }
         // FIXED[L-2]: Validate individual field names to prevent SQL injection via DDL in import
         for (const field of colData.fields) {
           if (typeof field.name !== 'string') {
-            return res.status(400).json({ code: 400, message: `Collection "${colData.name}" has a field without a valid name.` })
+            return res.status(400).json(createApiError(400, 'VALIDATION_FAILED', `Collection "${colData.name}" has a field without a valid name.`))
           }
           try {
             validateIdentifier(field.name, 'field name')
           } catch {
-            return res.status(400).json({ code: 400, message: `Collection "${colData.name}" has invalid field name: "${field.name}".` })
+            return res.status(400).json(createApiError(400, 'VALIDATION_FAILED', `Collection "${colData.name}" has invalid field name: "${field.name}".`))
           }
         }
         const existing = await app.findCollectionByNameOrId(colData.name)
@@ -156,7 +157,7 @@ export function registerCollectionRoutes(app: BaseApp, router: Router): void {
       res.json({ imported })
     } catch (err: any) {
       app.logger().error(err.message || err)
-      res.status(500).json({ code: 500, message: 'Internal server error' })
+      res.status(500).json(createApiError(500, 'INTERNAL_ERROR', 'Internal server error'))
     }
   })
 
@@ -166,7 +167,7 @@ export function registerCollectionRoutes(app: BaseApp, router: Router): void {
       res.json(collections.map(c => c.toJSON()))
     } catch (err: any) {
       app.logger().error(err.message || err)
-      res.status(500).json({ code: 500, message: 'Internal server error' })
+      res.status(500).json(createApiError(500, 'INTERNAL_ERROR', 'Internal server error'))
     }
   })
 

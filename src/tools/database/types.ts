@@ -21,6 +21,19 @@ export interface PostgresConnectionConfig {
   }
 }
 
+export interface MongoConnectionConfig {
+  provider: 'mongodb'
+  connectionString: string
+  database?: string
+  queryTimeout?: number
+  pool?: {
+    max?: number
+    min?: number
+    idleTimeoutMs?: number
+    connectionTimeoutMs?: number
+  }
+}
+
 export interface Row {
   [key: string]: any
 }
