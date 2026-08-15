@@ -1,0 +1,142 @@
+name: "SDK Screen (5-Layer)"
+
+on:
+  workflow_call:
+    inputs:
+      package_path:
+        required: true
+        type: string
+        description: "Relative path to SDK package (e.g. 'packages/core-client')"
+      workspace_name:
+        required: true
+        type: string
+        description: "Workspace identifier (e.g. '@solarch/core-client')"
+
+permissions:
+  contents: read
+
+jobs:
+  function:
+    name: "${{ inputs.workspace_name }} — 1. Function"
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22.x
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint --workspace=${{ inputs.workspace_name }} --if-present
+
+      - name: Typecheck
+        run: npm run typecheck --workspace=${{ inputs.workspace_name }} --if-present
+
+      - name: Unit Tests
+        run: npm run test:unit --workspace=${{ inputs.workspace_name }} --if-present
+
+      - name: Platform Boundary Check
+        run: npm run test:platform --workspace=${{ inputs.workspace_name }}
+
+  feature:
+    name: "${{ inputs.workspace_name }} — 2. Feature"
+    needs: function
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22.x
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Integration Tests
+        run: npm run test:integration --workspace=${{ inputs.workspace_name }} --if-present
+
+      - name: Realtime Feature Tests
+        run: npm run test:realtime --workspace=${{ inputs.workspace_name }}
+
+  contract:
+    name: "${{ inputs.workspace_name }} — 3. Contract"
+    needs: feature
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22.x
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Contract Tests
+        run: npm run test:contract --workspace=${{ inputs.workspace_name }} --if-present
+
+      - name: API Manifest Check
+        run: npm run api:manifest:check --workspace=${{ inputs.workspace_name }} --if-present
+
+  service-e2e:
+    name: "${{ inputs.workspace_name }} — 4. Service / E2E"
+    needs: contract
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22.x
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: E2E Tests
+        run: npm run test:e2e --workspace=${{ inputs.workspace_name }} --if-present
+
+  distribution:
+    name: "${{ inputs.workspace_name }} — 5. Distribution"
+    needs: service-e2e
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20.x
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build Package
+        run: npm run build --workspace=${{ inputs.workspace_name }}
+
+      - name: Verify Distribution Shape
+        run: npm run test:package-shape --workspace=${{ inputs.workspace_name }} --if-present
+
+      - name: Dry-run Package Smoke Test
+        run: npm pack --workspace=${{ inputs.workspace_name }} --dry-run

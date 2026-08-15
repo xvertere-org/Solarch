@@ -31,6 +31,12 @@
     "build": "tsup",
     "test": "vitest run",
     "test:watch": "vitest",
+    "test:unit": "vitest run tests/utils tests/stores tests/unit tests/security",
+    "test:platform": "node scripts/check-platform-boundary.cjs",
+    "test:integration": "vitest run tests/http tests/conformance tests/integration",
+    "test:realtime": "vitest run tests/realtime",
+    "test:e2e": "vitest run tests/e2e",
+    "test:package-shape": "node scripts/check-package-shape.cjs",
     "typecheck": "tsc --noEmit",
     "prepublishOnly": "npm run build"
   },
