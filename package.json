@@ -23,6 +23,10 @@
     "packages/*",
     "admin"
   ],
+  "solarchCi": {
+    "type": "backend",
+    "workspace": "root"
+  },
   "scripts": {
     "postinstall": "node scripts/postinstall.js",
     "build": "tsc && node -e \"require('fs').copyFileSync('src/tools/jsvm/deno_worker.ts', 'dist/tools/jsvm/deno_worker.ts')\" && npm run build:ui",

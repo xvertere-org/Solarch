@@ -10,8 +10,84 @@ permissions:
   packages: write   # required for GitHub Packages
 
 jobs:
+  pre-publish-check:
+    name: Pre-Publish Sanity Check
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22.x
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build project
+        run: npm run build
+
+      - name: Dry-run npm pack
+        run: npm pack --dry-run
+
+      - name: Validate package.json entrypoints
+        run: |
+          node -e "
+            const fs = require('fs');
+            const path = require('path');
+            const pkg = JSON.parse(fs.readFileSync('package.json', 'utf8'));
+
+            const fieldsToCheck = [
+              { field: 'main', target: pkg.main },
+              { field: 'types', target: pkg.types }
+            ];
+
+            if (pkg.bin) {
+              if (typeof pkg.bin === 'string') {
+                fieldsToCheck.push({ field: 'bin', target: pkg.bin });
+              } else {
+                for (const [k, v] of Object.entries(pkg.bin)) {
+                  fieldsToCheck.push({ field: 'bin.' + k, target: v });
+                }
+              }
+            }
+
+            if (pkg.exports) {
+              function checkExports(obj, prefix = 'exports') {
+                if (typeof obj === 'string') {
+                  fieldsToCheck.push({ field: prefix, target: obj });
+                } else if (typeof obj === 'object' && obj !== null) {
+                  for (const [k, v] of Object.entries(obj)) {
+                    checkExports(v, prefix + '.' + k);
+                  }
+                }
+              }
+              checkExports(pkg.exports);
+            }
+
+            let missing = [];
+            for (const { field, target } of fieldsToCheck) {
+              if (!target) continue;
+              const resolved = path.resolve(target);
+              if (!fs.existsSync(resolved)) {
+                missing.push(field + ' -> ' + target + ' (resolved: ' + resolved + ')');
+              }
+            }
+
+            if (missing.length > 0) {
+              console.error('❌ Missing published entrypoints declared in package.json:');
+              missing.forEach(m => console.error('  - ' + m));
+              process.exit(1);
+            }
+            console.log('✔ All package.json entrypoint files exist and resolved successfully.');
+          "
+
   publish:
     name: Build and Publish
+    needs: pre-publish-check
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Code

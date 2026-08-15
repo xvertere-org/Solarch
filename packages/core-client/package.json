@@ -2,6 +2,10 @@
   "name": "@solarch/core-client",
   "version": "0.1.0",
   "description": "Universal, platform-neutral TypeScript client SDK for Solarch",
+  "solarchCi": {
+    "type": "sdk",
+    "workspace": "@solarch/core-client"
+  },
   "homepage": "https://solarch.in/",
   "repository": {
     "type": "git",
