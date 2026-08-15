@@ -1,0 +1,7 @@
+# Gitleaks ignore list for historical documentation tokens & retired build cache
+6e4a63dd28ef79907a68324340c2904120fdd1f0:docs/features/authentication.md:generic-api-key:31
+6e4a63dd28ef79907a68324340c2904120fdd1f0:docs/features/authentication.md:generic-api-key:59
+6e4a63dd28ef79907a68324340c2904120fdd1f0:docs/features/file-storage.md:generic-api-key:66
+9f0bdb6a40136c2e04aaccd368ff75c319e0944f:torque/.next/cache/.previewinfo:generic-api-key:1
+9f0bdb6a40136c2e04aaccd368ff75c319e0944f:torque/.next/prerender-manifest.json:generic-api-key:58
+9f0bdb6a40136c2e04aaccd368ff75c319e0944f:torque/.next/prerender-manifest.json:generic-api-key:59
