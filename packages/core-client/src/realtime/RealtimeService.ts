@@ -6,8 +6,9 @@ import type { WebSocketFactory } from '../contracts/interfaces.js'
 import type { RealtimeEventPayload } from '../contracts/types.js'
 import type { HttpClient } from '../http/HttpClient.js'
 import type { RealtimeTransport } from './RealtimeTransport.js'
-import { SseTransport } from './SseTransport.js'
-import { WebSocketTransport } from './WebSocketTransport.js'
+import { SseTransportAdapter } from './SseTransportAdapter.js'
+import { WebSocketTransportAdapter } from './WebSocketTransportAdapter.js'
+
 
 export type RealtimeTopicSubscriber = (event: RealtimeEventPayload<any>) => void
 
@@ -46,10 +47,11 @@ export class RealtimeService {
     this.maxReconnectAttempts = options.maxReconnectAttempts || 10
 
     if (this.transportType === 'sse') {
-      this.transport = new SseTransport()
+      this.transport = new SseTransportAdapter()
     } else {
-      this.transport = new WebSocketTransport(this.wsFactory)
+      this.transport = new WebSocketTransportAdapter(this.wsFactory)
     }
+
 
     this.setupTransportListeners()
   }

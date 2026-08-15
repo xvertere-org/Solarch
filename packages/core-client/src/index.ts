@@ -7,8 +7,9 @@ export * from './stores/index.js'
 export * from './http/index.js'
 export * from './services/index.js'
 export * from './realtime/index.js'
-export * from './utils/filter.js'
+export * from './utils/index.js'
 export * from './Client.js'
+
 
 // Default export
 import { SolarchClient } from './Client.js'

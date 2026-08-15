@@ -4,7 +4,7 @@
 
 import type { RealtimeTransport } from './RealtimeTransport.js'
 
-export class SseTransport implements RealtimeTransport {
+export class SseTransportAdapter implements RealtimeTransport {
   private eventSource: any = null
   private messageListeners: Set<(data: string) => void> = new Set()
   private openListeners: Set<() => void> = new Set()
@@ -15,14 +15,11 @@ export class SseTransport implements RealtimeTransport {
     this.disconnect()
 
     return new Promise((resolve, reject) => {
-      let settled = false
-
       if (typeof EventSource === 'undefined') {
-        return reject(
-          new Error('EventSource is not supported in this runtime environment.')
-        )
+        return reject(new Error('EventSource is not supported in this runtime environment.'))
       }
 
+      let settled = false
       try {
         this.eventSource = new EventSource(url)
       } catch (err) {
@@ -63,7 +60,7 @@ export class SseTransport implements RealtimeTransport {
   }
 
   send(_data: string): void {
-    // SSE is unidirectional (downstream only). Subscriptions for SSE are passed via query parameters or REST endpoints.
+    throw new Error('SSE transport is unidirectional and does not support client-to-server messages.')
   }
 
   onMessage(callback: (data: string) => void): void {
@@ -86,3 +83,5 @@ export class SseTransport implements RealtimeTransport {
     return !!this.eventSource && this.eventSource.readyState === 1
   }
 }
+
+export const SseTransport = SseTransportAdapter

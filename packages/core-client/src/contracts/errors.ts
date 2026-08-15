@@ -111,3 +111,28 @@ export class ClientResponseError extends Error {
     return {}
   }
 }
+
+/**
+ * Canonical error parser for Solarch API responses
+ */
+export function parseApiError(
+  res: { status: number; statusText: string } | any,
+  body?: ApiErrorResponse | any
+): ClientResponseError {
+  if (res instanceof ClientResponseError) {
+    return res
+  }
+  if (res && typeof res.status === 'number') {
+    return ClientResponseError.fromApiResponse(res, body)
+  }
+  if (res && res.name === 'AbortError') {
+    return ClientResponseError.fromAbort(res)
+  }
+  return new ClientResponseError({
+    statusCode: 0,
+    status: 'INTERNAL_ERROR',
+    message: (res && res.message) || 'Network or unexpected client error.',
+    originalError: res,
+  })
+}
+

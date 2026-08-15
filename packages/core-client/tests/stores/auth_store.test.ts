@@ -1,33 +1,25 @@
 import { describe, it, expect, vi } from 'vitest'
-import { MemoryAuthStore, LocalAuthStore, decodeJwtPayload } from '../../src/stores/index.js'
+import { MemoryAuthStore, LocalAuthStore } from '../../src/stores/index.js'
 
 describe('AuthStore Unit Tests', () => {
-  it('decodes JWT payload correctly and checks isValid', () => {
+  it('treats token as opaque string and checks isValid correctly', () => {
     const store = new MemoryAuthStore()
     expect(store.getToken()).toBe('')
     expect(store.getModel()).toBeNull()
     expect(store.isValid()).toBe(false)
 
-    // Token with exp in future
-    const futureExp = Math.floor(Date.now() / 1000) + 3600
-    const payload = { id: 'usr_1', exp: futureExp }
-    const encodedPayload = Buffer.from(JSON.stringify(payload)).toString('base64').replace(/=/g, '')
-    const validToken = `header.${encodedPayload}.signature`
-
-    store.save(validToken, { id: 'usr_1', email: 'user@example.com' })
-    expect(store.getToken()).toBe(validToken)
+    const token = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.opaque.sig'
+    store.save(token, { id: 'usr_1', email: 'user@example.com' })
+    expect(store.getToken()).toBe(token)
     expect(store.getModel()).toEqual({ id: 'usr_1', email: 'user@example.com' })
     expect(store.isValid()).toBe(true)
 
-    // Token with exp in past
-    const pastExp = Math.floor(Date.now() / 1000) - 3600
-    const expiredPayload = { id: 'usr_1', exp: pastExp }
-    const expiredEncoded = Buffer.from(JSON.stringify(expiredPayload)).toString('base64').replace(/=/g, '')
-    const expiredToken = `header.${expiredEncoded}.signature`
-
-    store.save(expiredToken, null)
+    store.clear()
+    expect(store.getToken()).toBe('')
+    expect(store.getModel()).toBeNull()
     expect(store.isValid()).toBe(false)
   })
+
 
   it('notifies subscribers on save and clear, and supports unsubscribe', () => {
     const store = new MemoryAuthStore()

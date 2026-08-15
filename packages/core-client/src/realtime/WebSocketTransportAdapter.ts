@@ -1,11 +1,11 @@
 /**
- * @solarch/core-client - WebSocket Realtime Transport
+ * @solarch/core-client - WebSocket Realtime Transport Adapter
  */
 
 import type { WebSocketFactory, WebSocketLike } from '../contracts/interfaces.js'
 import type { RealtimeTransport } from './RealtimeTransport.js'
 
-export class WebSocketTransport implements RealtimeTransport {
+export class WebSocketTransportAdapter implements RealtimeTransport {
   private ws: WebSocketLike | null = null
   private wsFactory?: WebSocketFactory
   private messageListeners: Set<(data: string) => void> = new Set()
@@ -106,3 +106,5 @@ export class WebSocketTransport implements RealtimeTransport {
     return !!this.ws && this.ws.readyState === 1
   }
 }
+
+export const WebSocketTransport = WebSocketTransportAdapter

@@ -5,11 +5,13 @@
 import { ClientResponseError } from '../contracts/errors.js'
 import type {
   FetchLike,
-  FetchRequestInit,
   FetchResponseLike,
 } from '../contracts/interfaces.js'
 import type { AuthStore } from '../stores/AuthStore.js'
 import { MemoryAuthStore } from '../stores/MemoryAuthStore.js'
+import { prepareRequest } from './request.js'
+import { serializeQueryParams } from './serializer.js'
+import { parseHttpResponse } from './response.js'
 
 export interface SendOptions {
   method?: string
@@ -72,24 +74,9 @@ export class HttpClient {
       url = `${this.baseUrl}${cleanPath}`
     }
 
-    if (queryParams && Object.keys(queryParams).length > 0) {
-      const params = new URLSearchParams()
-      for (const [key, value] of Object.entries(queryParams)) {
-        if (value === undefined || value === null) continue
-        if (Array.isArray(value)) {
-          for (const item of value) {
-            if (item !== undefined && item !== null) {
-              params.append(key, String(item))
-            }
-          }
-        } else {
-          params.set(key, String(value))
-        }
-      }
-      const queryString = params.toString()
-      if (queryString) {
-        url += (url.includes('?') ? '&' : '?') + queryString
-      }
+    const queryStr = serializeQueryParams(queryParams)
+    if (queryStr) {
+      url += (url.includes('?') ? '&' : '') + (queryStr.startsWith('?') && url.includes('?') ? queryStr.slice(1) : queryStr)
     }
 
     return url
@@ -106,43 +93,16 @@ export class HttpClient {
     }
 
     const url = this.buildUrl(path, currentOptions.query)
-    const method = (currentOptions.method || 'GET').toUpperCase()
-
-    const headers: Record<string, string> = {
-      'X-Solarch-Protocol': '1.0',
-      ...(currentOptions.headers || {}),
-    }
-
     const token = this.authStore.getToken()
-    if (token && !headers['Authorization']) {
-      headers['Authorization'] = `Bearer ${token}`
-    }
-
-    let body = currentOptions.body
-
-    const isFormData =
-      typeof FormData !== 'undefined' && body instanceof FormData
-
-    if (body !== undefined && body !== null && !isFormData) {
-      if (typeof body === 'object') {
-        if (!headers['Content-Type']) {
-          headers['Content-Type'] = 'application/json'
-        }
-        body = JSON.stringify(body)
-      }
-    }
-
-    const fetchInit: FetchRequestInit = {
-      method,
-      headers,
-      body,
-      signal: currentOptions.signal,
-    }
+    const { init } = prepareRequest({
+      ...currentOptions,
+      token,
+    })
 
     let response: FetchResponseLike
     try {
       const fetchFn = this.getFetch()
-      response = await fetchFn(url, fetchInit)
+      response = await fetchFn(url, init)
     } catch (err: any) {
       if (err && (err.name === 'AbortError' || err.code === 20)) {
         throw ClientResponseError.fromAbort(err)
@@ -155,33 +115,13 @@ export class HttpClient {
       })
     }
 
-    if (response.status === 204) {
-      return (null as unknown) as T
-    }
-
-    let data: any
-    const contentType = response.headers?.get ? response.headers.get('content-type') : ''
-    const isJson = contentType && contentType.includes('application/json')
-
-    try {
-      if (isJson || typeof response.json === 'function') {
-        data = await response.json()
-      } else {
-        data = await response.text()
-      }
-    } catch (err) {
-      data = null
-    }
-
-    if (!response.ok) {
-      throw ClientResponseError.fromApiResponse(response, data)
-    }
+    let data = await parseHttpResponse<T>(response)
 
     if (this.afterSend) {
       data = await this.afterSend(response, data)
     }
 
-    return data as T
+    return data
   }
 
   get<T = any>(path: string, options?: SendOptions): Promise<T> {

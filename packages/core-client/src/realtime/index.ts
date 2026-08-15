@@ -1,4 +1,5 @@
 export * from './RealtimeTransport.js'
-export * from './WebSocketTransport.js'
-export * from './SseTransport.js'
+export * from './WebSocketTransportAdapter.js'
+export * from './SseTransportAdapter.js'
 export * from './RealtimeService.js'
+
