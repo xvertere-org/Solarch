@@ -12,3 +12,9 @@
 06f3bbe29bb73fe1f9512b7d9b559fc43438fb57:docs-verified/authentication.md:generic-api-key:122
 06f3bbe29bb73fe1f9512b7d9b559fc43438fb57:docs-verified/authentication.md:generic-api-key:211
 06f3bbe29bb73fe1f9512b7d9b559fc43438fb57:docs-verified/authentication.md:generic-api-key:369
+4dea4a16bb5dad5340d4ad9105aeee24d9d6dac7:scratch/standalone_e2e.js:generic-api-key:5
+4dea4a16bb5dad5340d4ad9105aeee24d9d6dac7:src/apis/settings.ts:generic-api-key:112
+4dea4a16bb5dad5340d4ad9105aeee24d9d6dac7:src/apis/__tests__/settings.test.ts:generic-api-key:184
+440dee816078b5f874ed3c47f765ed0670555f2b:packages/core-client/tests/integration/auth_flows.test.ts:generic-api-key:24
+440dee816078b5f874ed3c47f765ed0670555f2b:packages/core-client/tests/integration/auth_flows.test.ts:generic-api-key:81
+440dee816078b5f874ed3c47f765ed0670555f2b:packages/core-client/tests/stores/auth_store.test.ts:generic-api-key:11
