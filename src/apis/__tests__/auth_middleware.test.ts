@@ -37,14 +37,14 @@ describe('Auth Middlewares', () => {
     db.exec(`
         CREATE TABLE IF NOT EXISTS _superusers (
           id TEXT PRIMARY KEY,
-          email TEXT UNIQUE NOT NULL,
+          username TEXT UNIQUE NOT NULL,
           passwordHash TEXT NOT NULL,
           created TEXT NOT NULL,
           updated TEXT NOT NULL
         )
     `)
     const adminId = 'admin123'
-    db.prepare(`INSERT INTO _superusers (id, email, passwordHash, created, updated) VALUES (?, ?, ?, ?, ?)`).run(adminId, 'admin@example.com', 'hash', new Date().toISOString(), new Date().toISOString())
+    db.prepare(`INSERT INTO _superusers (id, username, passwordHash, created, updated) VALUES (?, ?, ?, ?, ?)`).run(adminId, 'admin', 'hash', new Date().toISOString(), new Date().toISOString())
     adminToken = app.generateJWT({ id: adminId, type: 'admin' }, app.getJwtSecret(), '1h')
     
     // Create user collection

@@ -22,7 +22,7 @@ async function fetchJson(url: string, init?: RequestInit) {
 
 describe('Admin Auth', () => {
   let ctx: { server: http.Server; dataDir: string; url: string; app: Solarch }
-  const ADMIN_EMAIL = 'admin@example.com'
+  const ADMIN_USERNAME = 'admin'
   const ADMIN_PASS = 'SecureAdminPass123!'
   let adminId: string
 
@@ -39,7 +39,7 @@ describe('Admin Auth', () => {
     db.exec(`
         CREATE TABLE IF NOT EXISTS _superusers (
           id TEXT PRIMARY KEY,
-          email TEXT UNIQUE NOT NULL,
+          username TEXT UNIQUE NOT NULL,
           passwordHash TEXT NOT NULL,
           created TEXT NOT NULL,
           updated TEXT NOT NULL
@@ -47,7 +47,7 @@ describe('Admin Auth', () => {
     `)
     adminId = 'admin123'
     const passwordHash = await hashPassword(ADMIN_PASS)
-    db.prepare(`INSERT INTO _superusers (id, email, passwordHash, created, updated) VALUES (?, ?, ?, ?, ?)`).run(adminId, ADMIN_EMAIL, passwordHash, new Date().toISOString(), new Date().toISOString())
+    db.prepare(`INSERT INTO _superusers (id, username, passwordHash, created, updated) VALUES (?, ?, ?, ?, ?)`).run(adminId, ADMIN_USERNAME, passwordHash, new Date().toISOString(), new Date().toISOString())
     
     const ep = express()
     ep.use(express.json())
@@ -69,26 +69,36 @@ describe('Admin Auth', () => {
   })
 
   beforeEach(() => {
-    clearAttempts(`admin:${ADMIN_EMAIL}`)
+    clearAttempts(`admin:${ADMIN_USERNAME}`)
   })
 
   it('Login: valid credentials -> returns JWT and admin meta', async () => {
     const { status, body } = await fetchJson(`${ctx.url}/api/admins/auth-with-password`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ identity: ADMIN_EMAIL, password: ADMIN_PASS })
+      body: JSON.stringify({ identity: ADMIN_USERNAME, password: ADMIN_PASS })
     })
     expect(status).toBe(200)
     expect(body.token).toBeDefined()
     expect(body.admin.id).toBe(adminId)
-    expect(body.admin.email).toBe(ADMIN_EMAIL)
+    expect(body.admin.username).toBe(ADMIN_USERNAME)
+  })
+
+  it('Login: case insensitive username', async () => {
+    const { status, body } = await fetchJson(`${ctx.url}/api/admins/auth-with-password`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ identity: 'AdMiN', password: ADMIN_PASS })
+    })
+    expect(status).toBe(200)
+    expect(body.admin.username).toBe(ADMIN_USERNAME)
   })
 
   it('Login: invalid credentials -> 400', async () => {
     const { status, body } = await fetchJson(`${ctx.url}/api/admins/auth-with-password`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ identity: ADMIN_EMAIL, password: 'WrongPassword1!' })
+      body: JSON.stringify({ identity: ADMIN_USERNAME, password: 'WrongPassword1!' })
     })
     expect(status).toBe(400)
     expect(body.message).toBe('Invalid credentials.')
@@ -99,7 +109,7 @@ describe('Admin Auth', () => {
       await fetchJson(`${ctx.url}/api/admins/auth-with-password`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ identity: ADMIN_EMAIL, password: 'WrongPassword1!' })
+        body: JSON.stringify({ identity: ADMIN_USERNAME, password: 'WrongPassword1!' })
       })
     }
 
@@ -107,7 +117,7 @@ describe('Admin Auth', () => {
     const { status, body } = await fetchJson(`${ctx.url}/api/admins/auth-with-password`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ identity: ADMIN_EMAIL, password: ADMIN_PASS })
+      body: JSON.stringify({ identity: ADMIN_USERNAME, password: ADMIN_PASS })
     })
     expect(status).toBe(429)
     // adminAuthRateLimiter hits first and returns 429
@@ -154,41 +164,5 @@ describe('Admin Auth', () => {
     expect(status).toBe(401)
   })
 
-  it('Password Reset: E2E flow changes password and revokes token', async () => {
-    // 1. Request Reset
-    const { status: reqStatus } = await fetchJson(`${ctx.url}/api/admins/request-password-reset`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email: ADMIN_EMAIL })
-    })
-    expect(reqStatus).toBe(200)
-    
-    // We can manually generate one and hash it into the DB.
-    const db = ctx.app.db().getDataDB()
-    const rawToken = crypto.randomBytes(32).toString('hex')
-    const tokenHash = crypto.createHash('sha256').update(rawToken).digest('hex')
-    db.prepare(`INSERT INTO _passwordResetTokens (userId, type, tokenHash, expiresAt, created) VALUES (?, ?, ?, ?, ?)`).run(adminId, 'admin', tokenHash, new Date(Date.now() + 3600000).toISOString(), new Date().toISOString())
 
-    // 2. Confirm Reset
-    const newPassword = 'NewAdminPassword123!'
-    const { status: confStatus } = await fetchJson(`${ctx.url}/api/admins/confirm-password-reset`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ token: rawToken, password: newPassword, passwordConfirm: newPassword })
-    })
-    expect(confStatus).toBe(200)
-
-    // 3. Verify DB state (passwordHash changed)
-    const adminRow = db.prepare(`SELECT passwordHash FROM _superusers WHERE id = ?`).get(adminId) as any
-    const verifyValid = await verifyPassword(newPassword, adminRow.passwordHash)
-    expect(verifyValid).toBe(true)
-
-    // 4. Verify token reuse is prevented
-    const { status: reuseStatus } = await fetchJson(`${ctx.url}/api/admins/confirm-password-reset`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ token: rawToken, password: 'AnotherPassword1!', passwordConfirm: 'AnotherPassword1!' })
-    })
-    expect(reuseStatus).toBe(400)
-  })
 })

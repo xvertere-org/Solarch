@@ -48,7 +48,7 @@ solarch init --dir ./my-app
 Create a new superuser account non-interactively.
 
 ```bash
-solarch superuser-create admin@example.com SecretPass123 --dir ./pb_data
+solarch superuser-create admin SecretPass123 --dir ./pb_data
 ```
 
 #### `solarch migrate up` ([src/cli.ts:L86](../../src/cli.ts#L86))

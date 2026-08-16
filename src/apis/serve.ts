@@ -15,6 +15,7 @@ import { registerLogRoutes } from './logs'
 import { registerInstallerRoutes } from './installer'
 import { registerAIRoutes } from './ai'
 import { registerAdminAuthRoutes } from './admin_auth'
+import { registerMetricsRoutes } from './metrics'
 import { corsMiddleware } from './middlewares_cors'
 import { rateLimitMiddleware } from './middlewares_rate_limit'
 import { loadAuthToken } from './middlewares_auth'
@@ -96,6 +97,7 @@ export async function serve(app: BaseApp, port: number): Promise<http.Server> {
   registerBackupRoutes(app, server)
   registerLogRoutes(app, server)
   registerAIRoutes(app, server)
+  registerMetricsRoutes(app, server)
 
   const adminBuildDir = path.join(process.cwd(), 'pb_public', 'admin')
   if (fs.existsSync(adminBuildDir)) {
@@ -133,7 +135,7 @@ export async function serve(app: BaseApp, port: number): Promise<http.Server> {
               <div class="box">
                 <p>No superuser found. Please complete the installation:</p>
                 <p><a href="${installerUrl}">Open Installer</a></p>
-                <p>Or run: <code>./solarch superuser-create EMAIL PASS</code></p>
+                <p>Or run: <code>./solarch superuser-create USERNAME PASS</code></p>
               </div>
             `}
           </body>

@@ -14,13 +14,13 @@ Solarch provides built-in authentication for superusers and auth collections. Us
 
 Superusers (formerly admins) manage system settings, collections, and server resources.
 
-### Login with Email & Password ([src/apis/admin_auth.ts:L48](../../src/apis/admin_auth.ts#L48))
+### Login with Username & Password ([src/apis/admin_auth.ts:L48](../../src/apis/admin_auth.ts#L48))
 
 ```bash
 curl -X POST http://localhost:8090/api/admins/auth-with-password \
   -H "Content-Type: application/json" \
   -d '{
-    "identity": "admin@example.com",
+    "identity": "admin",
     "password": "SecretPassword123"
   }'
 ```
@@ -31,7 +31,7 @@ curl -X POST http://localhost:8090/api/admins/auth-with-password \
   "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
   "admin": {
     "id": "superuser_id",
-    "email": "admin@example.com"
+    "username": "admin"
   }
 }
 ```

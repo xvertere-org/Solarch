@@ -45,7 +45,7 @@ solarch serve --dev --port 8090
 Open `http://localhost:8090/_/` for the Admin UI, or create a superuser directly:
  
 ```bash
-solarch superuser-create admin@example.com SuperSecretPassword123!
+solarch superuser-create admin SuperSecretPassword123!
 ```
  
 ### Programmatic Usage
