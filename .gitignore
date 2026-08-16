@@ -59,6 +59,13 @@ test1.sh
 test_*/
 *.sh
 
+# Scratch and Agent Rules
+scratch/
+.agents/
+docs/phase-*.md
+docs/admin-ui-audit.md
+scripts/create-test-record.js
+
 .gstack/
 
 # Torque Next.js build
