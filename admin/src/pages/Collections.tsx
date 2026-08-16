@@ -8,14 +8,10 @@ import {
   Trash2,
   Database,
   Search,
-  X,
   RefreshCw,
-  Layers,
-  Shield,
-  Filter,
 } from 'lucide-react'
 import { PageHeader } from '@/components/navigation/PageHeader'
-import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from '@/components/ui/card'
+import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
 import { Table, TableHeader, TableBody, TableHead, TableRow, TableCell } from '@/components/ui/table'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -250,7 +246,7 @@ export default function Collections() {
         <CardContent className="p-0">
           {filtered.length === 0 ? (
             <EmptyState
-              icon={Database}
+              icon={<Database size={24} />}
               title={search ? 'No matching collections' : 'No collections found'}
               message={
                 search

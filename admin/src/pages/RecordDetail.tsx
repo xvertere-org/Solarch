@@ -7,13 +7,6 @@ import {
   Trash2,
   Copy,
   Check,
-  RefreshCw,
-  Database,
-  Calendar,
-  Clock,
-  FileText,
-  AlertTriangle,
-  Info,
 } from 'lucide-react'
 import { PageHeader } from '@/components/navigation/PageHeader'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
@@ -22,14 +15,6 @@ import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Label } from '@/components/ui/label'
-import { Badge } from '@/components/ui/badge'
-import {
-  Select,
-  SelectTrigger,
-  SelectValue,
-  SelectContent,
-  SelectItem,
-} from '@/components/ui/select'
 import {
   AlertDialog,
   AlertDialogContent,
@@ -43,7 +28,6 @@ import {
 import { Skeleton } from '@/components/ui/Skeleton'
 import { ErrorState } from '@/components/ui/ErrorState'
 import { toast } from 'sonner'
-import { cn } from '@/lib/utils'
 
 interface Collection {
   id: string

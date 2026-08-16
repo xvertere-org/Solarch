@@ -6,9 +6,7 @@ import {
   Globe,
   Mail,
   Sparkles,
-  RefreshCw,
   HardDrive,
-  CheckCircle2,
 } from 'lucide-react'
 import { PageHeader } from '@/components/navigation/PageHeader'
 import {
@@ -28,7 +26,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { Switch } from '@/components/ui/switch'
-import { Badge } from '@/components/ui/badge'
+import { Checkbox } from '@/components/ui/checkbox'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/Skeleton'
 import { ErrorState } from '@/components/ui/ErrorState'

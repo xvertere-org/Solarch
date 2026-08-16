@@ -1,19 +1,15 @@
-import { useEffect, useState, useMemo, useCallback } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import { adminApi, LogItem } from '@/lib/admin-api'
 import {
   RefreshCw,
   Search,
-  X,
   ChevronLeft,
   ChevronRight,
   Eye,
   FileText,
-  AlertTriangle,
-  AlertCircle,
   Activity,
   Copy,
   Check,
-  Filter,
 } from 'lucide-react'
 import { PageHeader } from '@/components/navigation/PageHeader'
 import {
@@ -21,8 +17,6 @@ import {
   CardContent,
   CardHeader,
   CardTitle,
-  CardDescription,
-  CardFooter,
 } from '@/components/ui/card'
 import {
   Table,
@@ -60,7 +54,7 @@ export default function Logs() {
   const [totalItems, setTotalItems] = useState(0)
   const [totalPages, setTotalPages] = useState(1)
   const [page, setPage] = useState(1)
-  const [perPage, setPerPage] = useState(50)
+  const perPage = 50
   const [levelFilter, setLevelFilter] = useState('all')
   const [search, setSearch] = useState('')
 

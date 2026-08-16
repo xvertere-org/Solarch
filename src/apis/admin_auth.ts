@@ -56,7 +56,19 @@ export function registerAdminAuthRoutes(app: BaseApp, router: Router): void {
         return res.status(400).json(createApiError(400, 'UNAUTHORIZED', 'Invalid credentials.'))
       }
 
-      const row = await app.db().queryOne<any>(`SELECT * FROM _superusers WHERE email = ?`, [identity])
+      let row: any = null
+      try {
+        row = await app.db().queryOne<any>(`SELECT * FROM _superusers WHERE LOWER(email) = ?`, [identity.toLowerCase()])
+      } catch {
+        // In case email column does not exist
+      }
+      if (!row) {
+        try {
+          row = await app.db().queryOne<any>(`SELECT * FROM _superusers WHERE LOWER(username) = ?`, [identity.toLowerCase()])
+        } catch {
+          // In case username column does not exist
+        }
+      }
 
       if (!row) {
         recordFailedAttempt(`admin:${identity.toLowerCase()}`)
@@ -77,7 +89,14 @@ export function registerAdminAuthRoutes(app: BaseApp, router: Router): void {
         '720h'
       )
 
-      res.json({ token, admin: { id: row.id, email: row.email } })
+      res.json({
+        token,
+        admin: {
+          id: row.id,
+          email: row.email || row.username,
+          username: row.username || row.email,
+        },
+      })
     } catch (err: any) {
       app.logger().error(err.message || err)
       res.status(500).json(createApiError(500, 'INTERNAL_ERROR', 'Internal server error'))
@@ -116,7 +135,14 @@ export function registerAdminAuthRoutes(app: BaseApp, router: Router): void {
         '720h'
       )
 
-      res.json({ token: newToken, admin: { id: row.id, email: row.email } })
+      res.json({
+        token: newToken,
+        admin: {
+          id: row.id,
+          email: row.email || row.username,
+          username: row.username || row.email,
+        },
+      })
     } catch (err: any) {
       app.logger().error(err.message || err)
       res.status(500).json(createApiError(500, 'INTERNAL_ERROR', 'Internal server error'))
@@ -135,7 +161,16 @@ export function registerAdminAuthRoutes(app: BaseApp, router: Router): void {
         return res.status(204).send()
       }
 
-      const row = await app.db().queryOne<any>(`SELECT * FROM _superusers WHERE email = ?`, [email])
+      let row: any = null
+      try {
+        row = await app.db().queryOne<any>(`SELECT * FROM _superusers WHERE LOWER(email) = ?`, [email.toLowerCase()])
+      } catch { }
+      if (!row) {
+        try {
+          row = await app.db().queryOne<any>(`SELECT * FROM _superusers WHERE LOWER(username) = ?`, [email.toLowerCase()])
+        } catch { }
+      }
+
       if (!row) {
         return res.status(204).send()
       }
@@ -149,7 +184,7 @@ export function registerAdminAuthRoutes(app: BaseApp, router: Router): void {
           res.setHeader('Referrer-Policy', 'no-referrer')
           await sendPasswordResetEmail(mailer, engine, email, {
             resetURL: `${settings.appURL}/_/#/admin/confirm-password-reset?token=${token}`,
-            userName: row.email,
+            userName: row.email || row.username,
           })
         }
       } catch (emailErr: any) {

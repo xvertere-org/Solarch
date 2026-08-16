@@ -1,14 +1,12 @@
 import { useEffect, useState, useCallback } from 'react'
-import { useParams, useNavigate, Link } from 'react-router-dom'
+import { useParams, Link } from 'react-router-dom'
 import { solarch } from '@/lib/solarch'
 import {
   Plus,
   Trash2,
   ArrowLeft,
   Save,
-  Database,
   Layers,
-  RefreshCw,
   Eye,
   KeyRound,
   Shield,
@@ -64,7 +62,6 @@ const FIELD_TYPES = [
 
 export default function CollectionDetail() {
   const { id } = useParams<{ id: string }>()
-  const navigate = useNavigate()
 
   const [collection, setCollection] = useState<Collection | null>(null)
   const [fields, setFields] = useState<Field[]>([])

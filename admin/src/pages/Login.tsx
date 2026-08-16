@@ -9,11 +9,10 @@ import { Spinner } from '@/components/ui/spinner'
 import {
   Eye,
   EyeOff,
-  User,
   AlertCircle,
+  User,
   ShieldAlert,
   ShieldCheck,
-  RefreshCw,
   KeyRound,
 } from 'lucide-react'
 import { SolarchLogo } from '@/components/SolarchLogo'

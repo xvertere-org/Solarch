@@ -4,16 +4,17 @@ import { adminApi, BackupItem } from '@/lib/admin-api'
 import {
   Trash2,
   RefreshCw,
-  Archive,
   Upload,
   Plus,
   RotateCcw,
+  Download,
+  ChevronLeft,
+  ChevronRight,
+  Archive,
   HardDrive,
   Clock,
-  AlertTriangle,
   FileArchive,
-  X,
-  Download,
+  AlertTriangle,
 } from 'lucide-react'
 import { PageHeader } from '@/components/navigation/PageHeader'
 import {
@@ -21,7 +22,6 @@ import {
   CardContent,
   CardHeader,
   CardTitle,
-  CardDescription,
 } from '@/components/ui/card'
 import {
   Table,
@@ -195,22 +195,16 @@ export default function Backups() {
     }
   }
 
-  const handleDownloadBackup = async (backup: BackupItem) => {
+  const handleDownloadBackup = (backup: BackupItem) => {
     try {
-      const token = solarch.authStore.token
-      const downloadUrl = `/api/backups/${encodeURIComponent(backup.key)}`
-      const res = await fetch(downloadUrl, {
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      const downloadUrl = solarch.http.buildUrl(`/api/backups/${encodeURIComponent(backup.key)}`, {
+        token: solarch.authStore.getToken(),
       })
-      if (!res.ok) throw new Error('Failed to download archive')
-      const blob = await res.blob()
-      const url = window.URL.createObjectURL(blob)
       const a = document.createElement('a')
-      a.href = url
+      a.href = downloadUrl
       a.download = backup.key
       document.body.appendChild(a)
       a.click()
-      window.URL.revokeObjectURL(url)
       document.body.removeChild(a)
       toast.success('Backup download started')
     } catch (err: any) {
@@ -308,24 +302,22 @@ export default function Backups() {
       />
 
       {/* 2. Stat Cards */}
+      {/* 2. Stat Cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <StatCard
-          label="Total Backups"
+          title="Total Backups"
           value={stats.totalCount}
-          icon={Archive}
-          variant="primary"
+          icon={<Archive size={18} />}
         />
         <StatCard
-          label="Total Storage Used"
+          title="Total Storage Used"
           value={formatBytes(stats.totalBytes)}
-          icon={HardDrive}
-          variant="info"
+          icon={<HardDrive size={18} />}
         />
         <StatCard
-          label="Latest Snapshot"
+          title="Latest Snapshot"
           value={stats.latestTimestamp ? formatDate(stats.latestTimestamp) : 'None'}
-          icon={Clock}
-          variant="success"
+          icon={<Clock size={18} />}
         />
       </div>
 
@@ -454,6 +446,33 @@ export default function Backups() {
             </div>
           )}
         </CardContent>
+        {totalPages > 1 && (
+          <div className="p-3 border-t border-border/50 bg-bg-surface flex items-center justify-between">
+            <span className="text-xs text-text-muted">
+              Page {page} of {totalPages} ({filteredBackups.length} total)
+            </span>
+            <div className="flex items-center gap-1.5">
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={page <= 1}
+                onClick={() => setPage((p) => Math.max(1, p - 1))}
+                className="h-7 w-7 p-0 cursor-pointer"
+              >
+                <ChevronLeft size={14} />
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={page >= totalPages}
+                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                className="h-7 w-7 p-0 cursor-pointer"
+              >
+                <ChevronRight size={14} />
+              </Button>
+            </div>
+          </div>
+        )}
       </Card>
 
       {/* 4. Create Backup Modal */}

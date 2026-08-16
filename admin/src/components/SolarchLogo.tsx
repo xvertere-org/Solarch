@@ -1,4 +1,12 @@
-export function SolarchLogo({ className = "w-8 h-8" }: { className?: string }) {
+export function SolarchLogo({
+  className = 'w-8 h-8',
+  size,
+}: {
+  className?: string
+  size?: number
+}) {
+  const style = size ? { width: size, height: size } : undefined
+
   return (
     <svg
       id="Layer_1"
@@ -6,6 +14,7 @@ export function SolarchLogo({ className = "w-8 h-8" }: { className?: string }) {
       xmlns="http://www.w3.org/2000/svg"
       viewBox="331 32 704 704"
       className={`shrink-0 ${className}`}
+      style={style}
     >
       <defs>
         <mask id="solarch-logo-knockout">

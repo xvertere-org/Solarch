@@ -1,5 +1,5 @@
-import { useEffect, useState, useCallback, useMemo, useRef } from 'react'
-import { useParams, Link, useNavigate } from 'react-router-dom'
+import { useEffect, useState, useCallback, useMemo } from 'react'
+import { useParams, Link } from 'react-router-dom'
 import { solarch } from '@/lib/solarch'
 import {
   Plus,
@@ -9,17 +9,11 @@ import {
   ArrowLeft,
   Trash2,
   Edit,
-  Copy,
-  Check,
   RefreshCw,
   Database,
-  X,
-  FileText,
-  AlertTriangle,
-  Eye,
 } from 'lucide-react'
 import { PageHeader } from '@/components/navigation/PageHeader'
-import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card'
+import { Card, CardHeader, CardContent } from '@/components/ui/card'
 import {
   Table,
   TableHeader,
@@ -34,13 +28,6 @@ import { Label } from '@/components/ui/label'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Textarea } from '@/components/ui/textarea'
 import { Badge } from '@/components/ui/badge'
-import {
-  Select,
-  SelectTrigger,
-  SelectValue,
-  SelectContent,
-  SelectItem,
-} from '@/components/ui/select'
 import {
   Dialog,
   DialogContent,
@@ -75,16 +62,15 @@ interface Collection {
 
 export default function Records() {
   const { collectionId } = useParams<{ collectionId: string }>()
-  const navigate = useNavigate()
 
   const [collection, setCollection] = useState<Collection | null>(null)
   const [records, setRecords] = useState<any[]>([])
   const [totalItems, setTotalItems] = useState(0)
   const [totalPages, setTotalPages] = useState(1)
   const [page, setPage] = useState(1)
-  const [perPage, setPerPage] = useState(20)
+  const perPage = 20
   const [search, setSearch] = useState('')
-  const [sort, setSort] = useState('-created')
+  const sort = '-created'
 
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)

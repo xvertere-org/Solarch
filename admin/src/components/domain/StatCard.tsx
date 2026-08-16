@@ -2,10 +2,10 @@ import React from 'react'
 import { Card, CardContent } from '@/components/ui/card'
 import { cn } from '@/lib/utils'
 
-interface StatCardProps {
+export interface StatCardProps {
   title: string
   value: string | number
-  icon?: React.ReactNode
+  icon?: React.ReactNode | React.ElementType
   description?: string
   trend?: string
   badge?: string
@@ -15,12 +15,22 @@ interface StatCardProps {
 export const StatCard: React.FC<StatCardProps> = ({
   title,
   value,
-  icon,
+  icon: Icon,
   description,
   trend,
   badge,
   className,
 }) => {
+  const renderIcon = () => {
+    if (!Icon) return null
+    if (React.isValidElement(Icon)) return Icon
+    if (typeof Icon === 'function' || typeof Icon === 'object') {
+      const IconComponent = Icon as React.ElementType
+      return <IconComponent size={16} />
+    }
+    return null
+  }
+
   return (
     <Card
       className={cn(
@@ -31,9 +41,9 @@ export const StatCard: React.FC<StatCardProps> = ({
       <CardContent className="p-5 flex flex-col justify-between h-full">
         <div className="flex items-center justify-between">
           <p className="text-xs font-medium text-text-secondary uppercase tracking-wider">{title}</p>
-          {icon && (
+          {Icon && (
             <div className="p-2 rounded-lg bg-brand-primary/10 border border-brand-primary/20 text-brand-primary shrink-0">
-              {icon}
+              {renderIcon()}
             </div>
           )}
         </div>

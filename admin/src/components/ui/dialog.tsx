@@ -48,9 +48,11 @@ export function Dialog({
 export function DialogContent({
   children,
   className = '',
+  showCloseButton = true,
 }: {
   children?: React.ReactNode
   className?: string
+  showCloseButton?: boolean
 }) {
   const { open, onOpenChange } = React.useContext(DialogContext)
   const dialogRef = React.useRef<HTMLDivElement>(null)
@@ -83,14 +85,16 @@ export function DialogContent({
         )}
       >
         {children}
-        <button
-          type="button"
-          onClick={() => onOpenChange(false)}
-          className="absolute right-4 top-4 rounded-md p-1 text-text-muted hover:text-text-primary hover:bg-bg-elevated transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-brand-primary cursor-pointer"
-          aria-label="Close dialog"
-        >
-          <X size={16} />
-        </button>
+        {showCloseButton && (
+          <button
+            type="button"
+            onClick={() => onOpenChange(false)}
+            className="absolute right-4 top-4 rounded-md p-1 text-text-muted hover:text-text-primary hover:bg-bg-elevated transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-brand-primary cursor-pointer"
+            aria-label="Close dialog"
+          >
+            <X size={16} />
+          </button>
+        )}
       </div>
     </div>,
     document.body

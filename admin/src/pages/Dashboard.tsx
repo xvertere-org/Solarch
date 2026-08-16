@@ -15,7 +15,6 @@ import {
   Zap,
   Server,
   Key,
-  Layers,
   Activity,
   Cpu,
 } from 'lucide-react'
@@ -238,22 +237,19 @@ export default function Dashboard() {
       {/* 3 Metric Stat Cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <StatCard
-          label="Total Collections"
+          title="Total Collections"
           value={stats.collections}
-          icon={Database}
-          variant="primary"
+          icon={<Database size={18} />}
         />
         <StatCard
-          label="Total Records"
+          title="Total Records"
           value={stats.records}
-          icon={HardDrive}
-          variant="info"
+          icon={<HardDrive size={18} />}
         />
         <StatCard
-          label="Admin / Auth Users"
+          title="Admin / Auth Users"
           value={stats.users}
-          icon={Users}
-          variant="success"
+          icon={<Users size={18} />}
         />
       </div>
 
@@ -264,9 +260,8 @@ export default function Dashboard() {
           <div>
             <CardHeader className="p-5 pb-3 border-b border-border/60 flex flex-row items-center justify-between">
               <div>
-                <CardTitle className="text-sm font-semibold font-display text-text-primary flex items-center gap-2">
-                  <Layers size={16} className="text-brand-primary" />
-                  <span>Collections Overview</span>
+                <CardTitle className="text-sm font-semibold font-display text-text-primary">
+                  Collections Directory
                 </CardTitle>
                 <CardDescription className="text-xs text-text-secondary mt-0.5">
                   Schema definitions and table configurations
@@ -282,7 +277,7 @@ export default function Dashboard() {
             <CardContent className="p-0">
               {collections.length === 0 ? (
                 <EmptyState
-                  icon={Database}
+                  icon={<Database size={24} />}
                   title="No collections created yet"
                   message="Create your first schema collection to start persisting and querying records."
                   action={

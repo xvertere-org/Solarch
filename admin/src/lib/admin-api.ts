@@ -143,20 +143,10 @@ export const adminApi = {
     delete(key: string): Promise<any> {
       return solarch.http.delete(`/api/backups/${encodeURIComponent(key)}`)
     },
-    async upload(file: File): Promise<any> {
+    upload(file: File): Promise<any> {
       const formData = new FormData()
       formData.append('file', file)
-      const token = solarch.authStore.token
-      const res = await fetch('/api/backups/upload', {
-        method: 'POST',
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
-        body: formData,
-      })
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}))
-        throw new Error(data.message || 'Backup upload failed.')
-      }
-      return res.json().catch(() => ({}))
+      return solarch.http.post('/api/backups/upload', { body: formData })
     },
   },
 }

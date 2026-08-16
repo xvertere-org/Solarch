@@ -1,15 +1,17 @@
-import * as React from 'react';
-import { AlertCircle } from 'lucide-react';
-import { cn } from '../../lib/utils';
+import * as React from 'react'
+import { AlertCircle, RefreshCw } from 'lucide-react'
+import { cn } from '../../lib/utils'
+import { Button } from './button'
 
 export interface ErrorStateProps extends React.HTMLAttributes<HTMLDivElement> {
-  title?: string;
-  message: string;
-  action?: React.ReactNode;
+  title?: string
+  message: string
+  action?: React.ReactNode
+  onRetry?: () => void | Promise<void>
 }
 
 const ErrorState = React.forwardRef<HTMLDivElement, ErrorStateProps>(
-  ({ className, title = 'An error occurred', message, action, ...props }, ref) => {
+  ({ className, title = 'An error occurred', message, action, onRetry, ...props }, ref) => {
     return (
       <div
         ref={ref}
@@ -24,11 +26,23 @@ const ErrorState = React.forwardRef<HTMLDivElement, ErrorStateProps>(
         </div>
         <h4 className="mb-1 font-semibold text-text-primary text-sm font-display">{title}</h4>
         <p className="mb-4 text-xs text-text-secondary max-w-sm">{message}</p>
-        {action && <div>{action}</div>}
+        {action ? (
+          <div>{action}</div>
+        ) : onRetry ? (
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={onRetry}
+            className="text-xs h-8 flex items-center gap-1.5 cursor-pointer"
+          >
+            <RefreshCw size={12} />
+            <span>Try Again</span>
+          </Button>
+        ) : null}
       </div>
-    );
+    )
   }
-);
-ErrorState.displayName = 'ErrorState';
+)
+ErrorState.displayName = 'ErrorState'
 
-export { ErrorState };
+export { ErrorState }

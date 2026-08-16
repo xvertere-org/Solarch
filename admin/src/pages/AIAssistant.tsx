@@ -1,6 +1,5 @@
 import { useState, useRef, useEffect, useCallback, useMemo } from 'react'
 import { Link } from 'react-router-dom'
-import { solarch } from '@/lib/solarch'
 import { adminApi, AISettings } from '@/lib/admin-api'
 import {
   Send,
@@ -9,7 +8,6 @@ import {
   Sparkles,
   Plus,
   Trash2,
-  X,
   Copy,
   Check,
   RotateCcw,
@@ -23,7 +21,6 @@ import {
 import { PageHeader } from '@/components/navigation/PageHeader'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { Badge } from '@/components/ui/badge'
 import {
   AlertDialog,
   AlertDialogContent,
