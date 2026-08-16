@@ -54,7 +54,7 @@ import {
 } from '@/components/ui/alert-dialog'
 import { StatCard } from '@/components/domain/StatCard'
 import { Badge } from '@/components/ui/badge'
-import { Skeleton } from '@/components/ui/Skeleton'
+import { Skeleton } from '@/components/ui/skeleton'
 import { EmptyState } from '@/components/ui/EmptyState'
 import { ErrorState } from '@/components/ui/ErrorState'
 import { toast } from 'sonner'
