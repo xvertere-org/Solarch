@@ -170,6 +170,16 @@ export class RealtimeService {
     }, delay)
   }
 
+  /**
+   * Constructs the canonical realtime endpoint URL.
+   *
+   * Security note regarding BUG-11:
+   * The auth token is currently attached as a URL query parameter (?token=...) to match
+   * the backend server's realtime handshake contract across both WebSocket and EventSource/SSE
+   * (since browser EventSource API does not support custom Authorization headers).
+   * For future major protocol revisions, a WebSocket sub-protocol negotiation header or post-connect
+   * auth frame should be considered to prevent tokens appearing in access logs and proxy histories.
+   */
   private getRealtimeUrl(): string {
     let base = this.client.baseUrl
 
@@ -205,6 +215,16 @@ export class RealtimeService {
     this.transport.disconnect()
     this.clientId = ''
     this.subscriptions.clear()
+    this.channelAliases.clear()
+  }
+
+  private removeChannelAliases(topic: string): void {
+    const colChannel = `collections.${topic}.records`
+    for (const [key, val] of this.channelAliases.entries()) {
+      if (key === topic || key === colChannel || val === topic || val === colChannel) {
+        this.channelAliases.delete(key)
+      }
+    }
   }
 
   private resubscribeAll(): void {
@@ -247,6 +267,7 @@ export class RealtimeService {
       subs.delete(callback)
       if (subs.size === 0) {
         this.subscriptions.delete(topic)
+        this.removeChannelAliases(topic)
         if (this.transport.isConnected()) {
           try {
             this.transport.send(JSON.stringify({ type: 'unsubscribe', channels: [topic] }))
@@ -259,6 +280,7 @@ export class RealtimeService {
   async unsubscribe(topic?: string): Promise<void> {
     if (topic) {
       this.subscriptions.delete(topic)
+      this.removeChannelAliases(topic)
       if (this.transport.isConnected()) {
         try {
           this.transport.send(JSON.stringify({ type: 'unsubscribe', channels: [topic] }))
@@ -266,6 +288,7 @@ export class RealtimeService {
       }
     } else {
       this.subscriptions.clear()
+      this.channelAliases.clear()
       if (this.transport.isConnected()) {
         try {
           this.transport.send(JSON.stringify({ type: 'unsubscribe', channels: ['*'] }))

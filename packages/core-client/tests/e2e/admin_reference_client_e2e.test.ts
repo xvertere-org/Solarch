@@ -56,7 +56,11 @@ describe('ADMIN-13: Admin Reference Client Behavioral Regression Suite', () => {
       await new Promise<void>((resolve) => server.close(() => resolve()))
     }
     if (tempDir && fs.existsSync(tempDir)) {
-      fs.rmSync(tempDir, { recursive: true, force: true })
+      try {
+        fs.rmSync(tempDir, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 })
+      } catch {
+        // Ignore Windows transient file lock release error on temp directory
+      }
     }
   })
 

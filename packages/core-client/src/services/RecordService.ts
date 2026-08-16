@@ -57,12 +57,23 @@ export class RecordService<T extends RecordModel = RecordModel> {
 
   async getFullList(options: RecordFullListOptions = {}): Promise<T[]> {
     const batchSize = options.batchSize || 100
+    const maxItems = options.maxItems ?? 10_000
     const result: T[] = []
     let page = 1
 
     while (true) {
       const list = await this.getList(page, batchSize, options)
-      result.push(...list.items)
+      if (!list.items || list.items.length === 0) {
+        break
+      }
+
+      for (const item of list.items) {
+        result.push(item)
+        if (result.length >= maxItems) {
+          return result
+        }
+      }
+
       if (list.items.length < batchSize || result.length >= list.totalItems) {
         break
       }

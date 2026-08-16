@@ -8,18 +8,28 @@ import type { HttpClient } from '../http/HttpClient.js'
 
 export class CapabilityService {
   private cachedHealth: ServerHealthInfo | null = null
+  private lastCachedAt: number = 0
+  private cacheTtl: number
 
-  constructor(readonly client: HttpClient) {}
+  constructor(
+    readonly client: HttpClient,
+    options: { cacheTtl?: number } = {}
+  ) {
+    this.cacheTtl = options.cacheTtl ?? 30_000 // 30s TTL default
+  }
 
   /**
    * Queries the server /api/health endpoint and returns the actual server health and status payload.
+   * Result is cached for the configured TTL (default: 30s).
    */
   async getHealth(): Promise<ServerHealthInfo> {
-    if (this.cachedHealth) {
+    const now = Date.now()
+    if (this.cachedHealth && now - this.lastCachedAt < this.cacheTtl) {
       return this.cachedHealth
     }
     const health = await this.client.get<ServerHealthInfo>('/api/health')
     this.cachedHealth = health
+    this.lastCachedAt = Date.now()
     return health
   }
 
@@ -47,5 +57,6 @@ export class CapabilityService {
 
   clearCache(): void {
     this.cachedHealth = null
+    this.lastCachedAt = 0
   }
 }

@@ -1,0 +1,534 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Solarch Core REST & Realtime API",
+    "version": "1.0.0",
+    "description": "Canonical machine-readable API specification for Solarch backend and @solarch/core-client SDK contracts."
+  },
+  "paths": {
+    "/api/health": {
+      "get": {
+        "summary": "Server health and status check",
+        "operationId": "getHealth",
+        "responses": {
+          "200": {
+            "description": "Server health status payload",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ServerHealthInfo" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/collections": {
+      "get": {
+        "summary": "List collections schema metadata",
+        "operationId": "listCollections",
+        "parameters": [
+          { "name": "page", "in": "query", "schema": { "type": "integer", "default": 1 } },
+          { "name": "perPage", "in": "query", "schema": { "type": "integer", "default": 30 } }
+        ],
+        "responses": {
+          "200": {
+            "description": "Paginated collection list",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ListResultCollectionModel" }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "summary": "Create new collection schema",
+        "operationId": "createCollection",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/CollectionModel" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/CollectionModel" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/collections/{id}": {
+      "get": {
+        "summary": "Get collection schema by ID or name",
+        "operationId": "getCollection",
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/CollectionModel" }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "summary": "Update collection schema",
+        "operationId": "updateCollection",
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/CollectionModel" }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "summary": "Delete collection schema",
+        "operationId": "deleteCollection",
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }
+        ],
+        "responses": {
+          "204": { "description": "Collection deleted" }
+        }
+      }
+    },
+    "/api/collections/import": {
+      "post": {
+        "summary": "Bulk import collection schemas",
+        "operationId": "importCollections",
+        "responses": {
+          "200": { "description": "Collections imported successfully" }
+        }
+      }
+    },
+    "/api/collections/{collectionIdOrName}/records": {
+      "get": {
+        "summary": "List records in a collection",
+        "operationId": "listRecords",
+        "parameters": [
+          { "name": "collectionIdOrName", "in": "path", "required": true, "schema": { "type": "string" } },
+          { "name": "page", "in": "query", "schema": { "type": "integer", "default": 1 } },
+          { "name": "perPage", "in": "query", "schema": { "type": "integer", "default": 30 } },
+          { "name": "filter", "in": "query", "schema": { "type": "string" } },
+          { "name": "sort", "in": "query", "schema": { "type": "string" } },
+          { "name": "expand", "in": "query", "schema": { "type": "string" } },
+          { "name": "fields", "in": "query", "schema": { "type": "string" } }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ListResultRecordModel" }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "summary": "Create a record in a collection",
+        "operationId": "createRecord",
+        "parameters": [
+          { "name": "collectionIdOrName", "in": "path", "required": true, "schema": { "type": "string" } }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/RecordModel" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/collections/{collectionIdOrName}/records/{id}": {
+      "get": {
+        "summary": "Get a record by ID",
+        "operationId": "getRecord",
+        "parameters": [
+          { "name": "collectionIdOrName", "in": "path", "required": true, "schema": { "type": "string" } },
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/RecordModel" }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "summary": "Update a record",
+        "operationId": "updateRecord",
+        "parameters": [
+          { "name": "collectionIdOrName", "in": "path", "required": true, "schema": { "type": "string" } },
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/RecordModel" }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "summary": "Delete a record",
+        "operationId": "deleteRecord",
+        "parameters": [
+          { "name": "collectionIdOrName", "in": "path", "required": true, "schema": { "type": "string" } },
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }
+        ],
+        "responses": {
+          "204": { "description": "Record deleted" }
+        }
+      }
+    },
+    "/api/collections/{collectionIdOrName}/auth-with-password": {
+      "post": {
+        "summary": "Authenticate record with email/username and password",
+        "operationId": "authWithPassword",
+        "parameters": [
+          { "name": "collectionIdOrName", "in": "path", "required": true, "schema": { "type": "string" } }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/RecordAuthResponse" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/collections/{collectionIdOrName}/auth-with-oauth2": {
+      "post": {
+        "summary": "Authenticate record via OAuth2 code exchange",
+        "operationId": "authWithOAuth2",
+        "parameters": [
+          { "name": "collectionIdOrName", "in": "path", "required": true, "schema": { "type": "string" } }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/RecordAuthResponse" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/collections/{collectionIdOrName}/auth-with-otp": {
+      "post": {
+        "summary": "Authenticate record via one-time password",
+        "operationId": "authWithOtp",
+        "parameters": [
+          { "name": "collectionIdOrName", "in": "path", "required": true, "schema": { "type": "string" } }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/RecordAuthResponse" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/collections/{collectionIdOrName}/request-password-reset": {
+      "post": {
+        "summary": "Request password reset email",
+        "operationId": "requestPasswordReset",
+        "parameters": [
+          { "name": "collectionIdOrName", "in": "path", "required": true, "schema": { "type": "string" } }
+        ],
+        "responses": { "200": { "description": "Reset email dispatched" } }
+      }
+    },
+    "/api/collections/{collectionIdOrName}/confirm-password-reset": {
+      "post": {
+        "summary": "Confirm password reset with token",
+        "operationId": "confirmPasswordReset",
+        "parameters": [
+          { "name": "collectionIdOrName", "in": "path", "required": true, "schema": { "type": "string" } }
+        ],
+        "responses": { "200": { "description": "Password reset confirmed" } }
+      }
+    },
+    "/api/collections/{collectionIdOrName}/request-verification": {
+      "post": {
+        "summary": "Request verification email",
+        "operationId": "requestVerification",
+        "parameters": [
+          { "name": "collectionIdOrName", "in": "path", "required": true, "schema": { "type": "string" } }
+        ],
+        "responses": { "200": { "description": "Verification email dispatched" } }
+      }
+    },
+    "/api/collections/{collectionIdOrName}/confirm-verification": {
+      "post": {
+        "summary": "Confirm verification token",
+        "operationId": "confirmVerification",
+        "parameters": [
+          { "name": "collectionIdOrName", "in": "path", "required": true, "schema": { "type": "string" } }
+        ],
+        "responses": { "200": { "description": "Verification confirmed" } }
+      }
+    },
+    "/api/collections/{collectionIdOrName}/request-email-change": {
+      "post": {
+        "summary": "Request email change",
+        "operationId": "requestEmailChange",
+        "parameters": [
+          { "name": "collectionIdOrName", "in": "path", "required": true, "schema": { "type": "string" } }
+        ],
+        "responses": { "200": { "description": "Email change requested" } }
+      }
+    },
+    "/api/collections/{collectionIdOrName}/confirm-email-change": {
+      "post": {
+        "summary": "Confirm email change",
+        "operationId": "confirmEmailChange",
+        "parameters": [
+          { "name": "collectionIdOrName", "in": "path", "required": true, "schema": { "type": "string" } }
+        ],
+        "responses": { "200": { "description": "Email changed successfully" } }
+      }
+    },
+    "/api/collections/{collectionIdOrName}/impersonate/{id}": {
+      "post": {
+        "summary": "Impersonate record user",
+        "operationId": "impersonateRecord",
+        "parameters": [
+          { "name": "collectionIdOrName", "in": "path", "required": true, "schema": { "type": "string" } },
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/RecordAuthResponse" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/files/{collectionIdOrName}/{recordId}/{filename}": {
+      "get": {
+        "summary": "Download or view record file asset",
+        "operationId": "getFile",
+        "parameters": [
+          { "name": "collectionIdOrName", "in": "path", "required": true, "schema": { "type": "string" } },
+          { "name": "recordId", "in": "path", "required": true, "schema": { "type": "string" } },
+          { "name": "filename", "in": "path", "required": true, "schema": { "type": "string" } },
+          { "name": "thumb", "in": "query", "schema": { "type": "string" } },
+          { "name": "download", "in": "query", "schema": { "type": "boolean" } },
+          { "name": "token", "in": "query", "schema": { "type": "string" } }
+        ],
+        "responses": {
+          "200": { "description": "File binary content" }
+        }
+      }
+    },
+    "/api/files/token": {
+      "post": {
+        "summary": "Generate file access token",
+        "operationId": "getFileToken",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "token": { "type": "string" }
+                  },
+                  "required": ["token"]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/admins/auth-with-password": {
+      "post": {
+        "summary": "Authenticate admin user with email and password",
+        "operationId": "adminAuthWithPassword",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/AdminAuthResponse" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/admins/refresh": {
+      "post": {
+        "summary": "Refresh admin authentication token",
+        "operationId": "adminAuthRefresh",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/AdminAuthResponse" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/admins/request-password-reset": {
+      "post": {
+        "summary": "Request admin password reset email",
+        "operationId": "adminRequestPasswordReset",
+        "responses": { "200": { "description": "Admin reset email dispatched" } }
+      }
+    },
+    "/api/admins/confirm-password-reset": {
+      "post": {
+        "summary": "Confirm admin password reset",
+        "operationId": "adminConfirmPasswordReset",
+        "responses": { "200": { "description": "Admin password reset confirmed" } }
+      }
+    },
+    "/api/realtime": {
+      "get": {
+        "summary": "Realtime WebSocket / SSE connection endpoint",
+        "operationId": "realtimeConnect",
+        "parameters": [
+          { "name": "token", "in": "query", "schema": { "type": "string" } }
+        ],
+        "responses": {
+          "101": { "description": "WebSocket upgrade" },
+          "200": { "description": "Server-Sent Events stream" }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "ServerHealthInfo": {
+        "type": "object",
+        "properties": {
+          "code": { "type": "integer" },
+          "message": { "type": "string" },
+          "status": { "type": "string" },
+          "data": { "type": "object" }
+        }
+      },
+      "RecordModel": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string" },
+          "collectionId": { "type": "string" },
+          "collectionName": { "type": "string" },
+          "created": { "type": "string" },
+          "updated": { "type": "string" }
+        },
+        "required": ["id"]
+      },
+      "CollectionModel": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string" },
+          "name": { "type": "string" },
+          "type": { "type": "string" },
+          "schema": { "type": "array", "items": { "type": "object" } },
+          "listRule": { "type": ["string", "null"] },
+          "viewRule": { "type": ["string", "null"] },
+          "createRule": { "type": ["string", "null"] },
+          "updateRule": { "type": ["string", "null"] },
+          "deleteRule": { "type": ["string", "null"] }
+        },
+        "required": ["id", "name"]
+      },
+      "RecordAuthResponse": {
+        "type": "object",
+        "properties": {
+          "token": { "type": "string" },
+          "record": { "$ref": "#/components/schemas/RecordModel" },
+          "meta": { "type": "object" }
+        },
+        "required": ["token", "record"]
+      },
+      "AdminAuthResponse": {
+        "type": "object",
+        "properties": {
+          "token": { "type": "string" },
+          "admin": { "type": "object" }
+        },
+        "required": ["token", "admin"]
+      },
+      "ListResultRecordModel": {
+        "type": "object",
+        "properties": {
+          "page": { "type": "integer" },
+          "perPage": { "type": "integer" },
+          "totalItems": { "type": "integer" },
+          "totalPages": { "type": "integer" },
+          "items": { "type": "array", "items": { "$ref": "#/components/schemas/RecordModel" } }
+        },
+        "required": ["page", "perPage", "totalItems", "totalPages", "items"]
+      },
+      "ListResultCollectionModel": {
+        "type": "object",
+        "properties": {
+          "page": { "type": "integer" },
+          "perPage": { "type": "integer" },
+          "totalItems": { "type": "integer" },
+          "totalPages": { "type": "integer" },
+          "items": { "type": "array", "items": { "$ref": "#/components/schemas/CollectionModel" } }
+        },
+        "required": ["page", "perPage", "totalItems", "totalPages", "items"]
+      },
+      "ApiErrorResponse": {
+        "type": "object",
+        "properties": {
+          "code": { "type": "integer" },
+          "status": {
+            "type": "string",
+            "enum": [
+              "BAD_REQUEST",
+              "VALIDATION_FAILED",
+              "UNAUTHORIZED",
+              "FORBIDDEN",
+              "NOT_FOUND",
+              "RATE_LIMITED",
+              "INTERNAL_ERROR"
+            ]
+          },
+          "message": { "type": "string" },
+          "data": { "type": "object" }
+        },
+        "required": ["code", "status", "message"]
+      }
+    }
+  }
+}
