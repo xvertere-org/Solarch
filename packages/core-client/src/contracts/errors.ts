@@ -13,6 +13,20 @@ export interface ClientResponseErrorOptions {
   originalError?: any
 }
 
+export const VALID_ERROR_STATUSES: readonly ApiErrorStatus[] = [
+  'VALIDATION_FAILED',
+  'UNAUTHORIZED',
+  'FORBIDDEN',
+  'NOT_FOUND',
+  'RATE_LIMITED',
+  'INTERNAL_ERROR',
+  'BAD_REQUEST',
+] as const
+
+export function isKnownErrorStatus(status: any): status is ApiErrorStatus {
+  return typeof status === 'string' && (VALID_ERROR_STATUSES as readonly string[]).includes(status)
+}
+
 export class ClientResponseError extends Error {
   readonly statusCode: number
   readonly status: ApiErrorStatus
@@ -41,8 +55,8 @@ export class ClientResponseError extends Error {
 
     const statusCode = isErrorEnvelope && typeof body.code === 'number' ? body.code : res.status
     const status: ApiErrorStatus =
-      isErrorEnvelope && typeof body.status === 'string'
-        ? (body.status as ApiErrorStatus)
+      isErrorEnvelope && isKnownErrorStatus(body.status)
+        ? body.status
         : statusCode === 400
           ? 'VALIDATION_FAILED'
           : statusCode === 401

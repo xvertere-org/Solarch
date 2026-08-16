@@ -8,7 +8,9 @@ describe('AuthStore Unit Tests', () => {
     expect(store.getModel()).toBeNull()
     expect(store.isValid()).toBe(false)
 
-    const token = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.opaque.sig'
+    const header = Buffer.from(JSON.stringify({ alg: 'HS256', typ: 'JWT' })).toString('base64url')
+    const payload = Buffer.from(JSON.stringify({ sub: 'usr_1' })).toString('base64url')
+    const token = `${header}.${payload}.sig`
     store.save(token, { id: 'usr_1', email: 'user@example.com' })
     expect(store.getToken()).toBe(token)
     expect(store.getModel()).toEqual({ id: 'usr_1', email: 'user@example.com' })

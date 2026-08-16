@@ -6,7 +6,7 @@ import { ClientResponseError, parseApiError } from '../contracts/errors.js'
 import type { FetchResponseLike } from '../contracts/interfaces.js'
 
 export async function parseHttpResponse<T = any>(res: FetchResponseLike): Promise<T> {
-  const is204 = res.status === 204
+  const isNoBody = res.status === 204 || res.status === 205 || res.status === 304
   const contentType = (res.headers && typeof res.headers.get === 'function'
     ? res.headers.get('content-type') || ''
     : ''
@@ -14,7 +14,7 @@ export async function parseHttpResponse<T = any>(res: FetchResponseLike): Promis
 
   let data: any = null
 
-  if (!is204) {
+  if (!isNoBody) {
     if (contentType.includes('application/json')) {
       try {
         data = await res.json()

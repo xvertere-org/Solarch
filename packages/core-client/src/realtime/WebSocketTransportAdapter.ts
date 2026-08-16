@@ -55,6 +55,10 @@ export class WebSocketTransportAdapter implements RealtimeTransport {
       }
 
       this.ws.onclose = (event) => {
+        if (!settled) {
+          settled = true
+          reject(new Error(`WebSocket connection closed before opening: ${event?.code || ''}`))
+        }
         const code = event && typeof event.code === 'number' ? event.code : undefined
         const reason = event && typeof event.reason === 'string' ? event.reason : undefined
         for (const l of this.closeListeners) l(code, reason)

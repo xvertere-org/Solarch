@@ -17,7 +17,11 @@ permissions:
 
 jobs:
   function:
-    name: "${{ inputs.workspace_name }} — 1. Function"
+    name: "${{ inputs.workspace_name }} — 1. Function (Node ${{ matrix.node-version }})"
+    strategy:
+      fail-fast: false
+      matrix:
+        node-version: [22.x]
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -27,7 +31,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 22.x
+          node-version: ${{ matrix.node-version }}
           cache: 'npm'
 
       - name: Install dependencies
@@ -39,8 +43,8 @@ jobs:
       - name: Typecheck
         run: npm run typecheck --workspace=${{ inputs.workspace_name }} --if-present
 
-      - name: Unit Tests
-        run: npm run test:unit --workspace=${{ inputs.workspace_name }} --if-present
+      - name: Unit Tests & Coverage
+        run: npm run test:coverage --workspace=${{ inputs.workspace_name }} --if-present
 
       - name: Platform Boundary Check
         run: npm run test:platform --workspace=${{ inputs.workspace_name }}
@@ -126,7 +130,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20.x
+          node-version: 22.x
           cache: 'npm'
 
       - name: Install dependencies

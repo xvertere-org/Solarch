@@ -60,7 +60,13 @@ describe('CORE-CLIENT-8: Live SolarchClient End-to-End Suite', () => {
     if (app) {
       await app.db().close()
     }
-    fs.rmSync(tempDir, { recursive: true, force: true })
+    if (tempDir && fs.existsSync(tempDir)) {
+      try {
+        fs.rmSync(tempDir, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 })
+      } catch {
+        // Ignore Windows transient file lock release error
+      }
+    }
   })
 
   it('1. Capabilities Service: queries health facts directly from server', async () => {

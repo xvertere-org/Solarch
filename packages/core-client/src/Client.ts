@@ -70,8 +70,6 @@ export class SolarchClient {
   readonly realtime: RealtimeService
   readonly capabilities: CapabilityService
 
-  private recordServices: Map<string, RecordService<any>> = new Map()
-
   constructor(
     baseUrl: string = '/',
     options: SolarchClientOptions = {}
@@ -113,20 +111,39 @@ export class SolarchClient {
     return this.http.baseUrl
   }
 
+  private static readonly MAX_CACHED_COLLECTIONS = 500
+  private recordServices: Map<string, RecordService<any>> = new Map()
+
   /**
    * Returns a typed RecordService instance for the specified collection ID or name.
+   * Cached instances are retained up to a maximum of 500 collections (LRU eviction).
    */
   collection<T extends RecordModel = RecordModel>(
     idOrName: string
   ): RecordService<T> {
     const key = idOrName.trim().toLowerCase()
     if (!this.recordServices.has(key)) {
+      // LRU eviction when cache exceeds maximum capacity
+      if (this.recordServices.size >= SolarchClient.MAX_CACHED_COLLECTIONS) {
+        const oldestKey = this.recordServices.keys().next().value
+        if (oldestKey) {
+          this.recordServices.delete(oldestKey)
+        }
+      }
+
       this.recordServices.set(
         key,
         new RecordService<T>(this.http, idOrName, this.realtime)
       )
     }
     return this.recordServices.get(key)! as RecordService<T>
+  }
+
+  /**
+   * Clears the cached RecordService instances Map.
+   */
+  clearCollectionCache(): void {
+    this.recordServices.clear()
   }
 
   /**

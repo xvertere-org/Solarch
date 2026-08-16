@@ -50,6 +50,11 @@ export interface RecordFullListOptions extends RecordOptions {
   filter?: string
   sort?: string
   batchSize?: number
+  /**
+   * Maximum number of items to safely fetch.
+   * Default: 10,000. Set to Infinity or custom number if needed.
+   */
+  maxItems?: number
 }
 
 export interface FileOptions {
