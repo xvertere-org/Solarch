@@ -1,27 +1,39 @@
 {
   "name": "solarch",
-  "version": "0.18.1",
-  "description": "Solarch - a TypeScript backend-as-a-service with SQLite, auth, realtime, and admin UI. Inspired by PocketBase.",
+  "version": "0.18.2",
+  "description": "Solarch - a TypeScript backend-as-a-service with SQLite, auth, realtime, and CLI. Inspired by PocketBase.",
   "repository": "https://github.com/xvertere-org/Solarch",
   "homepage": "https://solarch.in/",
   "bugs": "https://github.com/xvertere-org/Solarch/issues",
   "license": "Apache-2.0",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    },
+    "./client": {
+      "types": "./packages/core-client/dist/index.d.ts",
+      "import": "./packages/core-client/dist/index.js",
+      "require": "./packages/core-client/dist/index.cjs"
+    }
+  },
   "bin": {
     "solarch": "dist/cli.js"
   },
   "files": [
     "dist/**/*",
     "scripts/postinstall.js",
+    "packages/core-client/dist/**/*",
     "pb_public/**/*",
     "pb_migrations/**/*",
     "README.md",
     "LICENSE"
   ],
   "workspaces": [
-    "packages/*",
-    "admin"
+    "packages/*"
   ],
   "solarchCi": {
     "type": "backend",
@@ -29,8 +41,7 @@
   },
   "scripts": {
     "postinstall": "node scripts/postinstall.js",
-    "build": "npm --workspace=@solarch/core-client run build --if-present && tsc && node -e \"require('fs').copyFileSync('src/tools/jsvm/deno_worker.ts', 'dist/tools/jsvm/deno_worker.ts')\" && npm run build:ui",
-    "build:ui": "cd admin && npm install && npm run build && cd .. && node scripts/copy-admin.js",
+    "build": "npm --workspace=@solarch/core-client run build --if-present && tsc && node -e \"require('fs').copyFileSync('src/tools/jsvm/deno_worker.ts', 'dist/tools/jsvm/deno_worker.ts')\"",
     "prepublishOnly": "npm run build",
     "dev": "tsx watch src/cli.ts serve --dev",
     "test": "vitest run",

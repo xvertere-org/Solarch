@@ -127,15 +127,14 @@ export async function serve(app: BaseApp, port: number): Promise<http.Server> {
             <h1>Solarch Admin</h1>
             ${hasAdmin ? `
               <div class="box">
-                <p>Admin UI is not built yet.</p>
-                <p>Run <code>cd admin && npm install && npm run build</code> to build the Admin UI.</p>
-                <p>Or manage your data using the REST API at <code>/api/</code></p>
+                <p><strong>Solarch Server is running.</strong></p>
+                <p>Manage your backend using <a href="https://github.com/xvertere-org/Solarch-Dashboard" target="_blank" rel="noopener">Solarch Dashboard</a> or interact directly via the REST API at <code>/api/</code>.</p>
               </div>
             ` : `
               <div class="box">
                 <p>No superuser found. Please complete the installation:</p>
                 <p><a href="${installerUrl}">Open Installer</a></p>
-                <p>Or run: <code>./solarch superuser-create USERNAME PASS</code></p>
+                <p>Or run: <code>solarch superuser-create USERNAME PASS</code></p>
               </div>
             `}
           </body>
