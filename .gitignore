@@ -8,12 +8,14 @@ dist/
 build/
 *.tsbuildinfo
 
-# Data directories
+# Local Runtime Data
 pb_data/
-pb_public/
-pb_migrations/
 test_data_*/
 backups/
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
 
 # Uploads
 uploads/
@@ -22,62 +24,25 @@ uploads/
 *.log
 logs/
 
-# Environment
+# Environment Variables
 .env
 .env.local
 .env.*.local
 
-# IDE
-.vscode/
+# IDE & Editor
+.vscode/*
+!.vscode/extensions.json
 .idea/
 *.swp
 *.swo
 
-# OS
+# OS Artifacts
 .DS_Store
 Thumbs.db
 
-# Test coverage
+# Test Coverage & Temp
 coverage/
 .nyc_output/
-
-# Temporary files
 *.tmp
 *.temp
-
-# Graphify output
-graphify-out/
-
-# PocketBase binary
-pocketbase
-
-# Empty / leftover dirs
-/ui/
-
-# Test scripts
-test1.sh
-test_*/
-*.sh
-
-# Scratch and Agent Rules
 scratch/
-.agents/
-docs/phase-*.md
-docs/admin-ui-audit.md
-scripts/create-test-record.js
-
-.gstack/
-
-# Torque Next.js build
-torque/.next/
-torque/out/
-torque/next-env.d.ts
-torque/node_modules/
-.qa
-
-# Vercel deployment metadata
-**/.vercel/
-
-# Large / generated archives
-Solarch.zip
-*.db

@@ -115,21 +115,28 @@ solarch migrate create <name>
 | **Realtime** | WebSocket & SSE room subscriptions |
 | **Storage** | Local disk or S3-compatible, interchangeable via config |
 | **AI & Search** | Cosine similarity vector search, natural-language schema generation |
-| **Admin UI** | Built-in React dashboard at `/_/` |
+| **Admin Dashboard** | Dedicated administrative UI via [Solarch Dashboard](https://github.com/xvertere-org/Solarch-Dashboard) |
 | **Extensibility** | JS hooks (`pb_hooks/`), JS migrations (`pb_migrations/`), full Express access |
  
 ---
  
-## Admin UI
+## Admin Dashboard
  
-Visit `http://localhost:8090/_/` after starting the server. On first access you'll create your admin account directly in the browser — enter an email and password (min. 6 characters) and you're logged into the dashboard.
+Manage your Solarch server with [Solarch Dashboard](https://github.com/xvertere-org/Solarch-Dashboard):
  
-The dashboard covers:
+```bash
+# Clone and start the dashboard
+git clone https://github.com/xvertere-org/Solarch-Dashboard.git
+cd Solarch-Dashboard
+npm install
+npm run dev
+```
+ 
+The dashboard connects directly to your Solarch backend instance at `http://localhost:8090` and covers:
 - Collection editor with field management
 - Record browser with filter, pagination, and CRUD
 - Settings panel (SMTP, S3, AI)
-- Log viewer, backup manager, and AI assistant at `/_/ai`
-It's a React SPA served from `pb_public/admin/`; you don't need to build it yourself for normal use.
+- Log viewer, backup manager, and AI assistant
  
 ---
  
