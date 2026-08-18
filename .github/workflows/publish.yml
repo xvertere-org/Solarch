@@ -146,13 +146,22 @@ jobs:
           VERSION=${GITHUB_REF#refs/tags/v}
           TARBALL_URL="https://registry.npmjs.org/solarch/-/solarch-${VERSION}.tgz"
           
+          if [ -z "${{ secrets.HOMEBREW_TAP_TOKEN }}" ]; then
+            echo "HOMEBREW_TAP_TOKEN secret not configured, skipping Homebrew formula update."
+            exit 0
+          fi
+
+          # Attempt to clone the homebrew-tap repo
+          if ! git clone "https://x-access-token:${{ secrets.HOMEBREW_TAP_TOKEN }}@github.com/xvertere-org/homebrew-tap.git" homebrew-tap 2>/dev/null; then
+            echo "homebrew-tap repository not accessible, skipping Homebrew formula update."
+            exit 0
+          fi
+
+          cd homebrew-tap
+
           # Download tarball to compute sha256 checksum
           curl -sL -o solarch.tgz "$TARBALL_URL"
           SHA256=$(sha256sum solarch.tgz | awk '{print $1}')
-          
-          # Clone the homebrew-tap repo
-          git clone https://x-access-token:${{ secrets.HOMEBREW_TAP_TOKEN }}@github.com/xvertere-org/homebrew-tap.git
-          cd homebrew-tap
           
           mkdir -p Formula
           
@@ -194,6 +203,6 @@ jobs:
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add Formula/solarch.rb
           git commit -m "Update solarch to ${VERSION}"
-          git push
+          git push || true
         env:
           GITHUB_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
