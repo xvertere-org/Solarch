@@ -1,4 +1,5 @@
 import { RecordModel as PBRecord } from '../../core/record'
+import { RealtimeProvider, InMemoryRealtimeProvider, RealtimeMessageHandler } from './provider'
 
 export interface Message {
   type: string
@@ -29,6 +30,20 @@ export interface Client {
 export class Broker {
   private clients: Map<string, Client> = new Map()
   private channels: Map<string, Set<string>> = new Map()
+  private provider: RealtimeProvider
+  private channelHandlers: Map<string, RealtimeMessageHandler> = new Map()
+
+  constructor(provider?: RealtimeProvider) {
+    this.provider = provider || new InMemoryRealtimeProvider()
+  }
+
+  getProvider(): RealtimeProvider {
+    return this.provider
+  }
+
+  setProvider(provider: RealtimeProvider): void {
+    this.provider = provider
+  }
 
   addClient(client: Client): void {
     this.clients.set(client.id, client)
@@ -45,6 +60,10 @@ export class Broker {
         const subscribers = this.channels.get(channel)
         if (subscribers) {
           subscribers.delete(clientId)
+          if (subscribers.size === 0) {
+            this.channels.delete(channel)
+            this.unsubscribeFromProvider(channel)
+          }
         }
       }
       this.clients.delete(clientId)
@@ -59,6 +78,7 @@ export class Broker {
 
     if (!this.channels.has(channel)) {
       this.channels.set(channel, new Set())
+      this.subscribeToProvider(channel)
     }
     this.channels.get(channel)!.add(clientId)
   }
@@ -72,10 +92,34 @@ export class Broker {
     const subscribers = this.channels.get(channel)
     if (subscribers) {
       subscribers.delete(clientId)
+      if (subscribers.size === 0) {
+        this.channels.delete(channel)
+        this.unsubscribeFromProvider(channel)
+      }
     }
   }
 
-  send(channel: string, message: Message): void {
+  private subscribeToProvider(channel: string): void {
+    if (this.channelHandlers.has(channel)) return
+    const handler: RealtimeMessageHandler = (message: Message) => {
+      this.dispatchLocal(channel, message)
+    }
+    this.channelHandlers.set(channel, handler)
+    this.provider.subscribe(channel, handler).catch(() => {})
+  }
+
+  private unsubscribeFromProvider(channel: string): void {
+    const handler = this.channelHandlers.get(channel)
+    if (handler) {
+      this.provider.unsubscribe(channel, handler).catch(() => {})
+      this.channelHandlers.delete(channel)
+    }
+  }
+
+  /**
+   * Dispatches a message to all locally connected client sockets subscribed to the channel.
+   */
+  private dispatchLocal(channel: string, message: Message): void {
     const subscribers = this.channels.get(channel)
     if (!subscribers) return
 
@@ -90,6 +134,15 @@ export class Broker {
         }
       }
     }
+  }
+
+  /**
+   * Broadcasts a message through the pub/sub provider.
+   */
+  send(channel: string, message: Message): void {
+    this.provider.publish(channel, message).catch(() => {
+      this.dispatchLocal(channel, message)
+    })
   }
 
   getClientCount(): number {

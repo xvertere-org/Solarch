@@ -9,11 +9,7 @@ export default defineConfig({
     testTimeout: 30000,
     hookTimeout: 30000,
     pool: 'forks',
-    poolOptions: {
-      forks: {
-        singleFork: true,
-      },
-    },
+    fileParallelism: false,
     coverage: {
       provider: 'v8',
       include: ['src/**/*.ts'],
