@@ -36,12 +36,27 @@ Start the HTTP server and database services.
 solarch serve --port 8090 --dev
 ```
 
-#### `solarch init` ([src/cli.ts:L169](../../src/cli.ts#L169))
-Interactive project scaffolding wizard.
-- `--dir <path>`: Target project directory (default: `.`).
+#### `solarch init` ([src/cli.ts](../../src/cli.ts))
+Project scaffolding wizard with interactive prompts and deterministic non-interactive flags.
+- `-y, --yes`: Accept default configuration without prompting (`my-app`, SQLite, email auth, rate limiting enabled, AI tools disabled).
+- `--name <name>`: Project directory and app name (default: `my-app`).
+- `--db <provider>`: Database provider (`sqlite` | `postgres`, default: `sqlite`).
+- `--db-url <url>`: PostgreSQL database connection URL (required when `--db postgres`).
+- `--auth <providers>`: Comma-separated auth providers (`email, google, github, discord`, default: `email`).
+- `--rate-limit <true|false>`: Enable/disable rate limiting (default: `true`).
+- `--ai <true|false>`: Enable/disable AI schema assistant (default: `false`).
+- `--force`: Force scaffolding even if the target directory already exists and is non-empty.
+- `--dir <path>`: Parent directory to create the project in (default: `.`).
 
 ```bash
-solarch init --dir ./my-app
+# Interactive setup
+solarch init
+
+# Non-interactive quickstart (defaults)
+solarch init -y
+
+# Non-interactive custom project
+solarch init -y --name backend --db postgres --db-url "postgres://user:pass@localhost:5432/db"
 ```
 
 #### `solarch superuser-create` ([src/cli.ts:L66](../../src/cli.ts#L66))
@@ -60,8 +75,23 @@ Rollback `count` database migration steps (default: `1`).
 #### `solarch migrate status` ([src/cli.ts:L118](../../src/cli.ts#L118))
 Display tabular status of applied and pending migrations.
 
-#### `solarch migrate create <name>` ([src/cli.ts:L135](../../src/cli.ts#L135))
+#### `solarch migrate create <name>` ([src/cli.ts](../../src/cli.ts))
 Generate a new boilerplate JavaScript migration script.
+
+#### `solarch doctor` / `solarch check` ([src/cli.ts](../../src/cli.ts))
+Run non-destructive diagnostic health checks on Node.js runtime, configuration, database connectivity, filesystem permissions, migrations state, and superusers.
+- `--dir <path>`: Path to runtime data directory (default: `./pb_data`).
+- `--db <provider>`: Database provider override (`sqlite` | `postgres`).
+- `--db-url <url>`: Database connection string override.
+- `--json`: Output report as formatted JSON (ideal for CI/CD).
+
+```bash
+# Run diagnostics in terminal
+solarch doctor
+
+# Output as JSON in CI
+solarch doctor --json
+```
 
 ---
 

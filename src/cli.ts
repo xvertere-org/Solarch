@@ -2,9 +2,13 @@
 
 import 'dotenv/config'
 import { Command } from 'commander'
-import { Solarch } from './solarch'
 import { readFileSync } from 'fs'
 import { join } from 'path'
+import { runServe } from './cmd/serve.js'
+import { createSuperuser } from './cmd/superuser.js'
+import { runMigrateUp, runMigrateDown, runMigrateStatus, runMigrateCreate } from './cmd/migrate.js'
+import { runInit } from './cmd/init.js'
+import { runDoctor } from './cmd/doctor.js'
 
 const program = new Command()
 
@@ -61,9 +65,8 @@ program
   .action(async (opts) => {
     const config = getCliOptions(opts)
     config.hideStartBanner = opts.hideStartBanner
-
-    const app = new Solarch(config)
-    await app.start(parseInt(opts.port, 10))
+    config.port = opts.port
+    await runServe(config)
   })
 
 program
@@ -78,7 +81,6 @@ program
   .option('--db-driver <driver>', 'database driver (postgres | neon)')
   .option('--db-mode <mode>', 'database mode (tcp | http | websocket)')
   .action(async (opts) => {
-    const { createSuperuser } = await import('./cmd/superuser.js')
     const config = getCliOptions(opts)
     await createSuperuser({
       ...config,
@@ -100,7 +102,6 @@ program
   .option('--db-driver <driver>', 'database driver (postgres | neon)')
   .option('--db-mode <mode>', 'database mode (tcp | http | websocket)')
   .action(async (email, password, opts) => {
-    const { createSuperuser } = await import('./cmd/superuser.js')
     const config = getCliOptions(opts)
     await createSuperuser({
       ...config,
@@ -123,13 +124,8 @@ migrate
   .option('--db-driver <driver>', 'database driver (postgres | neon)')
   .option('--db-mode <mode>', 'database mode (tcp | http | websocket)')
   .action(async (opts) => {
-    const { Solarch } = await import('./solarch.js')
     const config = getCliOptions(opts)
-    const app = new Solarch(config)
-    await app.bootstrap()
-    await app.migrate()
-    console.log('Migrations completed.')
-    process.exit(0)
+    await runMigrateUp(config)
   })
 
 migrate
@@ -143,13 +139,8 @@ migrate
   .option('--db-driver <driver>', 'database driver (postgres | neon)')
   .option('--db-mode <mode>', 'database mode (tcp | http | websocket)')
   .action(async (count, opts) => {
-    const { Solarch } = await import('./solarch.js')
     const config = getCliOptions(opts)
-    const app = new Solarch(config)
-    await app.bootstrap()
-    await app.migrateDown(parseInt(count, 10))
-    console.log(`Rolled back ${count} migration(s).`)
-    process.exit(0)
+    await runMigrateDown(count, config)
   })
 
 migrate
@@ -162,13 +153,8 @@ migrate
   .option('--db-driver <driver>', 'database driver (postgres | neon)')
   .option('--db-mode <mode>', 'database mode (tcp | http | websocket)')
   .action(async (opts) => {
-    const { Solarch } = await import('./solarch.js')
     const config = getCliOptions(opts)
-    const app = new Solarch(config)
-    await app.bootstrap()
-    const status = await app.migrationStatus()
-    console.table(status)
-    process.exit(0)
+    await runMigrateStatus(config)
   })
 
 migrate
@@ -177,150 +163,45 @@ migrate
   .argument('<name>', 'migration name')
   .option('--dir <path>', 'migrations directory', './pb_migrations')
   .action(async (name, opts) => {
-    const fs = await import('fs')
-    const path = await import('path')
-    const dir = opts.dir
-
-    if (!fs.existsSync(dir)) {
-      fs.mkdirSync(dir, { recursive: true })
-    }
-
-    const timestamp = Date.now()
-    const filename = `${timestamp}_${name}.js`
-    const filepath = path.join(dir, filename)
-
-    const template = `module.exports = {
-  async up(app) {
-    // Add your migration here
-    // e.g. await app.db().execute("...")
-  },
-
-  async down(app) {
-    // Add rollback logic here
-    // e.g. await app.db().execute("...")
-  }
-}
-`
-    fs.writeFileSync(filepath, template)
-    console.log(`Created migration: ${filepath}`)
+    await runMigrateCreate(name, opts)
   })
 
 program
   .command('init')
   .description('scaffold a new Solarch project')
-  .option('--dir <path>', 'project directory', '.')
+  .option('-y, --yes', 'accept default configuration without prompting')
+  .option('--name <name>', 'project name (default: my-app)')
+  .option('--db <provider>', 'database provider (sqlite | postgres)')
+  .option('--db-url <url>', 'database connection URL (required for postgres)')
+  .option('--auth <providers>', 'comma-separated auth providers (email, google, github, discord)')
+  .option('--rate-limit <true|false>', 'enable/disable rate limiting (default: true)')
+  .option('--ai <true|false>', 'enable/disable AI tools (default: false)')
+  .option('--force', 'force scaffolding even if target directory is not empty')
+  .option('--dir <path>', 'parent directory to create project in')
   .action(async (opts) => {
-    const fs = await import('fs')
-    const path = await import('path')
-    const readline = await import('readline')
+    const root = program.opts()
+    const dir = opts.dir || root.dir || '.'
+    await runInit({
+      ...opts,
+      dir,
+    })
+  })
 
-    const rl = readline.createInterface({ input: process.stdin, output: process.stdout })
-    const ask = (q: string): Promise<string> => new Promise(r => rl.question(q, r))
-
-    console.log('\n⚡ Solarch Project Initializer\n')
-
-    const name = (await ask('? Project name [my-app]: ')).trim() || 'my-app'
-    const dbType = (await ask('? Database (sqlite / postgres) [sqlite]: ')).trim().toLowerCase() || 'sqlite'
-
-    let dbUrl = ''
-    if (dbType === 'postgres') {
-      dbUrl = (await ask('? PostgreSQL DATABASE_URL: ')).trim()
-      while (!dbUrl) {
-        dbUrl = (await ask('  DATABASE_URL is required for PostgreSQL: ')).trim()
-      }
-    }
-
-    const authProvidersInput = (await ask('? Auth providers (email, google, github, discord) [email]: ')).trim() || 'email'
-    const authProviders = authProvidersInput.split(',').map(s => s.trim().toLowerCase()).filter(Boolean)
-
-    const useRateLimit = (await ask('? Enable rate limiting (y/n) [y]: ')).trim().toLowerCase()
-    const enableRateLimit = useRateLimit !== 'n'
-
-    const useAi = (await ask('? Enable AI tools (y/n) [n]: ')).trim().toLowerCase()
-    const enableAi = useAi === 'y'
-
-    rl.close()
-
-    const projectDir = path.resolve(opts.dir, name)
-    const dataDir = path.join(projectDir, 'pb_data')
-    const migrationsDir = path.join(projectDir, 'pb_migrations')
-
-    fs.mkdirSync(dataDir, { recursive: true })
-    fs.mkdirSync(migrationsDir, { recursive: true })
-
-    console.log(`\n✔ Created ${name}/`)
-    console.log(`✔ Created pb_data/`)
-    console.log(`✔ Created pb_migrations/`)
-
-    const envVars: string[] = [
-      `# Solarch Configuration`,
-      `JWT_SECRET=`,
-      `SOLARCH_ENCRYPTION_KEY=`,
-    ]
-
-    if (dbType === 'postgres') {
-      envVars.push(`DATABASE_URL=${dbUrl}`)
-    }
-
-    if (authProviders.includes('google')) envVars.push(`GOOGLE_CLIENT_ID=`)
-    if (authProviders.includes('github')) envVars.push(`GITHUB_CLIENT_ID=`)
-    if (authProviders.includes('discord')) envVars.push(`DISCORD_CLIENT_ID=`)
-
-    fs.writeFileSync(path.join(projectDir, '.env'), envVars.join('\n') + '\n')
-    console.log(`✔ Created .env`)
-
-    const configLines: string[] = [
-      `export default {`,
-      `  port: 8090,`,
-      `  dataDir: './pb_data',`,
-      `  database: { type: '${dbType}'${dbUrl ? `, url: '${dbUrl}'` : ''} },`,
-      `  auth: { providers: [${authProviders.map(p => `'${p}'`).join(', ')}] },`,
-      `  rateLimiting: { enabled: ${enableRateLimit} },`,
-      `  ai: { enabled: ${enableAi} },`,
-      `}`,
-    ]
-    fs.writeFileSync(path.join(projectDir, 'solarch.config.ts'), configLines.join('\n') + '\n')
-    console.log(`✔ Created solarch.config.ts`)
-
-    const migrationTemplate = [
-      `module.exports = {`,
-      `  async up(app) {`,
-      `    // Your first migration`,
-      `  },`,
-      `  async down(app) {`,
-      `    // Rollback`,
-      `  },`,
-      `}`,
-    ]
-    fs.writeFileSync(path.join(projectDir, 'pb_migrations', `001_init.js`), migrationTemplate.join('\n') + '\n')
-    console.log(`✔ Created pb_migrations/001_init.js`)
-
-    if (dbType === 'postgres') {
-      const dc = [
-        `version: "3.8"`,
-        `services:`,
-        `  postgres:`,
-        `    image: postgres:16-alpine`,
-        `    environment:`,
-        `      POSTGRES_DB: ${name}`,
-        `      POSTGRES_USER: solarch`,
-        `      POSTGRES_PASSWORD: \${POSTGRES_PASSWORD:-change_me}`,
-        `    ports:`,
-        `      - "5432:5432"`,
-        `    volumes:`,
-        `      - pg_data:/var/lib/postgresql/data`,
-        `volumes:`,
-        `  pg_data:`,
-      ]
-      fs.writeFileSync(path.join(projectDir, 'docker-compose.yml'), dc.join('\n') + '\n')
-      console.log(`✔ Created docker-compose.yml`)
-    }
-
-    console.log(`\n⚡ Project "${name}" initialized!\n`)
-    console.log(`  Next steps:`)
-    console.log(`    cd ${name}`)
-    console.log(`    solarch serve --port 8090\n`)
-    process.exit(0)
+program
+  .command('doctor')
+  .alias('check')
+  .description('run diagnostic health checks on environment, config, database, and permissions')
+  .option('--dir <path>', 'data directory')
+  .option('--db <provider>', 'database provider (sqlite | postgres)')
+  .option('--db-url <url>', 'database connection URL')
+  .option('--database-url <url>', 'database connection URL alias')
+  .option('--db-driver <driver>', 'database driver (postgres | neon)')
+  .option('--db-mode <mode>', 'database mode (tcp | http | websocket)')
+  .option('--json', 'output diagnostics report as JSON')
+  .action(async (opts) => {
+    const config = getCliOptions(opts)
+    config.json = opts.json
+    await runDoctor(config)
   })
 
 program.parse(process.argv)
