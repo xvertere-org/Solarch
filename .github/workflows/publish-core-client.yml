@@ -1,0 +1,84 @@
+name: Publish @solarch/core-client
+
+on:
+  push:
+    tags:
+      - 'core-client-v*'
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Dry run only (do not publish)'
+        required: false
+        default: 'false'
+        type: boolean
+
+permissions:
+  contents: read
+
+jobs:
+  gate:
+    name: Publication Gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.x
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build @solarch/core-client
+        run: npm --workspace=@solarch/core-client run build
+
+      - name: TypeScript check
+        run: npm --workspace=@solarch/core-client run typecheck
+
+      - name: Unit + security + stores tests
+        run: npm --workspace=@solarch/core-client run test:unit
+
+      - name: Contract conformance tests
+        run: npm --workspace=@solarch/core-client run test:contract
+
+      - name: HTTP + integration tests
+        run: npm --workspace=@solarch/core-client run test:integration
+
+      - name: Realtime transport tests
+        run: npm --workspace=@solarch/core-client run test:realtime
+
+      - name: Package shape audit
+        run: npm --workspace=@solarch/core-client run test:package-shape
+
+      - name: Platform boundary audit
+        run: npm --workspace=@solarch/core-client run test:platform
+
+      - name: Dry-run pack (verify tarball contents)
+        run: npm --workspace=@solarch/core-client pack --dry-run
+
+  publish:
+    name: Publish to npm
+    needs: gate
+    runs-on: ubuntu-latest
+    if: ${{ github.event.inputs.dry_run != 'true' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.x
+          registry-url: 'https://registry.npmjs.org'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build @solarch/core-client
+        run: npm --workspace=@solarch/core-client run build
+
+      - name: Publish @solarch/core-client
+        run: npm --workspace=@solarch/core-client publish --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
