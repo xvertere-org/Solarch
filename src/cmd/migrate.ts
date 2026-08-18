@@ -3,7 +3,7 @@ import { SolarchConfigInput } from '../core/config_types'
 import fs from 'fs'
 import path from 'path'
 
-export interface MigrateOptions extends SolarchConfigInput {}
+export type MigrateOptions = SolarchConfigInput
 
 export async function runMigrateUp(opts: MigrateOptions = {}): Promise<void> {
   const app = new Solarch(opts)
