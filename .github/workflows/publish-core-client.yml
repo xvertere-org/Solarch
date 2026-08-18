@@ -78,7 +78,14 @@ jobs:
       - name: Build @solarch/core-client
         run: npm --workspace=@solarch/core-client run build
 
+      - name: Verify npm auth
+        run: npm whoami
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
       - name: Publish @solarch/core-client
-        run: npm --workspace=@solarch/core-client publish --access public
+        run: |
+          cd packages/core-client
+          npm publish --access public
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
