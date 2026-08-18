@@ -13,10 +13,6 @@ export default defineConfig({
       exclude: ['src/tools/jsvm/deno_worker.ts', '**/dist/**', '**/node_modules/**', '**/*.test.ts'],
     },
     pool: 'forks',
-    poolOptions: {
-      forks: {
-        singleFork: true,
-      },
-    },
+    fileParallelism: false,
   },
 })

@@ -30,7 +30,7 @@ describe('Platform Security Regression Evaluation (SmartTransit & Live Quiz Secu
       id: 'col_confidential',
       name: 'confidential_docs',
       type: 'base',
-      schema: [{ name: 'owner', type: 'relation' }, { name: 'content', type: 'text' }],
+      fields: [{ name: 'owner', type: 'relation' }, { name: 'content', type: 'text' }],
       listRule: '@request.auth.id != "" && owner = @request.auth.id',
       viewRule: '@request.auth.id != "" && owner = @request.auth.id',
     })

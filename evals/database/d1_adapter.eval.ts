@@ -41,10 +41,11 @@ describe('Cloudflare D1 Database Driver Evaluation (F-003)', () => {
         }
         return stmt
       },
-      async batch(statements: D1PreparedStatement[]) {
-        const results = []
+      async batch<T = any>(statements: D1PreparedStatement[]): Promise<{ results?: T[]; success: boolean }[]> {
+        const results: { results?: T[]; success: boolean }[] = []
         for (const s of statements) {
-          results.push(await s.all())
+          const res = await s.all<T>()
+          results.push({ results: res.results, success: res.success })
         }
         return results
       },
