@@ -12,6 +12,19 @@ export function validateIdentifiers(names: string[], label = 'identifier'): stri
   return names
 }
 
+export function validateRelationalIdentifier(path: string, label = 'identifier'): string {
+  if (!path || typeof path !== 'string') {
+    throw new Error(`Invalid ${label}: "${path}"`)
+  }
+  const parts = path.split('.')
+  for (const part of parts) {
+    if (!part || !SQL_IDENTIFIER_RE.test(part)) {
+      throw new Error(`Invalid ${label}: "${path}"`)
+    }
+  }
+  return path
+}
+
 
 export function quoteIdentifier(name: string): string {
   return `"${name.replace(/"/g, '""')}"`

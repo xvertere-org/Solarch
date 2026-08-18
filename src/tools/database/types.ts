@@ -1,6 +1,6 @@
 import { FilterAST } from '../search/filter'
 
-export type DatabaseProviderType = 'sqlite' | 'postgres' | 'mongodb'
+export type DatabaseProviderType = 'sqlite' | 'postgres' | 'mongodb' | 'd1'
 
 /**
  * PostgreSQL connection configuration. `provider` stays `'postgres'` for

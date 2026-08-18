@@ -1,5 +1,5 @@
 import { FilterAST } from './filter'
-import { validateIdentifier } from '../../utils/sql_safe'
+import { validateRelationalIdentifier } from '../../utils/sql_safe'
 
 const VALID_DIRECTIONS = new Set(['ASC', 'DESC'])
 // FIXED[M-4]: Reject sort expressions exceeding maximum safe length
@@ -18,14 +18,16 @@ export class SqliteQueryBuilder {
 
       if (node.type === 'expression') {
         const field = this.escapeField(node.field!)
-        const operator = node.operator!
+        const operator = (node.operator || '=').toLowerCase()
         const value = node.value
 
         switch (operator) {
           case '=':
+          case '==':
             params.push(value)
             return `${field} = ?`
           case '!=':
+          case '<>':
             params.push(value)
             return `${field} != ?`
           case '>':
@@ -60,18 +62,26 @@ export class SqliteQueryBuilder {
             return `${field} NOT LIKE ?`
           case 'in':
             if (Array.isArray(value)) {
+              if (value.length === 0) return '1=0'
               const placeholders = value.map(() => '?').join(', ')
               params.push(...value)
               return `${field} IN (${placeholders})`
             }
             params.push(value)
             return `${field} IN (?)`
+          case 'not in':
+            if (Array.isArray(value)) {
+              if (value.length === 0) return '1=1'
+              const placeholders = value.map(() => '?').join(', ')
+              params.push(...value)
+              return `${field} NOT IN (${placeholders})`
+            }
+            params.push(value)
+            return `${field} NOT IN (?)`
           case '?=':
             params.push(value)
             return `EXISTS (SELECT 1 FROM json_each(${field}) WHERE json_each.value = ?)`
           case '?:':
-            params.push(`%${value}%`)
-            return `EXISTS (SELECT 1 FROM json_each(${field}) WHERE CAST(json_each.value AS TEXT) LIKE ?)`
           case '?~':
             params.push(`%${value}%`)
             return `EXISTS (SELECT 1 FROM json_each(${field}) WHERE CAST(json_each.value AS TEXT) LIKE ?)`
@@ -92,24 +102,46 @@ export class SqliteQueryBuilder {
   }
 
   buildSort(sort: string): string {
-    if (!sort) return 'created DESC'
+    if (!sort || !sort.trim()) return 'created DESC'
     if (sort.length > MAX_FILTER_LENGTH) {
       throw new Error(`sort expression exceeds maximum length of ${MAX_FILTER_LENGTH} characters`)
     }
 
     const parts = sort.split(',').map(s => {
       const trimmed = s.trim()
+      if (!trimmed) {
+        throw new Error('Empty sort term in sort expression')
+      }
+
       let field: string
       let direction = 'ASC'
+
+      // Check prefix notation: -field or +field
       if (trimmed.startsWith('-')) {
-        field = trimmed.slice(1)
+        field = trimmed.slice(1).trim()
         direction = 'DESC'
       } else if (trimmed.startsWith('+')) {
-        field = trimmed.slice(1)
+        field = trimmed.slice(1).trim()
+        direction = 'ASC'
       } else {
-        field = trimmed
+        // Check SQL keyword notation: "field DESC" or "field ASC" or "field"
+        const tokens = trimmed.split(/\s+/)
+        if (tokens.length === 1) {
+          field = tokens[0]
+          direction = 'ASC'
+        } else if (tokens.length === 2) {
+          field = tokens[0]
+          const dirUpper = tokens[1].toUpperCase()
+          if (!VALID_DIRECTIONS.has(dirUpper)) {
+            throw new Error(`Invalid sort direction "${tokens[1]}" in sort expression "${trimmed}"`)
+          }
+          direction = dirUpper
+        } else {
+          throw new Error(`Invalid sort expression: "${trimmed}"`)
+        }
       }
-      validateIdentifier(field, `sort field "${field}"`)
+
+      validateRelationalIdentifier(field, `sort field "${field}"`)
       return `${field} ${direction}`
     })
 
@@ -117,7 +149,7 @@ export class SqliteQueryBuilder {
   }
 
   escapeField(field: string): string {
-    validateIdentifier(field, `query field "${field}"`)
+    validateRelationalIdentifier(field, `query field "${field}"`)
     return field
   }
 }

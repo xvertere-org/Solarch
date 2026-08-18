@@ -36,6 +36,18 @@ export const MONGODB_CAPABILITIES: DatabaseCapabilities = {
   explainOpcodes: false,
 }
 
+export const D1_CAPABILITIES: DatabaseCapabilities = {
+  transactions: false,
+  joins: true,
+  indexes: true,
+  views: true,
+  foreignKeys: true,
+  jsonOperations: true,
+  migrations: true,
+  vectorFunctions: false,
+  explainOpcodes: false,
+}
+
 export const UNSUPPORTED_CAPABILITIES: DatabaseCapabilities = {
   transactions: false,
   joins: false,
