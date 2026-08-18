@@ -79,7 +79,14 @@ jobs:
         run: npm --workspace=@solarch/core-client run build
 
       - name: Verify npm auth
-        run: npm whoami
+        run: |
+          npm whoami
+          echo "=== Token Org Check ==="
+          curl -s -H "Authorization: Bearer $NODE_AUTH_TOKEN" "https://registry.npmjs.org/-/org/solarch/user" || true
+          echo ""
+          echo "=== User Orgs Check ==="
+          curl -s -H "Authorization: Bearer $NODE_AUTH_TOKEN" "https://registry.npmjs.org/-/user/xvertere-org/org" || true
+          echo ""
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
