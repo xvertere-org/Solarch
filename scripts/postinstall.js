@@ -14,7 +14,16 @@ const banner = ORANGE + `
   ███████║╚██████╔╝███████╗██║  ██║██║  ██║╚██████╗██║  ██║
   ╚══════╝ ╚═════╝ ╚══════╝╚═╝  ╚═╝╚═╝  ╚═╝ ╚═════╝╚═╝  ╚═╝
 
-  v${pkg.version} installed  ·  run: solarch serve --dir ./data
+  ⚡ Solarch CLI v${pkg.version}
+
+  Create:
+    solarch init
+
+  Develop:
+    solarch dev
+
+  Diagnose:
+    solarch doctor
 
 ` + RESET
 

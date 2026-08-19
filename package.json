@@ -1,6 +1,6 @@
 {
   "name": "solarch",
-  "version": "0.19.5",
+  "version": "0.19.6",
   "description": "Solarch - a TypeScript backend-as-a-service with SQLite, auth, realtime, and CLI. Inspired by PocketBase.",
   "repository": {
     "type": "git",

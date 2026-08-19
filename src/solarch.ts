@@ -28,6 +28,27 @@ export class Solarch extends BaseApp {
   private _migrationRunner?: MigrationRunner
 
   constructor(config: SolarchConfigInput | ResolvedAppConfig = {}) {
+    if (!process.env.JWT_SECRET && !process.env.SOLARCH_JWT_SECRET) {
+      const candidateDirs = [
+        process.cwd(),
+        (config as any).dataDir ? path.resolve((config as any).dataDir) : null,
+        (config as any).dataDir ? path.resolve((config as any).dataDir, '..') : null,
+        (config as any).defaultDataDir ? path.resolve((config as any).defaultDataDir) : null,
+        (config as any).defaultDataDir ? path.resolve((config as any).defaultDataDir, '..') : null,
+      ].filter(Boolean) as string[]
+
+      for (const d of candidateDirs) {
+        const envFile = path.join(d, '.env')
+        if (fs.existsSync(envFile)) {
+          try {
+            const dotenv = require('dotenv')
+            dotenv.config({ path: envFile })
+            break
+          } catch {}
+        }
+      }
+    }
+
     const resolved = 'db' in config && config.db && typeof config.db === 'object'
       ? (config as ResolvedAppConfig)
       : resolveAppConfig(config as SolarchConfigInput, process.env, { loadConfigFile: true })
