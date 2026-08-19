@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest'
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import fs from 'fs'
 import path from 'path'
 import os from 'os'
@@ -224,31 +224,240 @@ describe('CLI Init Command (Hardening & Scaffolding)', () => {
     expect(fs.existsSync(path.join(targetDir, 'solarch.config.ts'))).toBe(true)
   })
 
-  it('generated project configuration is fully compatible with Solarch engine boot', async () => {
+  it('generated project configuration is fully compatible with Solarch engine boot and dotenv loading', async () => {
+    const origJwtSecret = process.env.JWT_SECRET
+    const origSolarchJwtSecret = process.env.SOLARCH_JWT_SECRET
+    try {
+      delete process.env.JWT_SECRET
+      delete process.env.SOLARCH_JWT_SECRET
+
+      await runInit({
+        yes: true,
+        dir: tempBaseDir,
+        name: 'boot-test-app',
+        exitOnComplete: false,
+      })
+
+      const projectDir = path.join(tempBaseDir, 'boot-test-app')
+      const envContent = fs.readFileSync(path.join(projectDir, '.env'), 'utf-8')
+      
+      expect(envContent).toMatch(/^JWT_SECRET=[a-f0-9]{64}$/m)
+      expect(envContent).toMatch(/^SOLARCH_JWT_SECRET=[a-f0-9]{64}$/m)
+
+      // Simulate dotenv loading when entering the generated project directory
+      const dotenv = require('dotenv')
+      const parsed = dotenv.parse(envContent)
+      for (const [k, v] of Object.entries(parsed)) {
+        process.env[k] = v as string
+      }
+
+      const app = new Solarch({
+        hideStartBanner: true,
+        defaultDev: false,
+        defaultDataDir: path.join(projectDir, 'pb_data'),
+        dbProvider: 'sqlite',
+      })
+
+      await app.bootstrap()
+      expect(app.isBootstrapped()).toBe(true)
+      expect(app.getJwtSecret()).toBe(parsed.JWT_SECRET)
+      expect(app.getJwtSecretSafe()).toBe(parsed.JWT_SECRET)
+      expect(fs.existsSync(path.join(projectDir, 'pb_data', 'data.db'))).toBe(true)
+
+      await app.db().close()
+    } finally {
+      if (origJwtSecret) process.env.JWT_SECRET = origJwtSecret
+      else delete process.env.JWT_SECRET
+      if (origSolarchJwtSecret) process.env.SOLARCH_JWT_SECRET = origSolarchJwtSecret
+      else delete process.env.SOLARCH_JWT_SECRET
+    }
+  })
+
+  it('generates files when review step is accepted in interactive flow', async () => {
+    const initPromptModule = await import('../../ui/prompts/init')
+    const reviewPromptModule = await import('../../ui/prompts/review')
+
+    const origIsTTY = process.stdin.isTTY
+    const origCI = process.env.CI
+    try {
+      process.stdin.isTTY = true
+      delete process.env.CI
+
+      const initSpy = vi.spyOn(initPromptModule, 'promptInit').mockResolvedValueOnce({
+        name: 'reviewed-app',
+        database: 'sqlite',
+        authProviders: ['email'],
+        rateLimit: true,
+        ai: false,
+        dir: tempBaseDir,
+      })
+
+      const reviewSpy = vi.spyOn(reviewPromptModule, 'promptReview').mockResolvedValueOnce(true)
+
+      await runInit({
+        dir: tempBaseDir,
+        exitOnComplete: false,
+      })
+
+      expect(initSpy).toHaveBeenCalled()
+      expect(reviewSpy).toHaveBeenCalled()
+      expect(fs.existsSync(path.join(tempBaseDir, 'reviewed-app', 'solarch.config.ts'))).toBe(true)
+    } finally {
+      process.stdin.isTTY = origIsTTY
+      if (origCI !== undefined) process.env.CI = origCI
+    }
+  })
+
+  it('cancels file generation without creating project when review is rejected', async () => {
+    const initPromptModule = await import('../../ui/prompts/init')
+    const reviewPromptModule = await import('../../ui/prompts/review')
+
+    const origIsTTY = process.stdin.isTTY
+    const origCI = process.env.CI
+    try {
+      process.stdin.isTTY = true
+      delete process.env.CI
+
+      const initSpy = vi.spyOn(initPromptModule, 'promptInit').mockResolvedValueOnce({
+        name: 'cancelled-app',
+        database: 'sqlite',
+        authProviders: ['email'],
+        rateLimit: true,
+        ai: false,
+        dir: tempBaseDir,
+      })
+
+      const reviewSpy = vi.spyOn(reviewPromptModule, 'promptReview').mockResolvedValueOnce(false)
+
+      await runInit({
+        dir: tempBaseDir,
+        exitOnComplete: false,
+      })
+
+      expect(initSpy).toHaveBeenCalled()
+      expect(reviewSpy).toHaveBeenCalled()
+      expect(fs.existsSync(path.join(tempBaseDir, 'cancelled-app'))).toBe(false)
+    } finally {
+      process.stdin.isTTY = origIsTTY
+      if (origCI !== undefined) process.env.CI = origCI
+    }
+  })
+
+  it('invokes all 4 spinner lifecycle hooks in order during file generation', async () => {
+    const { generateProjectFiles } = await import('../init/generator')
+    const events: string[] = []
+
+    const hooks = {
+      onFoldersStart: () => events.push('foldersStart'),
+      onFoldersEnd: () => events.push('foldersEnd'),
+      onSecretsStart: () => events.push('secretsStart'),
+      onSecretsEnd: () => events.push('secretsEnd'),
+      onConfigStart: () => events.push('configStart'),
+      onConfigEnd: () => events.push('configEnd'),
+      onValidationStart: () => events.push('validationStart'),
+      onValidationEnd: () => events.push('validationEnd'),
+    }
+
+    generateProjectFiles(
+      {
+        name: 'spinner-order-app',
+        database: 'sqlite',
+        authProviders: ['email'],
+        rateLimit: true,
+        ai: false,
+        dir: tempBaseDir,
+      },
+      tempBaseDir,
+      hooks
+    )
+
+    expect(events).toEqual([
+      'foldersStart',
+      'foldersEnd',
+      'secretsStart',
+      'secretsEnd',
+      'configStart',
+      'configEnd',
+      'validationStart',
+      'validationEnd',
+    ])
+  })
+
+  it('stops spinner with failure when error occurs during generation in runInit', async () => {
+    const uiModule = await import('../../ui')
+    const stopSpy = vi.fn()
+    const startSpy = vi.fn()
+    vi.spyOn(uiModule, 'spinner').mockReturnValue({
+      start: startSpy,
+      stop: stopSpy,
+      message: vi.fn(),
+    } as any)
+
+    // Pre-create non-empty directory to trigger collision error without --force
+    const collisionDir = path.join(tempBaseDir, 'collision-app')
+    fs.mkdirSync(collisionDir)
+    fs.writeFileSync(path.join(collisionDir, 'some-file.txt'), 'content')
+
+    await expect(
+      runInit({
+        yes: true,
+        name: 'collision-app',
+        dir: tempBaseDir,
+        exitOnComplete: false,
+      })
+    ).rejects.toThrow(/already exists and is not empty/)
+
+    expect(stopSpy).toHaveBeenCalledWith(
+      expect.stringContaining('Failed:')
+    )
+  })
+
+  it('successfully passes doctor validation on valid generated project', async () => {
+    const doctorModule = await import('../doctor')
+    const doctorSpy = vi.spyOn(doctorModule, 'runDoctor')
+
     await runInit({
       yes: true,
+      name: 'doctor-valid-app',
       dir: tempBaseDir,
-      name: 'boot-test-app',
       exitOnComplete: false,
     })
 
-    const projectDir = path.join(tempBaseDir, 'boot-test-app')
-    const envContent = fs.readFileSync(path.join(projectDir, '.env'), 'utf-8')
-    const jwtSecret = envContent.match(/JWT_SECRET=([a-f0-9]+)/)![1]
+    expect(doctorSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        cwd: path.join(tempBaseDir, 'doctor-valid-app'),
+        silent: true,
+        exitOnComplete: false,
+      })
+    )
+    expect(fs.existsSync(path.join(tempBaseDir, 'doctor-valid-app', 'pb_data'))).toBe(true)
+  })
 
-    const app = new Solarch({
-      hideStartBanner: true,
-      defaultDev: false,
-      defaultDataDir: path.join(projectDir, 'pb_data'),
-      dbProvider: 'sqlite',
+  it('fails init when doctor validation detects a fatal check failure', async () => {
+    const doctorModule = await import('../doctor')
+    vi.spyOn(doctorModule, 'runDoctor').mockResolvedValueOnce({
+      timestamp: new Date().toISOString(),
+      nodeVersion: process.version,
+      platform: 'darwin',
+      cwd: path.join(tempBaseDir, 'doctor-fail-app'),
+      overallStatus: 'unhealthy',
+      checks: [
+        {
+          id: 'database_connectivity',
+          name: 'Database Connectivity',
+          status: 'fail',
+          message: 'Connection refused on host localhost:5432',
+        },
+      ],
     })
 
-    process.env.SOLARCH_JWT_SECRET = jwtSecret
-
-    await app.bootstrap()
-    expect(app.isBootstrapped()).toBe(true)
-    expect(fs.existsSync(path.join(projectDir, 'pb_data', 'data.db'))).toBe(true)
-
-    await app.db().close()
+    await expect(
+      runInit({
+        yes: true,
+        name: 'doctor-fail-app',
+        dir: tempBaseDir,
+        exitOnComplete: false,
+      })
+    ).rejects.toThrow(/Project generation failed validation/)
   })
 })

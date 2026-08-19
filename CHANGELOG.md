@@ -1,6 +1,38 @@
 # Changelog
 
-## v0.16.0 — Deprecate Torque & Agent Workflow System (2026-07-14)
+## v0.19.5 — Solarch CLI Developer Platform & Workflow Suite (2026-08-19)
+
+### Highlights & Major Additions
+
+- **Project Init Experience 2.0 & Starter Templates** (`solarch init` / `solarch template`):
+  - Decoupled starter architecture templates: `minimal`, `api`, `realtime`, `saas`, `ai`.
+  - Configuration presets: `development`, `production`, `testing`.
+  - `--dry-run` mode to preview scaffolding file plans without modifying disk.
+  - Template exploration tooling: `solarch template list` and `solarch template info <name>`.
+  - Interactive `@clack/prompts` intent picker, live configuration cards, and progress spinners.
+- **Development Server & Daily Workflow Tooling** (`solarch dev`, `solarch logs`, `solarch routes`, `solarch generate`):
+  - `solarch dev`: Primary local development runner with preflight doctor diagnostics, file system watching, and interactive runtime hotkeys (`[r]` reload, `[l]` logs, `[d]` doctor, `[q]` quit).
+  - `solarch logs`: Application log streaming, tailing, level filtering, and JSON output formatting.
+  - `solarch routes`: Complete catalog inspection of REST API and Realtime endpoints with JSON export.
+  - `solarch generate`: Code scaffolding for `collection` schemas, `migration` scripts, and `hook` handlers.
+- **Environment & Configuration Management** (`solarch env`, `solarch config`):
+  - `solarch env check`: Validates critical environment variables, missing secrets, and insecure defaults.
+  - `solarch env generate`: Generates production-ready `.env` files with 256-bit cryptographic entropy.
+  - `solarch env show`: Displays active environment variables with automated secret masking.
+  - `solarch config show | validate | set`: Inspect, validate schema invariants, and update TypeScript configuration files.
+- **Diagnostics, Inspection & Project Lifecycle** (`solarch doctor`, `solarch status`, `solarch inspect`, `solarch project`):
+  - `solarch doctor` (`solarch check`): Fast non-destructive health diagnostics across runtime, config, database, migrations, and superuser accounts.
+  - `solarch status`: Live status metrics on database engines, table counts, record counts, and storage.
+  - `solarch inspect`: Deep inspection for project structure, database drivers, active features, and package dependencies.
+  - `solarch project`: Project lifecycle tools (`project path`, `project clean`, `project reset`).
+- **Unified CLI Design System & UX Consolidation**:
+  - Grouped help formatting categorized by functional area (`PROJECT`, `DEVELOPMENT`, `CONFIGURATION`, `DATABASE`, `INSPECTION`, `ACCOUNT`).
+  - Interactive launcher when invoked without arguments in TTY environments.
+  - Levenshtein-distance typo suggestions for unrecognized commands.
+  - Standardized ANSI theme, progress spinners, status badges, and sanitized error boundaries.
+  - Command aliases: `solarch create` (`init`), `solarch check` (`doctor`), `solarch about` (`info`), `solarch ls` (`routes`).
+  - Detailed environment and platform version reporting via `solarch version`.
+
 
 ### Breaking Changes
 

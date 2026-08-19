@@ -30,7 +30,7 @@ export class Solarch extends BaseApp {
   constructor(config: SolarchConfigInput | ResolvedAppConfig = {}) {
     const resolved = 'db' in config && config.db && typeof config.db === 'object'
       ? (config as ResolvedAppConfig)
-      : resolveAppConfig(config as SolarchConfigInput)
+      : resolveAppConfig(config as SolarchConfigInput, process.env, { loadConfigFile: true })
     super(resolved)
     this.hideStartBanner = resolved.hideStartBanner
     // FIXED[L-4]: Load version from package.json instead of hardcoding

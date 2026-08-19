@@ -88,19 +88,38 @@ Admin UI:  http://localhost:8090/_/
 ---
  
 ## CLI Commands
- 
+
+The Solarch CLI provides a complete backend development environment:
+
 ```bash
-solarch serve [options]
-  --port, -p   Port to listen on (default: 8090)
-  --dev        Development mode
-  --dir        Data directory (default: ./pb_data)
- 
-solarch superuser-create <email> <password>
- 
-solarch migrate up
-solarch migrate down [count]
-solarch migrate status
-solarch migrate create <name>
+# Project Creation & Templates
+solarch init                           # Interactive TUI project wizard
+solarch init --template saas           # Initialize SaaS architecture (minimal, api, realtime, saas, ai)
+solarch template list                  # Explore starter architecture templates
+solarch template info saas             # Inspect template features and migrations
+
+# Development & Daily Workflow
+solarch dev                            # Development server with preflight checks, hotkeys & watcher
+solarch serve                          # Production runtime server
+solarch logs                           # Stream runtime application logs
+solarch routes                         # Inspect registered REST & realtime routes
+solarch generate collection <name>     # Generate collection schema definition
+solarch generate migration <name>      # Generate migration script
+solarch generate hook <name>           # Generate lifecycle hook
+
+# Configuration & Environment
+solarch config show                    # View loaded configuration
+solarch config validate                # Validate configuration without running
+solarch env check                      # Verify environment variables
+solarch env generate                   # Generate .env with cryptographic secrets
+
+# Diagnostics & Lifecycle
+solarch doctor                         # Diagnose runtime, config, database, and permissions
+solarch status                         # Inspect database metrics and storage usage
+solarch inspect project                # Deep inspect project structure and health
+solarch project clean                  # Clean build cache and temporary files
+solarch migrate up                     # Execute pending database migrations
+solarch superuser                      # Manage administrator accounts
 ```
  
 ---

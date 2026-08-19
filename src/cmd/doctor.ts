@@ -6,8 +6,11 @@ import { SolarchConfigInput } from '../core/config_types.js'
 import { resolveAppConfig, loadConfigFile } from '../core/config_loader.js'
 import { hasSuperuser } from './superuser.js'
 
+import dotenv from 'dotenv'
+
 export interface DoctorOptions extends SolarchConfigInput {
   json?: boolean
+  silent?: boolean
   exitOnComplete?: boolean
   cwd?: string
 }
@@ -32,6 +35,19 @@ export interface DoctorReport {
 export async function runDoctor(opts: DoctorOptions = {}): Promise<DoctorReport> {
   const cwd = opts.cwd || process.cwd()
   const checks: DoctorCheckResult[] = []
+  const envSnapshot = { ...process.env }
+
+  // Load target directory .env if present
+  const envPath = path.join(cwd, '.env')
+  const hasEnvFile = fs.existsSync(envPath)
+  if (hasEnvFile) {
+    try {
+      const parsedEnv = dotenv.parse(fs.readFileSync(envPath, 'utf-8'))
+      for (const [k, v] of Object.entries(parsedEnv)) {
+        process.env[k] = v
+      }
+    } catch {}
+  }
 
   // 1. Node.js Runtime Check
   const nodeVer = process.version
@@ -81,8 +97,6 @@ export async function runDoctor(opts: DoctorOptions = {}): Promise<DoctorReport>
       message: `Failed to parse config file: ${err.message}`,
     })
   }
-
-  const hasEnvFile = fs.existsSync(path.join(cwd, '.env'))
 
   if (!checks.some(c => c.id === 'config_file')) {
     if (hasConfigFile) {
@@ -278,29 +292,40 @@ export async function runDoctor(opts: DoctorOptions = {}): Promise<DoctorReport>
   }
 
   // Output formatting
-  if (opts.json) {
-    console.log(JSON.stringify(report, null, 2))
-  } else {
-    console.log('\n⚡ Solarch Doctor - Environment & System Diagnostics\n')
+  if (!opts.silent) {
+    if (opts.json) {
+      console.log(JSON.stringify(report, null, 2))
+    } else {
+      console.log('\n⚡ Solarch Doctor - Environment & System Diagnostics\n')
 
-    for (const check of checks) {
-      let icon = '✔'
-      if (check.status === 'warn') icon = '⚠'
-      if (check.status === 'fail') icon = '✖'
+      for (const check of checks) {
+        let icon = '✔'
+        if (check.status === 'warn') icon = '⚠'
+        if (check.status === 'fail') icon = '✖'
 
-      console.log(`  [${icon}] ${check.name}: ${check.message}`)
-      if (check.details) {
-        console.log(`      ${check.details}`)
+        console.log(`  [${icon}] ${check.name}: ${check.message}`)
+        if (check.details) {
+          console.log(`      ${check.details}`)
+        }
+      }
+
+      console.log('')
+      if (overallStatus === 'healthy') {
+        console.log('✔ All systems operational.\n')
+      } else if (overallStatus === 'warning') {
+        console.log('⚠ System operational with warnings (see details above).\n')
+      } else {
+        console.log('✖ Diagnostic check failed with one or more fatal issues.\n')
       }
     }
+  }
 
-    console.log('')
-    if (overallStatus === 'healthy') {
-      console.log('✔ All systems operational.\n')
-    } else if (overallStatus === 'warning') {
-      console.log('⚠ System operational with warnings (see details above).\n')
+  // Restore process.env so doctor checks on a target cwd do not leak
+  for (const key of Object.keys(process.env)) {
+    if (!(key in envSnapshot)) {
+      delete process.env[key]
     } else {
-      console.log('✖ Diagnostic check failed with one or more fatal issues.\n')
+      process.env[key] = envSnapshot[key]
     }
   }
 

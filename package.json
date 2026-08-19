@@ -1,6 +1,6 @@
 {
   "name": "solarch",
-  "version": "0.19.1",
+  "version": "0.19.5",
   "description": "Solarch - a TypeScript backend-as-a-service with SQLite, auth, realtime, and CLI. Inspired by PocketBase.",
   "repository": "https://github.com/xvertere-org/Solarch",
   "homepage": "https://solarch.in/",
@@ -52,6 +52,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@clack/prompts": "^1.7.0",
     "@neondatabase/serverless": "^1.1.0",
     "archiver": "^8.0.0",
     "bcryptjs": "^2.4.3",
@@ -108,4 +109,3 @@
     "node": ">=20.0.0"
   }
 }
-
