@@ -1,5 +1,9 @@
 # Solarch ☀️
 
+<p align="center">
+  <img src="./pb_public/solarch-banner.png" alt="Solarch Banner" width="800" />
+</p>
+
 <h3 align="center">
 The developer operating system for building production-ready backend applications.
 </h3>
