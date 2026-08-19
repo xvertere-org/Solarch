@@ -187,7 +187,6 @@ solarch dev
 │
 ◇  Runtime Endpoints
 │  • REST API:  http://localhost:8090/api/
-│  • Admin UI:  http://localhost:8090/_/
 │  • Realtime:  ws://localhost:8090/realtime
 │  • Events:    http://localhost:8090/api/realtime
 │

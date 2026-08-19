@@ -74,16 +74,13 @@ Solarch v${this.version}
 Database: ${dbSummary}
 Server started at http://localhost:${port}
 - REST API: http://localhost:${port}/api/
-- Admin UI: http://localhost:${port}/_/
+- Realtime: ws://localhost:${port}/realtime
 `)
       if (!hasAdmin) {
         console.log(`
 ========================================
   NO SUPERUSER FOUND
-  Complete installation at:
-  ${installerUrl}
-  
-  Or run: ./solarch superuser-create EMAIL PASS
+  Run: solarch superuser
 ========================================
 `)
       }
