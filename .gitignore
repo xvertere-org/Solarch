@@ -22,7 +22,7 @@ uploads/
 
 # Logs
 *.log
-logs/
+/logs/
 
 # Environment Variables
 .env
