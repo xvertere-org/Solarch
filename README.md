@@ -117,39 +117,124 @@ my-app/
 
 # Developer Workflow
 
-Solarch provides a complete local development environment.
+Solarch provides a complete, cohesive terminal development environment from initial scaffold to production verification.
 
-## Start Development
+---
+
+## 1. Interactive Project Creation
+
+```bash
+solarch init
+```
+
+```text
+┌  ⚡ Create Solarch Application
+│
+◇  What are you building?
+│  ● SaaS Application (Multi-tenant orgs, OAuth2, audit logs, billing hooks)
+│
+◇  Project name:
+│  my-saas-platform
+│
+◇  Database provider:
+│  ● PostgreSQL (Production-grade relational backend)
+│
+◇  Architecture Review:
+│  ┌────────────────────────────────────────────────────────┐
+│  │ Name:       my-saas-platform                           │
+│  │ Template:   saas (SaaS Application)                    │
+│  │ Database:   PostgreSQL                                 │
+│  │ Auth:       Email, Google, GitHub OAuth2               │
+│  │ Realtime:   Dual-protocol (WebSocket + SSE)            │
+│  │ Hooks:      billing.ts webhook lifecycle               │
+│  │ Security:   256-bit entropy keys (0o600 .env)          │
+│  └────────────────────────────────────────────────────────┘
+│
+◇  Generate project?
+│  ● Yes, initialize
+│
+◇  Project structure ready
+◇  Cryptographic secrets generated
+◇  Configuration and migrations created
+◇  Baseline health check passed
+│
+└  ⚡ Solarch Project Created!
+
+   Next steps:
+     cd my-saas-platform
+     solarch dev
+```
+
+---
+
+## 2. Interactive Development Server
 
 ```bash
 solarch dev
 ```
 
-Features:
+```text
+┌  ⚡ Solarch Dev Server
+│
+◇  Pre-flight Diagnostics
+│  ✔ Node.js Runtime: v22.22.3 (compatible: >= 20.0.0)
+│  ✔ Configuration: Loaded solarch.config.ts (with .env)
+│  ✔ Database: Connected to PostgreSQL (pool: 10 connections)
+│  ✔ Migrations: 3 applied, 0 pending
+│
+◇  File Watcher Active
+│  Watching for changes: solarch.config.ts, pb_migrations/, src/hooks/
+│
+◇  Runtime Endpoints
+│  • REST API:  http://localhost:8090/api/
+│  • Admin UI:  http://localhost:8090/_/
+│  • Realtime:  ws://localhost:8090/realtime
+│  • Events:    http://localhost:8090/api/realtime
+│
+◇  Interactive Controls:
+│  [r] Hot Restart   [l] Stream Logs   [d] Run Doctor   [q] Quit
+│
+└  ⚡ Ready for development
+```
 
-- automatic health validation
-- file watching
-- hot restart
-- runtime controls
-- development logs
+---
 
-Example:
+## 3. Automated System Diagnostics
+
+```bash
+solarch doctor
+```
 
 ```text
-⚡ Starting Solarch Development Server
+┌  ⚡ Solarch Doctor - Environment & System Diagnostics
+│
+│  [✔] Node.js Runtime:        v22.22.3 (compatible: >= 20.0.0)
+│  [✔] Configuration File:    Loaded solarch.config.ts (with .env)
+│  [✔] Data Directory:         pb_data (read/write verified)
+│  [✔] Database Connectivity:  Connected to PostgreSQL
+│  [✔] Database Migrations:    3 applied, 0 pending
+│  [✔] Superuser Status:       1 active administrator account
+│
+└  ✔ System operational: All 6 checks passed.
+```
 
-✔ Environment validated
-✔ Database connected
-✔ Configuration loaded
+---
 
-Local:
-http://localhost:8090
+## 4. Resource Generation & Schema Migrations
 
-Controls:
-r  restart
-l  logs
-d  doctor
-q  quit
+```bash
+solarch generate migration add_team_invites
+solarch generate hook stripe_billing
+solarch migrate up
+```
+
+```text
+┌  ⚡ Solarch Generator
+│
+◇  Scaffolded migration: pb_migrations/1787116740_add_team_invites.js
+◇  Scaffolded hook:      src/hooks/stripe_billing.ts
+│
+└  ✔ Resources generated. Run "solarch migrate up" to apply changes.
 ```
 
 ---
@@ -595,7 +680,7 @@ Areas:
 
 ---
 
-## Final Positioning Statement
+## Final Statements
 
 **Solarch is not a library you install.**
 
