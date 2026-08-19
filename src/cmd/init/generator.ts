@@ -127,7 +127,7 @@ export function generateProjectFiles(
     }
   }
 
-  fs.writeFileSync(path.join(projectDir, '.env'), envVars.join('\n') + '\n')
+  fs.writeFileSync(path.join(projectDir, '.env'), envVars.join('\n') + '\n', { mode: 0o600 })
   filesCreated.push('.env')
   hooks?.onSecretsEnd?.()
 
