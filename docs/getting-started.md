@@ -1,159 +1,193 @@
----
-title: "Getting Started"
-description: "Install, configure, and start Solarch BaaS in under 5 minutes."
-slug: "getting-started"
----
+# Getting Started with Solarch
 
-# Getting Started
+Welcome to **Solarch** — a lightweight, modular backend engine designed for developers who want the simplicity of SQLite with an instant upgrade path to scalable PostgreSQL.
 
-Solarch is a TypeScript Backend-as-a-Service (BaaS) providing SQLite database storage, authentication, file storage, realtime subscriptions, JS hooks, and AI features in a single binary or NPM package. Use it to launch backends for web and mobile applications quickly without managing complex cloud infrastructure.
-
-## Requirements
-
-- **Node.js**: `v20.0.0` or higher ([package.json:L76](../package.json#L76))
-- **Operating System**: macOS, Linux, or Windows
+This guide walks you through your first 10 minutes with Solarch: installing the CLI, scaffolding a project, starting the development server, exploring endpoints, and validating system health.
 
 ---
 
-## Step 1: Install Solarch
+## 1. Prerequisites
 
-Choose one of three installation methods depending on your workflow.
+- **Node.js**: `v20.0.0` or higher (`node -v`)
+- **Package Manager**: `npm`, `pnpm`, or `yarn`
+- **Database (optional)**: SQLite is embedded out-of-the-box with zero setup. PostgreSQL is optional.
 
-### Option A: Global CLI (Recommended for development)
+---
+
+## 2. Installation
+
+Install the Solarch CLI globally via npm:
 
 ```bash
 npm install -g solarch
 ```
 
-### Option B: Local Library (For TypeScript/Node integration)
+Verify your installation:
 
 ```bash
-npm install solarch
+solarch version
 ```
 
-### Option C: Docker Container
+Output:
+```text
+⚡ Solarch CLI
 
-```dockerfile
-FROM node:20-alpine
-RUN npm install -g solarch
-EXPOSE 8090
-CMD ["solarch", "serve", "--port", "8090"]
+Version:
+0.19.5
+
+Node:
+v22.22.3
+
+Platform:
+darwin-arm64
+```
+
+> **Note:** You can also run Solarch directly without global installation using `npx solarch <command>`.
+
+---
+
+## 3. Creating Your First Project
+
+Solarch features an interactive initialization wizard with starter templates and configuration presets.
+
+### Interactive Creation
+
+Run the `init` command in your terminal:
+
+```bash
+solarch init
+```
+
+The interactive wizard guides you through:
+1. **Starter Template**: Minimal, API Backend, Realtime, Full SaaS, or AI Backend.
+2. **Project Name**: Name of your project directory (e.g., `my-backend`).
+3. **Database Provider**: SQLite (zero-config file database) or PostgreSQL.
+4. **Authentication Providers**: Email/password, Google, GitHub, Discord.
+5. **Security & Rate Limiting**: Enable/disable rate limiting middleware.
+6. **AI Tools**: Enable/disable integrated LLM tools and vector embeddings.
+7. **Review & Confirmation**: Review your architectural plan before generating files.
+
+### Non-Interactive Creation (CLI Flags)
+
+You can also scaffold non-interactively using CLI flags:
+
+```bash
+# REST API with SQLite
+solarch init --name my-api --template api --db sqlite --yes
+
+# SaaS Backend with PostgreSQL
+solarch init --name my-saas --template saas --db postgres --db-url "postgres://user:pass@localhost:5432/mydb" --yes
+
+# Preview scaffolding plan without writing to disk
+solarch init --template realtime --dry-run
 ```
 
 ---
 
-## Step 2: Initialize a Project
+## 4. Understanding the Project Structure
 
-Use the `init` command to scaffold a project directory with default directories and configuration files.
-
-```bash
-solarch init --dir ./my-app
-```
-
-### Interactive Prompts
+A newly initialized Solarch project contains the following architecture:
 
 ```text
-⚡ Solarch Project Initializer
-
-? Project name [my-app]: my-app
-? Database (sqlite / postgres) [sqlite]: sqlite
-? Auth providers (email, google, github, discord) [email]: email
-? Enable rate limiting (y/n) [y]: y
-? Enable AI tools (y/n) [n]: n
+my-api/
+├── solarch.config.ts      # Main backend configuration (port, db, auth, rate limiting)
+├── .env                   # Environment secrets (JWT secret, encryption keys)
+├── pb_data/               # Embedded SQLite database files (WAL mode)
+│   ├── data.db
+│   └── auxiliary.db
+├── pb_migrations/         # Database schema migrations
+│   ├── 001_create_users.js
+│   └── 002_create_posts.js
+└── src/
+    └── hooks/             # Custom lifecycle and webhook handlers (if applicable)
 ```
 
-### Verification
-Check that `my-app` was created containing:
-- `pb_data/`: SQLite data directory ([src/cli.ts:L208](../src/cli.ts#L208))
-- `pb_migrations/`: Database migrations directory ([src/cli.ts:L209](../src/cli.ts#L209))
-- `.env`: Environment variables ([src/cli.ts:L229](../src/cli.ts#L229))
-- `solarch.config.ts`: Main project config ([src/cli.ts:L242](../src/cli.ts#L242))
+### Key Files Explained:
+- **`solarch.config.ts`**: Declarative TypeScript configuration defining port, database connections, authentication providers, and feature flags.
+- **`.env`**: Cryptographically secure secrets (`SOLARCH_JWT_SECRET`, `SOLARCH_ENCRYPTION_KEY`) generated automatically during project creation.
+- **`pb_migrations/`**: Plain JavaScript/TypeScript migration files with reversible `up(app)` and `down(app)` methods.
+- **`pb_data/`**: Runtime storage for SQLite databases, local backups, and cache logs.
 
 ---
 
-## Step 3: Create a Superuser Account
+## 5. Starting the Development Server
 
-Before serving requests, create an administrative superuser account.
+Navigate into your project directory and launch the interactive development server:
 
 ```bash
-solarch superuser-create admin SecretPassword123 --dir ./pb_data
+cd my-api
+solarch dev
 ```
 
-### Expected Terminal Output
+The dev server starts with:
+- **Instant Hot Reloading**: Watches `solarch.config.ts`, `.env`, migrations, and hook files.
+- **Diagnostics Check**: Pre-flight environment and database health check on startup.
+- **Interactive Keyboard Controls**:
+  - Press <kbd>r</kbd> to restart the server.
+  - Press <kbd>d</kbd> to run doctor diagnostics.
+  - Press <kbd>c</kbd> to clear the console.
+  - Press <kbd>q</kbd> to quit gracefully.
+
 ```text
-Superuser admin created successfully.
+⚡ Solarch Dev Server v0.19.5
+
+  Local:   http://localhost:8090
+  Admin:   http://localhost:8090/_/
+  REST:    http://localhost:8090/api/
+  Health:  http://localhost:8090/api/health
+
+[INFO] Database connected (sqlite, WAL mode)
+[INFO] 2 migration(s) ready
+[INFO] Server listening on http://127.0.0.1:8090
 ```
 
 ---
 
-## Step 4: Start the Server
+## 6. Inspecting API Routes
 
-Start the Solarch server on port `8090`.
+To explore all automatically generated REST endpoints, authentication routes, and realtime subscriptions:
 
 ```bash
-solarch serve --port 8090 --dev --dir ./pb_data
+solarch routes
 ```
 
-### Expected Terminal Output
+This displays a structured table of available endpoints:
+- `GET /api/collections/:c/records` (List records)
+- `POST /api/collections/:c/records` (Create record)
+- `POST /api/collections/:c/auth-with-password` (Authenticate user)
+- `GET /api/realtime` (Server-Sent Events subscriptions)
+- `WS /realtime` (WebSocket subscriptions)
+
+---
+
+## 7. Running Diagnostics
+
+Validate the health of your environment, configuration, database connectivity, and permissions anytime using `solarch doctor`:
+
+```bash
+solarch doctor
+```
+
+Output:
 ```text
-Solarch v0.15.6
-Server started at http://localhost:8090
-- REST API: http://localhost:8090/api/
-- Admin UI: http://localhost:8090/_/
+⚡ Solarch Doctor Diagnostics
+
+  ✔ Node.js Runtime: v22.22.3 (compatible: >= 20.0.0)
+  ✔ Configuration File: Loaded solarch.config.ts (with .env)
+  ✔ Data Directory: pb_data (read/write verified)
+  ✔ Database Connectivity: Connected to sqlite (WAL mode)
+  ✔ Database Migrations: 2 applied, 0 pending
+  ✔ Superuser Status: 1 superuser active
+
+Status: Healthy (6/6 checks passed)
 ```
 
 ---
 
-## Step 5: Make Your First API Call
+## 8. Next Steps
 
-Verify that the server is operational by requesting server health status.
-
-```bash
-curl -X GET http://localhost:8090/api/health
-```
-
-### Expected Output
-```json
-{
-  "code": 200,
-  "message": "API is healthy",
-  "data": {
-    "canRead": true,
-    "canWrite": true
-  }
-}
-```
-
----
-
-## Programmatic Usage Example
-
-You can also run Solarch directly within your Node.js/TypeScript code:
-
-```typescript
-import { Solarch } from 'solarch'
-
-const app = new Solarch({
-  defaultDev: true,
-  defaultDataDir: './pb_data',
-})
-
-async function main() {
-  await app.start(8090)
-  console.log('Solarch server started programmatically')
-}
-
-main().catch(console.error)
-```
-
----
-
-## Common Errors
-
-### Error: `DATABASE_URL is required for PostgreSQL`
-- **Cause**: Selected `postgres` database during `solarch init` without providing a `DATABASE_URL` ([src/cli.ts:L188](../src/cli.ts#L188)).
-- **Fix**: Provide a valid connection string like `postgres://user:password@localhost:5432/dbname` or press Enter to accept `sqlite`.
-
-### Error: `port in use` / `EADDRINUSE`
-- **Cause**: Port `8090` is occupied by another process.
-- **Fix**: Specify an alternate port using `--port 8095` ([src/cli.ts:L31](../src/cli.ts#L31)).
+Now that your Solarch backend is running:
+- **Explore Starter Templates**: Read the [Templates Guide](templates.md) to learn about SaaS, Realtime, and AI architectures.
+- **Scaffold Resources**: Use `solarch generate collection <name>` to create new collections. See [Development Workflow](development.md).
+- **Manage Migrations**: Learn about database migrations in [Migrations Guide](migrations.md).
+- **CLI Commands**: View the full command catalog in [CLI Reference](cli-reference.md).

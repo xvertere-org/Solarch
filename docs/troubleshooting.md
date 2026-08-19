@@ -1,69 +1,140 @@
----
-title: "Troubleshooting & FAQ"
-description: "Resolve common deployment, CORS, database, and sandbox execution issues."
-slug: "troubleshooting"
----
+# Troubleshooting & Diagnostics Playbook
 
-# Troubleshooting & FAQ
-
-Solutions for common operational and deployment issues with Solarch.
+This playbook provides solutions to common development, database, configuration, and environment issues encountered when working with Solarch.
 
 ---
 
-## 1. Database Lock & WAL File Issues
+## 1. Primary Diagnostic: `solarch doctor`
 
-### Problem
-Solarch database files (`pb_data/data.db-wal` or `pb_data/data.db-shm`) grow excessively large or report `SQLITE_BUSY: database is locked`.
-
-### Root Cause
-SQLite operates in Write-Ahead Logging (WAL) mode. If the process crashes uncleanly, WAL checkpoints may be delayed.
-
-### Resolution
-- Graceful shutdown handles WAL truncation automatically ([src/solarch.ts:L108](../src/solarch.ts#L108)). Ensure signals like `SIGINT` or `SIGTERM` are sent to the process.
-- If locked during CLI operations, ensure no other instance of `solarch serve` is accessing `pb_data` simultaneously.
-
----
-
-## 2. CORS Errors in Web Applications
-
-### Problem
-Browser requests to `http://localhost:8090/api/` fail with `Cross-Origin Request Blocked`.
-
-### Root Cause
-CORS domain restrictions in production mode ([src/apis/middlewares_cors.ts:L5](../src/apis/middlewares_cors.ts#L5)).
-
-### Resolution
-Set `CORS_ALLOWED_ORIGINS` environment variable to match your client web application domain:
+Whenever you encounter unexpected behavior, run the built-in diagnostic tool first:
 
 ```bash
-export CORS_ALLOWED_ORIGINS="http://localhost:3000,https://myapp.com"
-solarch serve --port 8090
+solarch doctor
+```
+
+The doctor engine performs 6 automated health checks:
+
+| Check ID | Component | What It Validates |
+|---|---|---|
+| `node_runtime` | Node.js | Runtime version compatibility (`>= 20.0.0`) |
+| `config_file` | Configuration | Existence and parse validity of `solarch.config.ts` |
+| `data_directory` | Filesystem | Read and write permissions on `pb_data/` directory |
+| `database_connectivity` | Database | Active SQLite WAL connection or PostgreSQL pool handshake |
+| `migrations` | Schema | Applied vs pending migrations in `pb_migrations/` |
+| `superuser` | Admin Accounts | Presence of at least one active superuser account |
+
+---
+
+## 2. Common Issues & Solutions
+
+### Port Collision (`EADDRINUSE: address already in use :::8090`)
+
+**Symptom**: Server fails to start with `Error: listen EADDRINUSE: address already in use :::8090`.
+
+**Solutions**:
+1. Specify an alternative port:
+   ```bash
+   solarch dev --port 8091
+   ```
+2. Or update `solarch.config.ts`:
+   ```typescript
+   export default {
+     port: 8091,
+   }
+   ```
+3. Or identify and terminate the process holding port 8090:
+   ```bash
+   lsof -i :8090
+   kill -9 <PID>
+   ```
+
+---
+
+### Database Locked / SQLite Busy (`SQLITE_BUSY: database is locked`)
+
+**Symptom**: SQLite queries fail under concurrent write load.
+
+**Solutions**:
+1. Solarch enables **Write-Ahead Logging (WAL)** mode automatically. Ensure no external processes or GUI viewers have opened the `.db` file with an exclusive lock.
+2. Check file permissions on `pb_data/`:
+   ```bash
+   chmod -R 755 ./pb_data
+   ```
+3. If running in multi-instance production, migrate to PostgreSQL:
+   ```bash
+   solarch config set database.type postgres
+   ```
+
+---
+
+### PostgreSQL Connection Failure (`ECONNREFUSED` / `password authentication failed`)
+
+**Symptom**: PostgreSQL handshake fails when starting server or running migrations.
+
+**Solutions**:
+1. Test your connection string with doctor:
+   ```bash
+   solarch doctor --db postgres --db-url "postgres://user:pass@localhost:5432/dbname"
+   ```
+2. Verify that your PostgreSQL server is active:
+   ```bash
+   # If using Docker Compose (e.g. SaaS template)
+   docker-compose up -d postgres
+   ```
+3. Ensure `DATABASE_URL` in `.env` is correctly formatted:
+   ```dotenv
+   DATABASE_URL=postgres://solarch:password@localhost:5432/solarch_db
+   ```
+
+---
+
+### Missing Environment Secrets Warning
+
+**Symptom**: `solarch doctor` reports `Missing required secret: SOLARCH_JWT_SECRET`.
+
+**Solution**:
+Run the automatic secret generator to populate missing cryptographic keys safely:
+```bash
+solarch env generate
 ```
 
 ---
 
-## 3. Account Lockouts Due to Failed Logins
+### Unapplied Migrations Warning
 
-### Problem
-Authentication requests return `429 Account temporarily locked. Try again later.`
+**Symptom**: `solarch status` or `solarch doctor` indicates `X pending migrations`.
 
-### Root Cause
-The security lockout module ([src/utils/lockout.ts](../src/utils/lockout.ts)) tracks IP and identity failed login attempts to prevent brute force attacks.
-
-### Resolution
-Wait 15 minutes for the window to reset, or restart the server process to clear transient in-memory lockout trackers.
+**Solution**:
+Apply the pending schema migrations:
+```bash
+solarch migrate up
+```
 
 ---
 
-## 4. Deno Sandbox Not Found Warning
+### Superuser Account Not Configured
 
-### Problem
-Terminal displays warning: `[JSVM] JSVM_SANDBOX_MODE=isolated but Deno is not available. Agent code/condition nodes will fall back to legacy vm.Script execution.`
+**Symptom**: `solarch doctor` warns: `No superuser account exists`.
 
-### Root Cause
-`JSVM_SANDBOX_MODE=isolated` was specified, but Deno executable is not in system `PATH` ([src/tools/jsvm/jsvm.ts:L46](../src/tools/jsvm/jsvm.ts#L46)).
+**Solution**:
+Create an administrator account using the interactive command:
+```bash
+solarch superuser
+```
+Or shorthand:
+```bash
+solarch superuser-create admin@example.com MySecretPassword123!
+```
 
-### Resolution
-1. Install Deno: `curl -fsSL https://deno.land/install.sh | sh`
-2. Ensure Deno directory is added to system `PATH`.
-3. Or unset `JSVM_SANDBOX_MODE` to run in default legacy V8 VM mode.
+---
+
+### Corrupted Local State
+
+**Symptom**: Development database is in an inconsistent state during local testing.
+
+**Solution**:
+Reset your local development state:
+```bash
+solarch project reset --yes
+```
+This clears `pb_data/`, regenerates fresh databases, and re-applies all migrations.
