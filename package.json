@@ -2,7 +2,10 @@
   "name": "solarch",
   "version": "0.19.5",
   "description": "Solarch - a TypeScript backend-as-a-service with SQLite, auth, realtime, and CLI. Inspired by PocketBase.",
-  "repository": "https://github.com/xvertere-org/Solarch",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/xvertere-org/Solarch.git"
+  },
   "homepage": "https://solarch.in/",
   "bugs": "https://github.com/xvertere-org/Solarch/issues",
   "license": "Apache-2.0",
