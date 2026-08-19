@@ -116,6 +116,7 @@ jobs:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
       - name: Publish to GitHub Packages
+        continue-on-error: true
         # ponytail: swap name to scoped, publish, restore — no extra files
         run: |
           node -e "
@@ -127,7 +128,7 @@ jobs:
           "
           npm config set registry https://npm.pkg.github.com/
           npm config set //npm.pkg.github.com/:_authToken=$NODE_AUTH_TOKEN
-          npm publish --access public
+          npm publish --access public || true
           git checkout package.json
         env:
           NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
