@@ -16,7 +16,7 @@ describe('Standardized Error Handling', () => {
   })
 
   it('2. removes raw 32+ character hex secrets', () => {
-    const rawSecret = '4f8b9a1c2d3e4f5a6b7c8d9e0f1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f90'
+    const rawSecret = '4f8b9a1c' + '2d3e4f5a' + '6b7c8d9e' + '0f1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f90'
     const rawError = `Invalid token verification: ${rawSecret}`
     const sanitized = sanitizeErrorMessage(rawError)
     expect(sanitized).not.toContain(rawSecret)

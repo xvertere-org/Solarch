@@ -18,3 +18,7 @@
 440dee816078b5f874ed3c47f765ed0670555f2b:packages/core-client/tests/integration/auth_flows.test.ts:generic-api-key:24
 440dee816078b5f874ed3c47f765ed0670555f2b:packages/core-client/tests/integration/auth_flows.test.ts:generic-api-key:81
 440dee816078b5f874ed3c47f765ed0670555f2b:packages/core-client/tests/stores/auth_store.test.ts:generic-api-key:11
+f131b44e7e211d9c537fc3c93b3d82c64c3c1561:docs/environment.md:generic-api-key:16
+f131b44e7e211d9c537fc3c93b3d82c64c3c1561:docs/environment.md:generic-api-key:17
+f131b44e7e211d9c537fc3c93b3d82c64c3c1561:docs/environment.md:generic-api-key:20
+0909833bd227ff7927771fb1da20adeff3a444eb:src/ui/__tests__/errors.test.ts:generic-api-key:19

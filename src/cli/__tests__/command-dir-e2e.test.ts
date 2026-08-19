@@ -10,6 +10,9 @@ describe('CLI Option Resolution E2E (--dir external paths)', () => {
   const cliPath = path.resolve(__dirname, '../../../dist/cli.js')
 
   beforeAll(() => {
+    if (!fs.existsSync(cliPath)) {
+      execSync('npm run build', { cwd: path.resolve(__dirname, '../../..'), stdio: 'pipe' })
+    }
     tmpRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'solarch-opt-test-'))
     projectDir = path.join(tmpRoot, 'my-external-app')
 
