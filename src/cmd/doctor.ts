@@ -5,6 +5,8 @@ import { Solarch } from '../solarch.js'
 import { SolarchConfigInput } from '../core/config_types.js'
 import { resolveAppConfig, loadConfigFile } from '../core/config_loader.js'
 import { hasSuperuser } from './superuser.js'
+import { AuthService } from '../platform/auth/auth-service.js'
+import { ProjectMetadata } from '../ecosystem/metadata.js'
 
 import dotenv from 'dotenv'
 
@@ -98,7 +100,7 @@ export async function runDoctor(opts: DoctorOptions = {}): Promise<DoctorReport>
     })
   }
 
-  if (!checks.some(c => c.id === 'config_file')) {
+  if (!checks.some((c) => c.id === 'config_file')) {
     if (hasConfigFile) {
       checks.push({
         id: 'config_file',
@@ -111,7 +113,9 @@ export async function runDoctor(opts: DoctorOptions = {}): Promise<DoctorReport>
         id: 'config_file',
         name: 'Configuration File',
         status: 'warn',
-        message: `No solarch.config.ts found in working directory (using defaults${hasEnvFile ? ' with .env' : ''})`,
+        message: `No solarch.config.ts found in working directory (using defaults${
+          hasEnvFile ? ' with .env' : ''
+        })`,
       })
     }
   }
@@ -119,7 +123,10 @@ export async function runDoctor(opts: DoctorOptions = {}): Promise<DoctorReport>
   // 3. Data Directory Permissions Check
   let resolvedConfig
   try {
-    resolvedConfig = resolveAppConfig(opts, process.env, { cwd, loadConfigFile: true })
+    resolvedConfig = resolveAppConfig(opts, process.env, {
+      cwd,
+      loadConfigFile: true,
+    })
   } catch (err: any) {
     checks.push({
       id: 'config_resolution',
@@ -129,14 +136,19 @@ export async function runDoctor(opts: DoctorOptions = {}): Promise<DoctorReport>
     })
   }
 
-  const effectiveDataDir = resolvedConfig ? path.resolve(cwd, resolvedConfig.dataDir) : path.resolve(cwd, './pb_data')
+  const effectiveDataDir = resolvedConfig
+    ? path.resolve(cwd, resolvedConfig.dataDir)
+    : path.resolve(cwd, './pb_data')
 
   try {
     if (!fs.existsSync(effectiveDataDir)) {
       fs.mkdirSync(effectiveDataDir, { recursive: true })
     }
     // Test write permission
-    const testFile = path.join(effectiveDataDir, `.doctor_rw_test_${Date.now()}`)
+    const testFile = path.join(
+      effectiveDataDir,
+      `.doctor_rw_test_${Date.now()}`
+    )
     fs.writeFileSync(testFile, 'test')
     fs.unlinkSync(testFile)
 
@@ -144,7 +156,9 @@ export async function runDoctor(opts: DoctorOptions = {}): Promise<DoctorReport>
       id: 'data_directory',
       name: 'Data Directory',
       status: 'pass',
-      message: `${path.relative(cwd, effectiveDataDir) || '.'} (read/write verified)`,
+      message: `${
+        path.relative(cwd, effectiveDataDir) || '.'
+      } (read/write verified)`,
     })
   } catch (err: any) {
     checks.push({
@@ -172,7 +186,9 @@ export async function runDoctor(opts: DoctorOptions = {}): Promise<DoctorReport>
       id: 'database_connectivity',
       name: 'Database Connectivity',
       status: 'pass',
-      message: `Connected to ${app.dbProvider} (${app.dbProvider === 'sqlite' ? 'WAL mode' : 'external'})`,
+      message: `Connected to ${app.dbProvider} (${
+        app.dbProvider === 'sqlite' ? 'WAL mode' : 'external'
+      })`,
     })
   } catch (err: any) {
     checks.push({
@@ -188,10 +204,12 @@ export async function runDoctor(opts: DoctorOptions = {}): Promise<DoctorReport>
     try {
       const migrationsDir = path.join(cwd, 'pb_migrations')
       const localFiles = fs.existsSync(migrationsDir)
-        ? fs.readdirSync(migrationsDir).filter(f => f.endsWith('.js'))
+        ? fs.readdirSync(migrationsDir).filter((f) => f.endsWith('.js'))
         : []
 
-      const hasMigrationsTable = await app.db().hasTable('_applied_migrations')
+      const hasMigrationsTable = await app
+        .db()
+        .hasTable('_applied_migrations')
       if (!hasMigrationsTable) {
         if (localFiles.length > 0) {
           checks.push({
@@ -211,7 +229,7 @@ export async function runDoctor(opts: DoctorOptions = {}): Promise<DoctorReport>
       } else {
         const status = await app.migrationStatus()
         const total = status.length
-        const applied = status.filter(m => m.applied).length
+        const applied = status.filter((m) => m.applied).length
         const pending = total - applied
 
         if (pending > 0) {
@@ -226,7 +244,10 @@ export async function runDoctor(opts: DoctorOptions = {}): Promise<DoctorReport>
             id: 'migrations',
             name: 'Database Migrations',
             status: 'pass',
-            message: total === 0 ? 'Zero migrations found (pb_migrations/)' : `All ${applied} migration(s) applied`,
+            message:
+              total === 0
+                ? 'Zero migrations found (pb_migrations/)'
+                : `All ${applied} migration(s) applied`,
           })
         }
       }
@@ -256,7 +277,8 @@ export async function runDoctor(opts: DoctorOptions = {}): Promise<DoctorReport>
           id: 'superuser',
           name: 'Superuser Status',
           status: 'warn',
-          message: 'No superuser account exists (run "solarch superuser" to create one)',
+          message:
+            'No superuser account exists (run "solarch superuser" to create one)',
         })
       }
     } catch (err: any) {
@@ -273,9 +295,58 @@ export async function runDoctor(opts: DoctorOptions = {}): Promise<DoctorReport>
     }
   }
 
+  // 7. Platform Authentication & Project Linkage Check (Phase 2)
+  try {
+    const authService = new AuthService()
+    const resolved = await authService.resolveSession()
+    const manifest = await ProjectMetadata.readManifest(cwd).catch(() => null)
+
+    if (resolved.session.isAuthenticated()) {
+      const userDesc = resolved.user?.email || resolved.session.userId || 'User'
+      if (manifest?.platform) {
+        checks.push({
+          id: 'platform_auth',
+          name: 'Platform Authentication',
+          status: 'pass',
+          message: `Authenticated as ${userDesc} (Linked: ${manifest.platform.projectId})`,
+        })
+      } else {
+        checks.push({
+          id: 'platform_auth',
+          name: 'Platform Authentication',
+          status: 'pass',
+          message: `Authenticated as ${userDesc} (Local project not linked)`,
+        })
+      }
+    } else {
+      if (manifest?.platform) {
+        checks.push({
+          id: 'platform_auth',
+          name: 'Platform Authentication',
+          status: 'warn',
+          message: `Project is linked to platform (${manifest.platform.projectId}), but CLI is not logged in (run "solarch login")`,
+        })
+      } else {
+        checks.push({
+          id: 'platform_auth',
+          name: 'Platform Authentication',
+          status: 'pass',
+          message: 'Offline mode active (run "solarch login" for platform integration)',
+        })
+      }
+    }
+  } catch {
+    checks.push({
+      id: 'platform_auth',
+      name: 'Platform Authentication',
+      status: 'pass',
+      message: 'Offline mode active',
+    })
+  }
+
   // Overall status evaluation
-  const hasFailures = checks.some(c => c.status === 'fail')
-  const hasWarnings = checks.some(c => c.status === 'warn')
+  const hasFailures = checks.some((c) => c.status === 'fail')
+  const hasWarnings = checks.some((c) => c.status === 'warn')
   const overallStatus: 'healthy' | 'warning' | 'unhealthy' = hasFailures
     ? 'unhealthy'
     : hasWarnings
@@ -313,9 +384,13 @@ export async function runDoctor(opts: DoctorOptions = {}): Promise<DoctorReport>
       if (overallStatus === 'healthy') {
         console.log('✔ All systems operational.\n')
       } else if (overallStatus === 'warning') {
-        console.log('⚠ System operational with warnings (see details above).\n')
+        console.log(
+          '⚠ System operational with warnings (see details above).\n'
+        )
       } else {
-        console.log('✖ Diagnostic check failed with one or more fatal issues.\n')
+        console.log(
+          '✖ Diagnostic check failed with one or more fatal issues.\n'
+        )
       }
     }
   }

@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest'
-import { sanitizeErrorMessage, formatCliError } from '../errors'
+import { sanitizeErrorMessage, formatCliError } from '../errors.js'
+import { SolarchError } from '../../errors/index.js'
 
 describe('Standardized Error Handling', () => {
   const originalEnv = process.env.SOLARCH_DEBUG
@@ -43,5 +44,16 @@ describe('Standardized Error Handling', () => {
     expect(formatted).toContain('✖ Failed')
     expect(formatted).toContain('Debug stack:')
     expect(formatted).toContain('Error: Database connection failed')
+  })
+
+  it('5. formats structured SolarchError with code and suggestion', () => {
+    delete process.env.SOLARCH_DEBUG
+    const error = SolarchError.authRequired()
+    const formatted = formatCliError(error)
+
+    expect(formatted).toContain('SOLARCH_AUTH_REQUIRED')
+    expect(formatted).toContain('Suggestion:')
+    expect(formatted).toContain('solarch login')
+    expect(formatted).toContain('https://solarch.in/docs/errors#solarch_auth_required')
   })
 })

@@ -1,5 +1,5 @@
 /**
- * Solarch CLI Project Filesystem Generator
+ * Solarch CLI Project Filesystem Generator (Phase 1)
  * Performs deterministic file and directory generation without user prompts.
  */
 
@@ -8,6 +8,7 @@ import path from 'path'
 import crypto from 'crypto'
 import { InitConfig, GenerationResult } from './types.js'
 import { MINIMAL_TEMPLATE } from '../../templates/definitions.js'
+import { ProjectMetadata, ProjectPlan, DatabaseStrategy, SdkSelection, PluginSelection, ProjectIntent } from '../../ecosystem/index.js'
 
 export interface GeneratorHooks {
   onFoldersStart?: () => void
@@ -50,10 +51,42 @@ export function generateProjectFiles(
     }
   }
 
+  // Compile or resolve ProjectPlan
+  let plan = config.plan
+  if (!plan) {
+    const intent = new ProjectIntent({
+      application: (config.template?.name as any) || 'api',
+      deployment: config.deployment || 'local',
+      desktopRuntime: config.desktopRuntime || 'unspecified',
+      explicitChoices: {
+        database: config.database,
+        sdks: config.sdks,
+        plugins: config.plugins,
+      },
+    })
+
+    const dbStrategy = new DatabaseStrategy({
+      engine: config.database,
+      topology: config.database === 'postgres' ? 'postgres_only' : config.database === 'mongodb' ? 'mongodb_only' : 'sqlite_only',
+      capabilities: { vector: intent.application === 'ai' || intent.application === 'agent' },
+      source: 'user',
+    })
+
+    plan = new ProjectPlan({
+      identity: { name: config.name, dir: config.dir || targetBaseDir },
+      intent,
+      database: dbStrategy,
+      sdks: new SdkSelection({ selected: config.sdks || [] }),
+      plugins: new PluginSelection({ mode: config.plugins ? 'selected' : 'none', plugins: config.plugins }),
+      desktop: { runtime: config.desktopRuntime || 'unspecified' },
+    })
+  }
+
   const filesCreated: string[] = []
 
   // 3. Dry-Run Plan Compilation
   if (config.dryRun) {
+    filesCreated.push('.solarch/project.json')
     filesCreated.push('solarch.config.ts')
     filesCreated.push('.env')
     filesCreated.push('pb_data/')
@@ -80,15 +113,18 @@ export function generateProjectFiles(
       database: config.database,
       filesCreated,
       dryRun: true,
+      plan,
     }
   }
 
   // 4. Directory Structure
   hooks?.onFoldersStart?.()
+  const dotSolarchDir = path.join(projectDir, '.solarch')
   const dataDir = path.join(projectDir, 'pb_data')
   const migrationsDir = path.join(projectDir, 'pb_migrations')
   const hooksDir = path.join(projectDir, 'src', 'hooks')
 
+  fs.mkdirSync(dotSolarchDir, { recursive: true })
   fs.mkdirSync(dataDir, { recursive: true })
   fs.mkdirSync(migrationsDir, { recursive: true })
   if (template.hooks && template.hooks.length > 0) {
@@ -96,11 +132,20 @@ export function generateProjectFiles(
   }
 
   filesCreated.push(`${config.name}/`)
+  filesCreated.push('.solarch/project.json')
   filesCreated.push('pb_data/')
   filesCreated.push('pb_migrations/')
   hooks?.onFoldersEnd?.()
 
-  // 5. Cryptographic Secret Generation
+  // 5. Write Local Ecosystem Manifest (.solarch/project.json)
+  const manifest = ProjectMetadata.fromPlan(plan, '0.19.8')
+  fs.writeFileSync(
+    path.join(dotSolarchDir, 'project.json'),
+    JSON.stringify(manifest, null, 2) + '\n',
+    'utf-8'
+  )
+
+  // 6. Cryptographic Secret Generation
   hooks?.onSecretsStart?.()
   const jwtSecret = crypto.randomBytes(32).toString('hex')
   const encKey = crypto.randomBytes(32).toString('hex')
@@ -131,7 +176,7 @@ export function generateProjectFiles(
   filesCreated.push('.env')
   hooks?.onSecretsEnd?.()
 
-  // 6. solarch.config.ts & Template Migrations / Hooks
+  // 7. solarch.config.ts & Template Migrations / Hooks
   hooks?.onConfigStart?.()
   const configLines: string[] = [
     `export default {`,
@@ -191,7 +236,7 @@ export function generateProjectFiles(
   }
   hooks?.onConfigEnd?.()
 
-  // 7. Validation Hooks
+  // 8. Validation Hooks
   hooks?.onValidationStart?.()
   hooks?.onValidationEnd?.()
 
@@ -200,5 +245,6 @@ export function generateProjectFiles(
     projectName: config.name,
     database: config.database,
     filesCreated,
+    plan,
   }
 }

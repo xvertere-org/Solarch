@@ -15,10 +15,10 @@ export function getVersion(): string {
     const pkgPath = path.join(__dirname, '..', '..', 'package.json')
     if (fs.existsSync(pkgPath)) {
       const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf-8'))
-      return pkg.version || '0.19.1'
+      return pkg.version || '0.20.0'
     }
   } catch {}
-  return '0.19.1'
+  return '0.20.0'
 }
 
 /**

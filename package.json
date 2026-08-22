@@ -1,6 +1,6 @@
 {
   "name": "solarch",
-  "version": "0.19.8",
+  "version": "0.20.0",
   "description": "Solarch - The developer operating system for building, running, and managing modern backend applications.",
   "repository": {
     "type": "git",
@@ -33,6 +33,7 @@
     "pb_public/**/*",
     "pb_migrations/**/*",
     "README.md",
+    "CHANGELOG.md",
     "LICENSE"
   ],
   "workspaces": [

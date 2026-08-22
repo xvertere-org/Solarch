@@ -12,6 +12,7 @@ export type CommandCategory =
   | 'DATABASE'
   | 'INSPECTION'
   | 'ACCOUNT'
+  | 'PLATFORM'
 
 export interface CliCommandMetadata {
   name: string
@@ -90,6 +91,12 @@ export const COMMANDS: CliCommandMetadata[] = [
     interactiveLabel: 'Database migrations (migrate)',
   },
   {
+    name: 'db',
+    description: 'Database provisioning and topology sync',
+    category: 'DATABASE',
+    interactiveLabel: 'Database provisioning (db)',
+  },
+  {
     name: 'doctor',
     description: 'Diagnose problems',
     category: 'INSPECTION',
@@ -122,6 +129,90 @@ export const COMMANDS: CliCommandMetadata[] = [
     category: 'ACCOUNT',
     interactiveLabel: 'Manage admin users (superuser)',
   },
+  {
+    name: 'login',
+    description: 'Authenticate with Solarch Platform',
+    category: 'PLATFORM',
+    interactiveLabel: 'Authenticate with platform (login)',
+  },
+  {
+    name: 'logout',
+    description: 'Clear stored platform credentials',
+    category: 'PLATFORM',
+    interactiveLabel: 'Log out from platform (logout)',
+  },
+  {
+    name: 'whoami',
+    description: 'Show authenticated platform identity',
+    category: 'PLATFORM',
+    interactiveLabel: 'Show platform identity (whoami)',
+  },
+  {
+    name: 'link',
+    description: 'Link project to Solarch Platform',
+    category: 'PLATFORM',
+    interactiveLabel: 'Link project to platform (link)',
+  },
+  {
+    name: 'unlink',
+    description: 'Unlink project from Solarch Platform',
+    category: 'PLATFORM',
+    interactiveLabel: 'Unlink project (unlink)',
+  },
+  {
+    name: 'sync',
+    description: 'Synchronize config from Solarch Platform',
+    category: 'PLATFORM',
+    interactiveLabel: 'Sync platform configuration (sync)',
+  },
+  {
+    name: 'deploy',
+    description: 'Deploy project to cloud environments',
+    category: 'PLATFORM',
+    interactiveLabel: 'Deploy project (deploy)',
+  },
+  {
+    name: 'metrics',
+    description: 'Inspect runtime telemetry and performance metrics',
+    category: 'PLATFORM',
+    interactiveLabel: 'Inspect metrics (metrics)',
+  },
+  {
+    name: 'traces',
+    description: 'Inspect distributed request trace spans',
+    category: 'PLATFORM',
+    interactiveLabel: 'Inspect traces (traces)',
+  },
+  {
+    name: 'alerts',
+    description: 'View production alerts and health status',
+    category: 'PLATFORM',
+    interactiveLabel: 'View alerts (alerts)',
+  },
+  {
+    name: 'service',
+    description: 'Manage production services, scaling, traffic, and maintenance',
+    category: 'PLATFORM',
+    interactiveLabel: 'Manage production service (service)',
+  },
+  {
+    name: 'sdk',
+    description: 'Manage and provision client SDK packages',
+    category: 'DEVELOPMENT',
+    interactiveLabel: 'Manage client SDKs (sdk)',
+  },
+  {
+    name: 'plugin',
+    description: 'Manage and discover ecosystem plugins',
+    category: 'DEVELOPMENT',
+    interactiveLabel: 'Manage plugins (plugin)',
+  },
+  {
+    name: 'mcp',
+    description: 'Inspect and govern MCP tools and capabilities for external AI agents',
+    category: 'DEVELOPMENT',
+    interactiveLabel: 'Inspect MCP tools & governance (mcp)',
+  },
 ]
 
 export const CATEGORY_ORDER: CommandCategory[] = [
@@ -131,6 +222,7 @@ export const CATEGORY_ORDER: CommandCategory[] = [
   'DATABASE',
   'INSPECTION',
   'ACCOUNT',
+  'PLATFORM',
 ]
 
 /**
@@ -144,6 +236,7 @@ export function getCommandGroups(): Record<CommandCategory, CliCommandMetadata[]
     DATABASE: [],
     INSPECTION: [],
     ACCOUNT: [],
+    PLATFORM: [],
   }
 
   for (const cmd of COMMANDS) {

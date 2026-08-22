@@ -35,26 +35,29 @@ export function validateProjectName(name: string): string {
 /**
  * Validates database provider against supported scaffolding engines.
  */
-export function validateDatabase(db: string): 'sqlite' | 'postgres' {
+export function validateDatabase(db: string): 'sqlite' | 'postgres' | 'mongodb' {
   const normalized = (db || '').trim().toLowerCase()
   if (!VALID_DATABASES.includes(normalized as any)) {
     throw new Error(
       `Invalid database provider "${db}". Supported: ${VALID_DATABASES.join(', ')}.`
     )
   }
-  return normalized as 'sqlite' | 'postgres'
+  return normalized as 'sqlite' | 'postgres' | 'mongodb'
 }
 
 /**
- * Validates connection URL requirement and protocol for PostgreSQL.
+ * Validates connection URL protocol for PostgreSQL if provided or required.
  */
-export function validateDatabaseUrl(dbType: string, url?: string): string {
+export function validateDatabaseUrl(dbType: string, url?: string, required: boolean = false): string {
   if (dbType !== 'postgres') return ''
   const trimmed = (url || '').trim()
   if (!trimmed) {
-    throw new Error(
-      'PostgreSQL requires a non-empty DATABASE_URL (e.g. postgres://user:pass@localhost:5432/dbname).'
-    )
+    if (required) {
+      throw new Error(
+        'PostgreSQL requires a non-empty DATABASE_URL (e.g. postgres://user:pass@localhost:5432/dbname).'
+      )
+    }
+    return ''
   }
   if (!trimmed.startsWith('postgres://') && !trimmed.startsWith('postgresql://')) {
     throw new Error(

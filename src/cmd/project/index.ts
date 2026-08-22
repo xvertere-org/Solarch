@@ -1,10 +1,10 @@
 /**
- * Solarch CLI Project Lifecycle Subcommands Facade
+ * Solarch CLI Project Commands Index
  */
 
-export * from './types.js'
-export * from './scanner.js'
-export * from './formatter.js'
 export * from './path.js'
 export * from './clean.js'
 export * from './reset.js'
+export * from './diff.js'
+export * from './pull.js'
+export * from './push.js'

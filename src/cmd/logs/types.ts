@@ -15,6 +15,8 @@ export interface LogEntry {
 
 export interface LogsOptions {
   dir?: string
+  env?: string
+  token?: string
   follow?: boolean
   level?: string
   json?: boolean

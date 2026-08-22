@@ -3,78 +3,87 @@ import { promptInit } from '../prompts/init.js'
 import * as textModule from '../prompts/text.js'
 import * as selectModule from '../prompts/select.js'
 import * as multiselectModule from '../prompts/multiselect.js'
-import * as confirmModule from '../prompts/confirm.js'
 
-describe('Solarch Init TUI Prompt Flow (src/ui/prompts/init.ts)', () => {
+describe('Solarch Init TUI Prompt Flow (Phase 1)', () => {
   beforeEach(() => {
     vi.restoreAllMocks()
   })
 
-  it('collects default project configuration interactively via template', async () => {
+  it('1. Collects full project configuration interactively via ecosystem decision flow', async () => {
     vi.spyOn(selectModule, 'promptSelect')
-      .mockResolvedValueOnce('api')     // Template selection
-      .mockResolvedValueOnce('sqlite')  // Database selection
-    vi.spyOn(textModule, 'promptText').mockResolvedValueOnce('my-custom-app')
+      .mockResolvedValueOnce('api')     // 1. Application Type
+      .mockResolvedValueOnce('local')   // 3. Deployment Model
+      .mockResolvedValueOnce('sqlite')  // 4. Database Engine
+      .mockResolvedValueOnce('none')    // 6. Plugin mode
+
+    vi.spyOn(textModule, 'promptText').mockResolvedValueOnce('my-custom-app') // 2. Project Name
+    vi.spyOn(multiselectModule, 'promptMultiSelect').mockResolvedValueOnce(['solarch-web']) // 5. SDKs
 
     const config = await promptInit()
 
     expect(config.name).toBe('my-custom-app')
     expect(config.database).toBe('sqlite')
-    expect(config.template?.name).toBe('api')
-    expect(config.authProviders).toContain('email')
-    expect(config.rateLimit).toBe(true)
-
-    expect(selectModule.promptSelect).toHaveBeenCalledTimes(2)
-    expect(textModule.promptText).toHaveBeenCalledTimes(1)
+    expect(config.plan).toBeDefined()
+    expect(config.plan?.intent.application).toBe('api')
+    expect(config.plan?.intent.deployment).toBe('local')
+    expect(config.plan?.database.engine).toBe('sqlite')
+    expect(config.plan?.sdks.selected).toEqual(['solarch-web'])
+    expect(config.plan?.plugins.mode).toBe('none')
   })
 
-  it('prompts for PostgreSQL database URL when postgres is chosen', async () => {
+  it('2. Prompts desktop runtime when desktop application is selected', async () => {
     vi.spyOn(selectModule, 'promptSelect')
-      .mockResolvedValueOnce('saas')       // Template selection
-      .mockResolvedValueOnce('postgres')   // Database selection
-    vi.spyOn(textModule, 'promptText')
-      .mockResolvedValueOnce('enterprise-service')
-      .mockResolvedValueOnce('postgres://admin:secret@localhost:5432/maindb')
+      .mockResolvedValueOnce('desktop')   // 1. Application Type
+      .mockResolvedValueOnce('local')     // 3. Deployment Model
+      .mockResolvedValueOnce('sqlite')    // 4. Database Engine
+      .mockResolvedValueOnce('electron')  // 5a. Desktop runtime
+      .mockResolvedValueOnce('none')      // 6. Plugin mode
+
+    vi.spyOn(textModule, 'promptText').mockResolvedValueOnce('desktop-app')
+    vi.spyOn(multiselectModule, 'promptMultiSelect').mockResolvedValueOnce(['solarch-electron'])
 
     const config = await promptInit()
 
-    expect(config.name).toBe('enterprise-service')
+    expect(config.name).toBe('desktop-app')
+    expect(config.desktopRuntime).toBe('electron')
+    expect(config.plan?.desktop.runtime).toBe('electron')
+    expect(config.plan?.sdks.selected).toEqual(['solarch-electron'])
+  })
+
+  it('3. Supports plugin selection when plugin mode is selected', async () => {
+    vi.spyOn(selectModule, 'promptSelect')
+      .mockResolvedValueOnce('saas')       // 1. Application Type
+      .mockResolvedValueOnce('cloud')      // 3. Deployment Model
+      .mockResolvedValueOnce('postgres')   // 4. Database Engine
+      .mockResolvedValueOnce('selected')   // 6a. Plugin mode
+
+    vi.spyOn(textModule, 'promptText').mockResolvedValueOnce('saas-enterprise')
+    vi.spyOn(multiselectModule, 'promptMultiSelect')
+      .mockResolvedValueOnce(['solarch-web'])           // 5. SDKs
+      .mockResolvedValueOnce(['stripe', 'resend'])        // 6b. Plugins
+
+    const config = await promptInit()
+
+    expect(config.name).toBe('saas-enterprise')
     expect(config.database).toBe('postgres')
-    expect(config.databaseUrl).toBe('postgres://admin:secret@localhost:5432/maindb')
-    expect(config.template?.name).toBe('saas')
-    expect(config.authProviders).toEqual(['email', 'google', 'github'])
-
-    expect(textModule.promptText).toHaveBeenCalledTimes(2)
+    expect(config.plan?.plugins.mode).toBe('selected')
+    expect(config.plan?.plugins.plugins).toEqual(['stripe', 'resend'])
   })
 
-  it('allows custom stack configuration with multi-select and feature checkboxes', async () => {
+  it('4. Uses provided initial values when passed in options', async () => {
     vi.spyOn(selectModule, 'promptSelect')
-      .mockResolvedValueOnce('custom')     // Custom template
-      .mockResolvedValueOnce('sqlite')     // Database selection
-    vi.spyOn(textModule, 'promptText').mockResolvedValueOnce('custom-app')
-    vi.spyOn(multiselectModule, 'promptMultiSelect').mockResolvedValueOnce(['email', 'discord'])
-    vi.spyOn(confirmModule, 'promptConfirm')
-      .mockResolvedValueOnce(true)   // rate limit
-      .mockResolvedValueOnce(true)   // ai
+      .mockResolvedValueOnce('api')     // Application Type
+      .mockResolvedValueOnce('local')   // Deployment Model
+      .mockResolvedValueOnce('sqlite')  // Database Engine
+      .mockResolvedValueOnce('none')    // Plugin mode
 
-    const config = await promptInit()
-
-    expect(config.name).toBe('custom-app')
-    expect(config.database).toBe('sqlite')
-    expect(config.authProviders).toEqual(['email', 'discord'])
-    expect(config.rateLimit).toBe(true)
-    expect(config.ai).toBe(true)
-  })
-
-  it('uses provided initial values when passed in options', async () => {
-    vi.spyOn(selectModule, 'promptSelect').mockResolvedValueOnce('sqlite')
     vi.spyOn(textModule, 'promptText').mockResolvedValueOnce('seeded-app')
+    vi.spyOn(multiselectModule, 'promptMultiSelect').mockResolvedValueOnce([])
 
     const config = await promptInit({
       initialValues: {
         name: 'seeded-app',
         database: 'sqlite',
-        template: 'minimal',
         authProviders: ['email'],
         rateLimit: false,
         ai: false,
@@ -88,7 +97,7 @@ describe('Solarch Init TUI Prompt Flow (src/ui/prompts/init.ts)', () => {
     expect(config.dir).toBe('/custom/path')
   })
 
-  it('handles custom onCancel callback without throwing', async () => {
+  it('5. Handles custom onCancel callback without throwing', async () => {
     const onCancel = vi.fn()
     vi.spyOn(selectModule, 'promptSelect').mockImplementationOnce(async (opts) => {
       opts.onCancel?.()

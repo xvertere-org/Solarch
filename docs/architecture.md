@@ -91,3 +91,53 @@ A lightweight, isomorphic TypeScript client for consuming Solarch backends from 
 
 - **Location**: `packages/core-client/`
 - **Features**: Type-safe collection queries, automatic JWT refresh handling, realtime SSE/WebSocket subscriptions, and filter query builders.
+
+---
+
+## 6. Ecosystem Architecture & Planning Contracts (Phase 0)
+
+Solarch establishes clean, decoupled boundaries between the CLI, Client SDKs, Dashboard, and the Platform API:
+
+```text
+                    SOLARCH ECOSYSTEM
+                           │
+                 ┌─────────┴─────────┐
+                 │                   │
+            ProjectPlan        PlatformSession
+                 │                   │
+       ┌─────────┼─────────┐         │
+       │         │         │         │
+     Intent   Database    SDKs     Auth State
+       │         │         │
+       │         │         └── metadata only (isolated packages)
+       │         │
+       │         └── recommendation with reasons
+       │
+       └── recommendation
+                 │
+                 ▼
+       .solarch/project.json (Local Ecosystem Manifest)
+```
+
+### Core Invariants & Boundaries
+
+1. **SDK Repository Isolation**:
+   - SDKs (`@solarch/web`, `@solarch/ai`, `@solarch/react-native`, `@solarch/desktop`) are independently developed and published packages.
+   - The CLI repository never imports SDK implementation code; it only consumes machine-readable `SdkMetadata` contracts.
+
+2. **Dashboard & Platform Isolation**:
+   - The Solarch Dashboard is an independent application.
+   - Session authentication state (`PlatformSession`) is maintained as an isolated session concern, never embedded into `ProjectPlan` or project generation specifications.
+
+3. **Strict Credential Boundary**:
+   - Planning contracts (`ProjectIntent`, `DatabaseStrategy`, `ProjectPlan`, `PluginSelection`, `ProjectMetadata`) must **never** contain passwords, connection strings, API keys, or access tokens.
+   - Credentials belong exclusively to local `.env` (file mode `0o600`) and the future Dashboard platform configuration.
+
+4. **Recommendation vs. Selection**:
+   - The deterministic recommendation engine evaluates `ProjectIntent` and produces suggestions annotated with provenance (`RecommendationReason`).
+   - **Explicit User Choices always override System Recommendations**:
+     `Explicit Choice > Deployment Topology > Application Recommendation > Feature Requirement > Default`.
+
+5. **Local Ecosystem Manifest (`.solarch/project.json`)**:
+   - Stores non-secret project metadata acting as a shared contract between the CLI, local SDK tooling, and future Dashboard synchronization.
+

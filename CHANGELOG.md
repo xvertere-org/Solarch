@@ -1,6 +1,59 @@
 # Changelog
 
-## v0.19.5 — Solarch CLI Developer Platform & Workflow Suite (2026-08-19)
+## v0.20.0 — Solarch Platform Control Plane & MCP Governance Release (2026-08-22)
+
+Major architectural release establishing the Solarch Developer Operating System with remote platform authentication, SDK provisioning, database lifecycle, production deployment orchestration, telemetry, service control plane, and MCP external agent governance.
+
+### Added
+- **Phase 1: Ecosystem-Aware Project Scaffolding (`solarch init`)**:
+  - Deterministic recommendation engine for database topologies (`sqlite_only`, `sqlite_local_postgres_cloud`, `serverless`), SDKs, and plugins.
+  - Interactive project intent wizard with live preview and configuration presets.
+- **Phase 2: Platform Authentication & Identity (`solarch login`, `solarch whoami`, `solarch logout`)**:
+  - Strict credential precedence (flag > environment > persisted session).
+  - Ephemeral local callback server with OAuth 2.0 PKCE challenge flow.
+- **Phase 3: SDK Provisioning & Synchronization (`solarch sdk`)**:
+  - `solarch sdk add <packages...>`: Installs client SDKs using friendly short names (`web`, `mobile`, `ai`, `electron`, `tauri`).
+  - `solarch sdk list`: Displays installed, required, and available ecosystem packages.
+  - `solarch sdk sync`: Reconciles project SDK requirements and environment variables with remote platform projects.
+- **Phase 4: Platform Project Configuration & 3-Way Reconciliation (`solarch project`)**:
+  - `solarch project diff`: 3-way differ comparing local manifest, base snapshot, and remote platform configuration.
+  - `solarch project pull` & `solarch project push`: Safe, non-conflicting bi-directional synchronization.
+- **Phase 5 & 5.1: Plugin Ecosystem & Lifecycle Isolation (`solarch plugin`)**:
+  - Discovery, installation, dependency resolution, and runtime hooks for official extensions (`auth-oauth`, `storage-s3`, `billing-stripe`, `search-pgvector`, `telemetry-otel`).
+  - In-process sandboxed execution with timeout, circuit breaking, and strict capability gating.
+- **Phase 6: Remote Database Management & Secret Boundaries (`solarch db`)**:
+  - `solarch db status`: Real-time topology and engine health monitoring.
+  - `solarch db provision`: Serverless database provisioning across Neon, Turso, Supabase, Cloudflare D1, and AWS Aurora.
+  - `solarch db sync`: Manifest topology reconciliation with zero local secret leakage.
+- **Phase 7 & 7.x: Production Deployment & Provenance Hardening (`solarch deploy`)**:
+  - Deterministic zero-secret bundle packaging with SHA-256 integrity verification and automated secret scanning.
+  - Immutable deployment releases with health-gated promotions, log streaming (`solarch deploy logs`), and atomic rollbacks (`solarch deploy rollback`).
+- **Phase 8: Telemetry, Observability & Strict W3C Context (`solarch metrics`, `solarch traces`, `solarch alerts`)**:
+  - Fail-open in-memory metrics collector with mathematical percentiles (p50, p95, p99) and pre-persistence secret sanitization.
+  - W3C TraceContext propagator with parent-child span waterfall timelines.
+- **Phase 9: Production Service Control Plane & Staged Canary Promotion (`solarch service`)**:
+  - `solarch service status`: Production health, replica state, traffic distribution, and latency tracking.
+  - `solarch service scale`: Compute scaling (min/max replicas).
+  - `solarch service traffic`: Zero-downtime canary traffic shifting (0-100%).
+  - `solarch service maintenance`: Scheduled maintenance mode toggle with custom public notices.
+  - Automated anomaly-driven recovery engine with rollback loop circuit breaking.
+- **Phase 10: MCP Integration & External Agent Tooling Layer (`solarch mcp`)**:
+  - Dedicated capability provider exposing 18 typed Solarch tools across Project, Database, Deployment, Service, and Telemetry.
+  - Multi-tier risk governance (`read`, `local_mutation`, `production_mutation`, `destructive`) with structured human approval challenges.
+  - Append-only `.solarch/audit/mcp-tool-calls.jsonl` audit logging with pre-persistence secret redaction.
+  - CLI management commands: `solarch mcp tools`, `solarch mcp inspect`, `solarch mcp permissions`, `solarch mcp audit`, `solarch mcp serve`.
+- **Developer Error System (`src/errors/`)**:
+  - Centralized `SolarchError` class providing actionable suggestions, doc links, and machine-readable error codes (`SOLARCH_AUTH_REQUIRED`, `SOLARCH_CONFIG_CONFLICT`, `SOLARCH_MCP_APPROVAL_REQUIRED`, etc.).
+
+### Changed & Corrected
+- **Canonical SDK Naming**: Aligned all ecosystem catalog resolution to real published packages (`solarch-web`, `solarch-rn`, `solarch-electron`, `solarch-tauri`, `solarch-ai`).
+- **Decoupled CLI from Application AI**: Removed `solarch-ai` requirement from CLI core, establishing it exclusively as an end-user developer SDK.
+- **External MCP Server Boundary**: Positioned `@solarch/mcp-server` as the external bridge for Claude Code, Cursor, and IDE assistants, rather than embedding an internal reasoning agent.
+
+### Breaking Changes & Removals
+- **Removed internal agent commands**: Deprecated `solarch agent plan`, `solarch agent run`, `solarch agent diagnose`, `solarch agent memory` in favor of external agent integration via `solarch mcp`.
+
+---
 
 ### Added
 - **Starter Template System (`solarch init` / `solarch template`)**:

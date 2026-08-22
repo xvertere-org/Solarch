@@ -1,6 +1,6 @@
 /**
- * Solarch CLI Init Command Orchestrator (Init Experience 2.0)
- * Coordinates template loading, preset configuration, prompt interaction, pre-flight validation, and filesystem generation.
+ * Solarch CLI Init Command Orchestrator (Init Experience Phase 1)
+ * Coordinates ecosystem intent resolution, recommendations, prompt interaction, pre-flight validation, and filesystem generation.
  */
 
 import { InitOptions, InitConfig, GenerationResult } from './types.js'
@@ -19,13 +19,20 @@ import {
 } from './validation.js'
 import { generateProjectFiles } from './generator.js'
 import { runDoctor } from '../doctor.js'
-import { promptInit } from '../../ui/prompts/init.js'
-import { promptReview } from '../../ui/prompts/review.js'
+import * as promptsInit from '../../ui/prompts/init.js'
+import * as promptsReview from '../../ui/prompts/review.js'
 import { spinner } from '../../ui/index.js'
 import { loadTemplate, loadPreset } from '../../templates/loader.js'
 import { TemplateDefinition } from '../../templates/types.js'
 import { MINIMAL_TEMPLATE } from '../../templates/definitions.js'
 import { colors } from '../../ui/theme.js'
+import {
+  ProjectIntent,
+  ApplicationType,
+  DeploymentModel,
+  RecommendationEngine,
+  ProjectPlan,
+} from '../../ecosystem/index.js'
 
 export * from './types.js'
 export * from './defaults.js'
@@ -55,14 +62,16 @@ export async function runInit(opts: InitOptions = {}): Promise<GenerationResult 
     presetAi = preset.ai
   }
 
-  // 2. Template Resolution
+  // 2. Template / App Resolution
   let template: TemplateDefinition = MINIMAL_TEMPLATE
   if (opts.template) {
     template = loadTemplate(opts.template)
   }
 
   let name = opts.name !== undefined ? opts.name : DEFAULT_PROJECT_NAME
-  let dbType = opts.db || presetDb || DEFAULT_DATABASE
+  const rawAppType = opts.app || (opts.template as ApplicationType) || 'api'
+  const deployment: DeploymentModel = opts.deployment || 'local'
+  let dbType = opts.db || presetDb || (opts.template === 'saas' ? 'postgres' : DEFAULT_DATABASE)
   let dbUrl = opts.dbUrl || ''
   if (dbType === 'postgres' && !dbUrl && (opts.preset === 'production' || (opts.template === 'saas' && opts.db === 'postgres'))) {
     dbUrl = `postgres://solarch:password@localhost:5432/${name}`
@@ -75,11 +84,13 @@ export async function runInit(opts: InitOptions = {}): Promise<GenerationResult 
     ? parseBoolean(opts.ai, DEFAULT_AI, 'ai')
     : (presetAi ?? template.features.ai ?? DEFAULT_AI)
 
+  let plan: ProjectPlan | undefined
+
   if (isInteractive) {
-    const collected = await promptInit({
+    const collected = await promptsInit.promptInit({
       initialValues: {
         name,
-        database: (dbType === 'postgres' ? 'postgres' : 'sqlite'),
+        database: (dbType === 'postgres' ? 'postgres' : dbType === 'mongodb' ? 'mongodb' : 'sqlite'),
         databaseUrl: dbUrl,
         authProviders,
         rateLimit: enableRateLimit,
@@ -87,6 +98,7 @@ export async function runInit(opts: InitOptions = {}): Promise<GenerationResult 
         template: opts.template ? template : undefined,
         force: opts.force,
         dir: opts.dir,
+        deployment,
       },
     })
     name = collected.name
@@ -95,15 +107,51 @@ export async function runInit(opts: InitOptions = {}): Promise<GenerationResult 
     authProviders = collected.authProviders
     enableRateLimit = collected.rateLimit
     enableAi = collected.ai
+    plan = collected.plan
     if (collected.template) {
       template = collected.template
     }
+  } else {
+    // Non-interactive mode: Construct deterministic ProjectPlan
+    const explicitSdks = opts.sdks ? (Array.isArray(opts.sdks) ? opts.sdks : [opts.sdks]) : undefined
+    const explicitPlugins = opts.plugins ? (Array.isArray(opts.plugins) ? opts.plugins : [opts.plugins]) : undefined
+    const explicitDb = opts.db || presetDb || (opts.template === 'saas' ? 'postgres' : undefined)
+
+    const intent = new ProjectIntent({
+      application: rawAppType,
+      deployment,
+      desktopRuntime: opts.desktopRuntime || 'unspecified',
+      features: {
+        auth: authProviders,
+        rateLimit: enableRateLimit,
+        ai: enableAi,
+        realtime: true,
+        storage: true,
+      },
+      explicitChoices: {
+        application: opts.app ? rawAppType : undefined,
+        deployment: opts.deployment ? deployment : undefined,
+        database: explicitDb,
+        sdks: explicitSdks,
+        plugins: explicitPlugins,
+        desktopRuntime: opts.desktopRuntime,
+      },
+    })
+
+    plan = RecommendationEngine.createPlan(
+      { name, dir: opts.dir || '.' },
+      intent
+    )
+    dbType = plan.database.engine
+    enableAi = intent.features.ai
+    enableRateLimit = intent.features.rateLimit
   }
 
   // --- Pre-flight Validation ---
   const validName = validateProjectName(name)
   const validDbType = validateDatabase(dbType)
-  const validDbUrl = validateDatabaseUrl(validDbType, dbUrl)
+  const isExplicitPgFlag = Boolean(opts.db === 'postgres' && !opts.app && !opts.template && !opts.preset)
+  const validDbUrl = validateDatabaseUrl(validDbType, dbUrl, isExplicitPgFlag)
   const validAuthProviders = validateAuthProviders(authProviders)
 
   const config: InitConfig = {
@@ -117,11 +165,13 @@ export async function runInit(opts: InitOptions = {}): Promise<GenerationResult 
     dryRun: opts.dryRun,
     force: opts.force,
     dir: opts.dir || '.',
+    plan,
+    deployment,
   }
 
   // --- Interactive Review Confirmation ---
   if (isInteractive) {
-    const confirmed = await promptReview(config)
+    const confirmed = await promptsReview.promptReview(config)
     if (!confirmed) {
       return
     }
@@ -168,8 +218,8 @@ export async function runInit(opts: InitOptions = {}): Promise<GenerationResult 
 
     const failedChecks = doctorReport.checks.filter(c => {
       if (c.status !== 'fail') return false
-      // For PostgreSQL projects, external database container is scaffolded in docker-compose.yml but not yet running during init
-      if (c.id === 'database_connectivity' && config.database === 'postgres') {
+      // For PostgreSQL or MongoDB projects, external database container is scaffolded but not running during local init
+      if (c.id === 'database_connectivity' && (config.database === 'postgres' || config.database === 'mongodb')) {
         return false
       }
       return true
@@ -192,6 +242,7 @@ export async function runInit(opts: InitOptions = {}): Promise<GenerationResult 
   console.log(`  ${colors.green('✔')} Secrets generated`)
   console.log(`  ${colors.green('✔')} Database initialized`)
   console.log(`  ${colors.green('✔')} Migrations ready`)
+  console.log(`  ${colors.green('✔')} Local ecosystem manifest created (.solarch/project.json)`)
   console.log(`  ${colors.green('✔')} Health check passed\n`)
 
   console.log(`Project:\n`)

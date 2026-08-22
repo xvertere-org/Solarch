@@ -46,3 +46,8 @@ coverage/
 *.tmp
 *.temp
 scratch/
+
+# Local Solarch state
+.solarch/
+session.json
+

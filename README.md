@@ -502,35 +502,98 @@ Interactive mode:
   Check system health
   Manage database
   Inspect project
+  MCP external agent tools
+```
+
+---
+
+# Complete CLI Command Reference (v0.20.0)
+
+```text
+solarch
+
+├── init / create         # Interactive project intent wizard & template scaffolding
+├── dev                   # Interactive local development server with hot reloading
+├── doctor / check        # Comprehensive multi-point diagnostic analyzer
+│
+├── login                 # Interactive browser OAuth PKCE authentication
+├── logout                # Invalidate and clear local credentials
+├── whoami                # Display authenticated user and active organization
+│
+├── project
+│   ├── diff              # 3-way differ comparing local manifest, base, and remote platform
+│   ├── pull              # Reconcile remote changes into local project
+│   └── push              # Publish local manifest configuration to platform
+│
+├── sdk
+│   ├── list              # List installed, required, and available ecosystem SDKs
+│   ├── add               # Install SDK packages (web, mobile, ai, electron, tauri)
+│   ├── remove            # Uninstall SDK packages
+│   └── sync              # Reconcile project dependencies and .env with platform
+│
+├── plugin
+│   ├── list              # Discover official and third-party extensions
+│   ├── add / remove      # Manage plugin installations
+│   ├── enable / disable  # Toggle runtime plugin activation
+│   └── sync              # Reconcile active plugins with manifest
+│
+├── db
+│   ├── status            # Real-time database health and topology inspection
+│   ├── provision         # Serverless database provisioning (Neon, Turso, Supabase)
+│   └── sync              # Manifest topology alignment with zero secret leakage
+│
+├── deploy
+│   ├── list              # List immutable deployment releases and commit provenance
+│   ├── status            # Rollout health and replica status
+│   ├── rollback          # Instant atomic deployment rollback
+│   └── logs              # Build and runtime log tailing with redaction
+│
+├── service
+│   ├── status            # Production compute, replica count, error rate, p95 latency
+│   ├── scale             # Configure min/max compute replicas
+│   ├── traffic           # Stage zero-downtime canary traffic shift (0-100%)
+│   └── maintenance       # Toggle scheduled maintenance mode with public notice
+│
+├── metrics               # Query aggregated service performance percentiles (p50/p95/p99)
+├── logs                  # Stream structured, pre-redacted logs
+├── traces                # Distributed W3C execution waterfall traces
+├── alerts                # Service degradation and anomaly alerts
+│
+└── mcp                   # External AI Agent Governance & Tool Catalog (@solarch/mcp-server)
+    ├── tools             # List 18 registered MCP tools with risk classifications
+    ├── inspect           # Inspect parameter schemas and approval requirements
+    ├── permissions       # Display risk tiers (read, mutation, destructive)
+    ├── audit             # View append-only external agent invocation audit trail
+    └── serve             # Start local stdio bridge for MCP clients (Claude Code, Cursor)
 ```
 
 ---
 
 # Architecture
 
-Solarch is designed around clear layers.
+Solarch is designed as a unified developer operating system connecting client SDKs, platform services, and external AI agents.
 
 ```text
-                 Solarch Platform
+                                 SOLARCH ECOSYSTEM ARCHITECTURE
 
-              Developer Interface
-                    CLI
-                     |
-              Command Framework
-                     |
-              Runtime Engine
-                     |
-        Database / Auth / Realtime
-                     |
-              Application Layer
+                               ┌─────────────────────────────┐
+                               │     solarch (Core CLI)      │
+                               │  - Lifecycle & Scaffolding  │
+                               │  - Deployments & Telemetry  │
+                               │  - Control Plane & MCP Tools│
+                               └──────────────┬──────────────┘
+                                              │
+                     ┌────────────────────────┼────────────────────────┐
+                     ▼                        ▼                        ▼
+        ┌─────────────────────────┐ ┌───────────────────┐  ┌───────────────────────┐
+        │  Client & Runtime SDKs  │ │  Application AI   │  │   Agent Integration   │
+        │                         │ │                   │  │                       │
+        │ • solarch-web (Browser) │ │ • solarch-ai      │  │ • @solarch/mcp-server │
+        │ • solarch-rn (Mobile)   │ │   (Dev AI SDK)    │  │   (External IDE & LLM │
+        │ • solarch-electron      │ │                   │  │    Tool Protocol)     │
+        │ • solarch-tauri         │ │                   │  │                       │
+        └─────────────────────────┘ └───────────────────┘  └───────────────────────┘
 ```
-
-The architecture is designed for:
-
-- extensibility
-- automation
-- team workflows
-- future cloud capabilities
 
 ---
 
@@ -539,7 +602,7 @@ The architecture is designed for:
 Requirements:
 
 - Node.js 20+
-- npm / pnpm / yarn
+- npm / pnpm / yarn / bun
 
 Install:
 
@@ -557,119 +620,30 @@ solarch version
 
 # Quick Start
 
-Create a project:
-
+1. Create a project:
 ```bash
 solarch init
 ```
 
-Enter project:
-
+2. Enter project:
 ```bash
 cd my-app
 ```
 
-Start development:
-
+3. Start development server:
 ```bash
 solarch dev
 ```
 
-Check health:
-
+4. Check diagnostics:
 ```bash
 solarch doctor
 ```
 
-Your backend is ready.
-
----
-
-# Development Philosophy
-
-Solarch follows three principles:
-
-## 1. Developer First
-
-The developer experience is part of the product.
-
-Every command should be:
-
-- discoverable
-- predictable
-- safe
-
-## 2. Production Mindset
-
-Projects should not start as experiments.
-
-They should start with:
-
-- structure
-- security
-- observability
-- maintainability
-
-## 3. One Unified Workflow
-
-Development should not require switching between dozens of disconnected systems.
-
-Solarch provides one continuous workflow:
-
-```text
-Create
-↓
-Develop
-↓
-Inspect
-↓
-Improve
-↓
-Deploy
+5. Explore external MCP agent capabilities:
+```bash
+solarch mcp tools
 ```
-
----
-
-# Roadmap
-
-## Current
-
-### v0.19.x — Local Developer Platform
-
-Completed:
-
-- CLI ecosystem
-- templates
-- development workflow
-- diagnostics
-- migrations
-- security hardening
-
-## Future
-
-### v0.20 — Platform Layer
-
-Planned:
-
-- team collaboration
-- cloud environments
-- deployment workflows
-- project management
-- plugin ecosystem
-
----
-
-# Contributing
-
-Contributions are welcome.
-
-Areas:
-
-- CLI improvements
-- templates
-- integrations
-- documentation
-- developer tooling
 
 ---
 
@@ -679,8 +653,9 @@ Areas:
 
 ---
 
-## Final Statements
+## Solarch Philosophy
 
 **Solarch is not a library you install.**
 
-**Solarch is the environment where you build, run, and evolve backend systems.**
+**Solarch is the developer operating system where you build, run, scale, and govern modern backend architectures.**
+

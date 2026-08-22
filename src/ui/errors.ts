@@ -1,11 +1,11 @@
 /**
  * Standardized CLI error handler for Solarch.
  * Enforces zero secret leakage, hides internal stack traces by default,
- * and provides clear, actionable hints.
+ * and provides clear, actionable hints and error codes.
  */
 
 import { colors } from './theme.js'
-import { maskDatabaseUrl } from '../cmd/env/masking.js'
+import { SolarchError } from '../errors/solarch-error.js'
 
 /**
  * Sanitizes arbitrary error text to prevent secret leakage
@@ -20,7 +20,6 @@ export function sanitizeErrorMessage(text: string): string {
 
   // 2. Redact 32+ char hex/base64 tokens (JWT secrets, encryption keys)
   clean = clean.replace(/([a-f0-9]{32,64})/gi, (match) => {
-    // If it looks like a hex hash/secret, mask it
     if (match.length >= 32) return '****************'
     return match
   })
@@ -35,8 +34,19 @@ export function formatCliError(error: unknown, hint?: string): string {
   const isDebug = process.env.SOLARCH_DEBUG === 'true'
   let rawMessage = ''
   let stackTrace = ''
+  let errorCode: string | undefined
+  let suggestion: string | undefined
+  let docsUrl: string | undefined
 
-  if (error instanceof Error) {
+  if (error instanceof SolarchError) {
+    errorCode = error.code
+    rawMessage = error.message
+    suggestion = error.suggestion
+    docsUrl = error.docsUrl
+    if (error.stack) {
+      stackTrace = error.stack
+    }
+  } else if (error instanceof Error) {
     rawMessage = error.message
     if (error.stack) {
       stackTrace = error.stack
@@ -51,14 +61,24 @@ export function formatCliError(error: unknown, hint?: string): string {
   const lines: string[] = []
 
   lines.push('')
-  lines.push(`${colors.bold(colors.red('✖ Failed'))}`)
+  if (errorCode) {
+    lines.push(`${colors.bold(colors.red('✖ Failed'))} ${colors.dim(`[${errorCode}]`)}`)
+  } else {
+    lines.push(`${colors.bold(colors.red('✖ Failed'))}`)
+  }
   lines.push('')
   lines.push(cleanMessage)
 
-  if (hint) {
+  const effectiveHint = suggestion || hint
+  if (effectiveHint) {
     lines.push('')
-    lines.push(`${colors.bold('Hint:')}`)
-    lines.push(hint)
+    lines.push(`${colors.bold(suggestion ? 'Suggestion:' : 'Hint:')}`)
+    lines.push(`  ${effectiveHint}`)
+  }
+
+  if (docsUrl) {
+    lines.push('')
+    lines.push(`${colors.dim(`Learn more: ${docsUrl}`)}`)
   }
 
   if (isDebug && stackTrace) {
@@ -77,6 +97,7 @@ export function formatCliError(error: unknown, hint?: string): string {
 export function handleCliError(error: unknown, hint?: string, exitOnComplete = true): void {
   console.error(formatCliError(error, hint))
   if (exitOnComplete) {
-    process.exit(1)
+    const exitCode = error instanceof SolarchError ? error.exitCode : 1
+    process.exit(exitCode)
   }
 }

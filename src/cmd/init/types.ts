@@ -3,10 +3,11 @@
  */
 
 import { TemplateDefinition } from '../../templates/types.js'
+import { DatabaseEngine, ProjectPlan, ApplicationType, DeploymentModel, DesktopRuntime } from '../../ecosystem/index.js'
 
 export interface InitConfig {
   name: string
-  database: 'sqlite' | 'postgres'
+  database: DatabaseEngine
   databaseUrl?: string
   authProviders: string[]
   rateLimit: boolean
@@ -15,6 +16,11 @@ export interface InitConfig {
   dir?: string
   template?: TemplateDefinition
   dryRun?: boolean
+  plan?: ProjectPlan
+  deployment?: DeploymentModel
+  desktopRuntime?: DesktopRuntime
+  sdks?: string[]
+  plugins?: string[]
 }
 
 export interface InitOptions {
@@ -31,12 +37,18 @@ export interface InitOptions {
   dryRun?: boolean
   force?: boolean
   exitOnComplete?: boolean
+  app?: ApplicationType
+  deployment?: DeploymentModel
+  desktopRuntime?: DesktopRuntime
+  sdks?: string | string[]
+  plugins?: string | string[]
 }
 
 export interface GenerationResult {
   projectDir: string
   projectName: string
-  database: 'sqlite' | 'postgres'
+  database: DatabaseEngine
   filesCreated: string[]
   dryRun?: boolean
+  plan?: ProjectPlan
 }
