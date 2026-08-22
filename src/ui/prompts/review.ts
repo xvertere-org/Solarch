@@ -57,6 +57,15 @@ export async function promptReview(
     lines.push(`  ${colors.bold(appDisplay)}`)
     lines.push('')
 
+    if (config.capabilities && config.capabilities.length > 0) {
+      const capsDisplay = config.capabilities
+        .map(c => c.charAt(0).toUpperCase() + c.slice(1))
+        .join(', ')
+      lines.push('Capabilities:')
+      lines.push(`  ${colors.bold(capsDisplay)}`)
+      lines.push('')
+    }
+
     lines.push('Deployment Model:')
     lines.push(`  ${colors.bold(deployDisplay)}`)
     lines.push('')
@@ -64,6 +73,17 @@ export async function promptReview(
     lines.push('Database Strategy:')
     lines.push(`  ${colors.bold(dbDisplay)}`)
     lines.push('')
+
+    if (config.dbSetup) {
+      const setupDisplay = config.dbSetup === 'linked'
+        ? 'Platform Managed (Link Solarch project)'
+        : config.dbSetup === 'later'
+        ? 'Connect Later (via Solarch Platform)'
+        : 'Local Development'
+      lines.push('Database Setup:')
+      lines.push(`  ${colors.bold(setupDisplay)}`)
+      lines.push('')
+    }
 
     const sdksDisplay = plan.sdks.selected.length > 0
       ? plan.sdks.selected.join(', ')

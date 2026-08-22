@@ -1,5 +1,5 @@
 /**
- * Solarch CLI Project Filesystem Generator (Phase 1)
+ * Solarch CLI Project Filesystem Generator (Phase 1 & Platform Alignment)
  * Performs deterministic file and directory generation without user prompts.
  */
 
@@ -8,6 +8,7 @@ import path from 'path'
 import crypto from 'crypto'
 import { InitConfig, GenerationResult } from './types.js'
 import { MINIMAL_TEMPLATE } from '../../templates/definitions.js'
+import { getVersion } from '../../ui/banner.js'
 import { ProjectMetadata, ProjectPlan, DatabaseStrategy, SdkSelection, PluginSelection, ProjectIntent } from '../../ecosystem/index.js'
 
 export interface GeneratorHooks {
@@ -103,7 +104,7 @@ export function generateProjectFiles(
       }
     }
 
-    if (config.database === 'postgres') {
+    if ((config.database === 'postgres' || config.database === 'mongodb') && (!config.dbSetup || config.dbSetup === 'local')) {
       filesCreated.push('docker-compose.yml')
     }
 
@@ -111,6 +112,7 @@ export function generateProjectFiles(
       projectDir,
       projectName: config.name,
       database: config.database,
+      dbSetup: config.dbSetup,
       filesCreated,
       dryRun: true,
       plan,
@@ -138,7 +140,8 @@ export function generateProjectFiles(
   hooks?.onFoldersEnd?.()
 
   // 5. Write Local Ecosystem Manifest (.solarch/project.json)
-  const manifest = ProjectMetadata.fromPlan(plan, '0.19.8')
+  const currentCliVersion = getVersion()
+  const manifest = ProjectMetadata.fromPlan(plan, currentCliVersion)
   fs.writeFileSync(
     path.join(dotSolarchDir, 'project.json'),
     JSON.stringify(manifest, null, 2) + '\n',
@@ -159,6 +162,8 @@ export function generateProjectFiles(
 
   if (config.database === 'postgres' && config.databaseUrl) {
     envVars.push(`DATABASE_URL=${config.databaseUrl}`)
+  } else if (config.database === 'mongodb' && config.databaseUrl) {
+    envVars.push(`DATABASE_URL=${config.databaseUrl}`)
   }
 
   if (config.authProviders.includes('google')) envVars.push(`GOOGLE_CLIENT_ID=`)
@@ -176,13 +181,13 @@ export function generateProjectFiles(
   filesCreated.push('.env')
   hooks?.onSecretsEnd?.()
 
-  // 7. solarch.config.ts & Template Migrations / Hooks
+  // 7. solarch.config.ts & Template Migrations / Hooks (Credential-free)
   hooks?.onConfigStart?.()
   const configLines: string[] = [
     `export default {`,
     `  port: 8090,`,
     `  dataDir: './pb_data',`,
-    `  database: { type: '${config.database}'${config.databaseUrl ? `, url: '${config.databaseUrl}'` : ''} },`,
+    `  database: { type: '${config.database}' },`,
     `  auth: { providers: [${config.authProviders.map(p => `'${p}'`).join(', ')}] },`,
     `  rateLimiting: { enabled: ${config.rateLimit} },`,
     `  ai: { enabled: ${config.ai} },`,
@@ -210,8 +215,9 @@ export function generateProjectFiles(
     }
   }
 
-  // docker-compose.yml for PostgreSQL
-  if (config.database === 'postgres') {
+  // docker-compose.yml for local PostgreSQL / MongoDB
+  const isLocalContainerSetup = !config.dbSetup || config.dbSetup === 'local'
+  if (config.database === 'postgres' && isLocalContainerSetup) {
     const dc = [
       `version: "3.8"`,
       `services:`,
@@ -233,6 +239,26 @@ export function generateProjectFiles(
       dc.join('\n') + '\n'
     )
     filesCreated.push('docker-compose.yml')
+  } else if (config.database === 'mongodb' && isLocalContainerSetup) {
+    const dc = [
+      `version: "3.8"`,
+      `services:`,
+      `  mongodb:`,
+      `    image: mongo:7-jammy`,
+      `    environment:`,
+      `      MONGO_INITDB_DATABASE: ${config.name}`,
+      `    ports:`,
+      `      - "27017:27017"`,
+      `    volumes:`,
+      `      - mongo_data:/data/db`,
+      `volumes:`,
+      `  mongo_data:`,
+    ]
+    fs.writeFileSync(
+      path.join(projectDir, 'docker-compose.yml'),
+      dc.join('\n') + '\n'
+    )
+    filesCreated.push('docker-compose.yml')
   }
   hooks?.onConfigEnd?.()
 
@@ -244,6 +270,7 @@ export function generateProjectFiles(
     projectDir,
     projectName: config.name,
     database: config.database,
+    dbSetup: config.dbSetup,
     filesCreated,
     plan,
   }

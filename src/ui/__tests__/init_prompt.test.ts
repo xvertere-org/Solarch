@@ -4,7 +4,7 @@ import * as textModule from '../prompts/text.js'
 import * as selectModule from '../prompts/select.js'
 import * as multiselectModule from '../prompts/multiselect.js'
 
-describe('Solarch Init TUI Prompt Flow (Phase 1)', () => {
+describe('Solarch Init TUI Prompt Flow (Phase 1 & Platform Alignment)', () => {
   beforeEach(() => {
     vi.restoreAllMocks()
   })
@@ -14,10 +14,12 @@ describe('Solarch Init TUI Prompt Flow (Phase 1)', () => {
       .mockResolvedValueOnce('api')     // 1. Application Type
       .mockResolvedValueOnce('local')   // 3. Deployment Model
       .mockResolvedValueOnce('sqlite')  // 4. Database Engine
-      .mockResolvedValueOnce('none')    // 6. Plugin mode
+      .mockResolvedValueOnce('none')    // 10. Plugin mode
 
     vi.spyOn(textModule, 'promptText').mockResolvedValueOnce('my-custom-app') // 2. Project Name
-    vi.spyOn(multiselectModule, 'promptMultiSelect').mockResolvedValueOnce(['solarch-web']) // 5. SDKs
+    vi.spyOn(multiselectModule, 'promptMultiSelect')
+      .mockResolvedValueOnce(['auth'])           // 7. Capabilities
+      .mockResolvedValueOnce(['solarch-web'])    // 8. SDKs
 
     const config = await promptInit()
 
@@ -31,16 +33,18 @@ describe('Solarch Init TUI Prompt Flow (Phase 1)', () => {
     expect(config.plan?.plugins.mode).toBe('none')
   })
 
-  it('2. Prompts desktop runtime when desktop application is selected', async () => {
+  it('2. Prompts desktop runtime and database setup when selected', async () => {
     vi.spyOn(selectModule, 'promptSelect')
       .mockResolvedValueOnce('desktop')   // 1. Application Type
       .mockResolvedValueOnce('local')     // 3. Deployment Model
       .mockResolvedValueOnce('sqlite')    // 4. Database Engine
-      .mockResolvedValueOnce('electron')  // 5a. Desktop runtime
-      .mockResolvedValueOnce('none')      // 6. Plugin mode
+      .mockResolvedValueOnce('electron')  // 6. Desktop runtime
+      .mockResolvedValueOnce('none')      // 10. Plugin mode
 
     vi.spyOn(textModule, 'promptText').mockResolvedValueOnce('desktop-app')
-    vi.spyOn(multiselectModule, 'promptMultiSelect').mockResolvedValueOnce(['solarch-electron'])
+    vi.spyOn(multiselectModule, 'promptMultiSelect')
+      .mockResolvedValueOnce(['auth'])               // 7. Capabilities
+      .mockResolvedValueOnce(['solarch-electron'])   // 8. SDKs
 
     const config = await promptInit()
 
@@ -50,22 +54,25 @@ describe('Solarch Init TUI Prompt Flow (Phase 1)', () => {
     expect(config.plan?.sdks.selected).toEqual(['solarch-electron'])
   })
 
-  it('3. Supports plugin selection when plugin mode is selected', async () => {
+  it('3. Supports database setup and plugin selection when platform options are selected', async () => {
     vi.spyOn(selectModule, 'promptSelect')
       .mockResolvedValueOnce('saas')       // 1. Application Type
       .mockResolvedValueOnce('cloud')      // 3. Deployment Model
       .mockResolvedValueOnce('postgres')   // 4. Database Engine
-      .mockResolvedValueOnce('selected')   // 6a. Plugin mode
+      .mockResolvedValueOnce('local')      // 5. Database Setup
+      .mockResolvedValueOnce('selected')   // 10. Plugin mode
 
     vi.spyOn(textModule, 'promptText').mockResolvedValueOnce('saas-enterprise')
     vi.spyOn(multiselectModule, 'promptMultiSelect')
-      .mockResolvedValueOnce(['solarch-web'])           // 5. SDKs
-      .mockResolvedValueOnce(['stripe', 'resend'])        // 6b. Plugins
+      .mockResolvedValueOnce(['auth', 'payments'])      // 7. Capabilities
+      .mockResolvedValueOnce(['solarch-web'])           // 8. SDKs
+      .mockResolvedValueOnce(['stripe', 'resend'])      // 10b. Plugins
 
     const config = await promptInit()
 
     expect(config.name).toBe('saas-enterprise')
     expect(config.database).toBe('postgres')
+    expect(config.dbSetup).toBe('local')
     expect(config.plan?.plugins.mode).toBe('selected')
     expect(config.plan?.plugins.plugins).toEqual(['stripe', 'resend'])
   })
@@ -78,7 +85,9 @@ describe('Solarch Init TUI Prompt Flow (Phase 1)', () => {
       .mockResolvedValueOnce('none')    // Plugin mode
 
     vi.spyOn(textModule, 'promptText').mockResolvedValueOnce('seeded-app')
-    vi.spyOn(multiselectModule, 'promptMultiSelect').mockResolvedValueOnce([])
+    vi.spyOn(multiselectModule, 'promptMultiSelect')
+      .mockResolvedValueOnce(['auth'])
+      .mockResolvedValueOnce([])
 
     const config = await promptInit({
       initialValues: {

@@ -150,14 +150,15 @@ export async function runInit(opts: InitOptions = {}): Promise<GenerationResult 
   // --- Pre-flight Validation ---
   const validName = validateProjectName(name)
   const validDbType = validateDatabase(dbType)
-  const isExplicitPgFlag = Boolean(opts.db === 'postgres' && !opts.app && !opts.template && !opts.preset)
-  const validDbUrl = validateDatabaseUrl(validDbType, dbUrl, isExplicitPgFlag)
+  const validDbUrl = validateDatabaseUrl(validDbType, dbUrl, false)
   const validAuthProviders = validateAuthProviders(authProviders)
 
   const config: InitConfig = {
     name: validName,
     database: validDbType,
     databaseUrl: validDbUrl,
+    dbSetup: opts.dbSetup || 'local',
+    capabilities: opts.capabilities ? (Array.isArray(opts.capabilities) ? opts.capabilities : [opts.capabilities]) : undefined,
     authProviders: validAuthProviders,
     rateLimit: enableRateLimit,
     ai: enableAi,
@@ -240,7 +241,33 @@ export async function runInit(opts: InitOptions = {}): Promise<GenerationResult 
   console.log(`\n${colors.bold(colors.cyan('⚡ Solarch Project Created'))}\n`)
   console.log(`  ${colors.green('✔')} Configuration generated`)
   console.log(`  ${colors.green('✔')} Secrets generated`)
-  console.log(`  ${colors.green('✔')} Database initialized`)
+
+  if (config.database === 'sqlite') {
+    console.log(`  ${colors.green('✔')} Local SQLite database initialized (./pb_data)`)
+  } else if (config.database === 'postgres') {
+    if (config.dbSetup === 'linked') {
+      console.log(`  ${colors.green('✔')} PostgreSQL database requirement registered`)
+      console.log(`  ${colors.dim('  Connect with: solarch db provision')}`)
+    } else if (config.dbSetup === 'later') {
+      console.log(`  ${colors.green('✔')} PostgreSQL requirement registered`)
+      console.log(`  ${colors.dim('  Connect via Solarch Platform: solarch login')}`)
+    } else {
+      console.log(`  ${colors.green('✔')} PostgreSQL configuration & docker-compose.yml generated`)
+      console.log(`  ${colors.dim('  Start local database: docker compose up -d')}`)
+    }
+  } else if (config.database === 'mongodb') {
+    if (config.dbSetup === 'linked') {
+      console.log(`  ${colors.green('✔')} MongoDB database requirement registered`)
+      console.log(`  ${colors.dim('  Connect with: solarch db provision')}`)
+    } else if (config.dbSetup === 'later') {
+      console.log(`  ${colors.green('✔')} MongoDB requirement registered`)
+      console.log(`  ${colors.dim('  Connect via Solarch Platform: solarch login')}`)
+    } else {
+      console.log(`  ${colors.green('✔')} MongoDB configuration & docker-compose.yml generated`)
+      console.log(`  ${colors.dim('  Start local database: docker compose up -d')}`)
+    }
+  }
+
   console.log(`  ${colors.green('✔')} Migrations ready`)
   console.log(`  ${colors.green('✔')} Local ecosystem manifest created (.solarch/project.json)`)
   console.log(`  ${colors.green('✔')} Health check passed\n`)
@@ -250,6 +277,9 @@ export async function runInit(opts: InitOptions = {}): Promise<GenerationResult 
 
   console.log(`Next:\n`)
   console.log(`  cd ${result.projectName}`)
+  if (config.database !== 'sqlite' && (!config.dbSetup || config.dbSetup === 'local')) {
+    console.log(`  docker compose up -d`)
+  }
   console.log(`  solarch dev\n`)
 
   if (opts.exitOnComplete ?? true) {

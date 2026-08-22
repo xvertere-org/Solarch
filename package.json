@@ -1,6 +1,6 @@
 {
   "name": "solarch",
-  "version": "0.20.0",
+  "version": "0.20.1",
   "description": "Solarch - The developer operating system for building, running, and managing modern backend applications.",
   "repository": {
     "type": "git",

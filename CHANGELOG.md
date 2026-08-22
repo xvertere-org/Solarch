@@ -1,5 +1,24 @@
 # Changelog
 
+## v0.20.1 — Platform-First Init Wizard & UX Alignment (2026-08-22)
+
+Targeted bug-fix and UX alignment release aligning the project creation experience (`solarch init`) with the platform-first architecture.
+
+### Fixed & Enhanced
+- **Database Setup Intent Layer**:
+  - Replaced manual `DATABASE_URL` prompt with platform-first intent options (`Local development`, `Link Solarch project`, `Configure later`).
+  - Scaffolds local container infrastructure (`docker-compose.yml`) for local PostgreSQL/MongoDB setups while registering remote database requirements cleanly for managed deployments.
+- **Application Capability Selection & SDK Resolution**:
+  - Decoupled application types from capabilities — added explicit multi-select capability configuration (`Authentication`, `Realtime Subscriptions`, `File Storage`, `AI Features`, `Vector Search`, `Payments & Billing`).
+  - Dynamic capability resolver automatically maps declared capabilities to required SDK packages (`solarch-web`, `solarch-ai`, `solarch-rn`, `solarch-electron`, `solarch-tauri`).
+  - Added interactive SDK installation preview showing resolved packages and install commands before file mutation.
+- **Credential-Free Configuration Hardening**:
+  - Removed database connection strings from generated `solarch.config.ts`, ensuring secrets and connection URLs live strictly in runtime environments (`.env`).
+- **Dynamic CLI Version Resolution**:
+  - Removed hardcoded version strings from local project metadata manifests (`.solarch/project.json`), dynamically resolving the active CLI version from runtime packages.
+- **Database-Aware Status Messaging**:
+  - Replaced misleading remote database success indicators with clear engine-specific status messages for SQLite, PostgreSQL, and MongoDB.
+
 ## v0.20.0 — Solarch Platform Control Plane & MCP Governance Release (2026-08-22)
 
 Major architectural release establishing the Solarch Developer Operating System with remote platform authentication, SDK provisioning, database lifecycle, production deployment orchestration, telemetry, service control plane, and MCP external agent governance.

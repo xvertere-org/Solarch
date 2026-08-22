@@ -102,25 +102,27 @@ describe('CLI Init Command (Hardening & Scaffolding)', () => {
     expect(envContent).toContain('GITHUB_CLIENT_ID=')
 
     const configContent = fs.readFileSync(path.join(projectDir, 'solarch.config.ts'), 'utf-8')
-    expect(configContent).toContain(`database: { type: 'postgres', url: '${pgUrl}' }`)
+    expect(configContent).toContain("database: { type: 'postgres' }")
+    expect(configContent).not.toContain(pgUrl)
     expect(configContent).toContain("auth: { providers: ['email', 'google', 'github'] }")
     expect(configContent).toContain('rateLimiting: { enabled: false }')
     expect(configContent).toContain('ai: { enabled: true }')
   })
 
-  it('fails fast when PostgreSQL is selected without a DATABASE_URL in non-interactive mode', async () => {
-    await expect(
-      runInit({
-        yes: true,
-        dir: tempBaseDir,
-        name: 'fail-pg',
-        db: 'postgres',
-        exitOnComplete: false,
-      })
-    ).rejects.toThrow(/PostgreSQL requires a non-empty DATABASE_URL/)
+  it('scaffolds PostgreSQL project cleanly without a DATABASE_URL in non-interactive mode', async () => {
+    await runInit({
+      yes: true,
+      dir: tempBaseDir,
+      name: 'pg-local-app',
+      db: 'postgres',
+      exitOnComplete: false,
+    })
 
-    // Invariant: No partial files created on validation failure
-    expect(fs.existsSync(path.join(tempBaseDir, 'fail-pg'))).toBe(false)
+    const projectDir = path.join(tempBaseDir, 'pg-local-app')
+    expect(fs.existsSync(projectDir)).toBe(true)
+    expect(fs.existsSync(path.join(projectDir, 'docker-compose.yml'))).toBe(true)
+    const configContent = fs.readFileSync(path.join(projectDir, 'solarch.config.ts'), 'utf-8')
+    expect(configContent).toContain("database: { type: 'postgres' }")
   })
 
   it('fails fast when PostgreSQL DATABASE_URL has invalid protocol shape', async () => {
